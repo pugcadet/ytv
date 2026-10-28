@@ -13,7 +13,7 @@
   const params = new URLSearchParams(location.search);
   const live = params.has("channel") && !params.has("video"), quality = /^[\w]{1,12}$/.test(params.get("ytvq") || "") ? params.get("ytvq") : "chunked";
   let warm = params.get("ytvwarm") === "1"; // loaded ahead (when you point at a stream): it already plays, muted and out of sight, until YTV says go
-  try { localStorage.setItem("video-muted", JSON.stringify({ default: false })); } catch {} // Twitch's player: sound on
+  try { localStorage.setItem("video-muted", JSON.stringify({ default: false })); localStorage.setItem("volume", "1"); } catch {} // Twitch's player: sound on, at full volume
   const say = (m) => { try { window.parent.postMessage({ ytvTw: m }, PARENT); } catch {} };
   const video = () => document.querySelector("video");
   // a live stream has no pause; YTV's full screen is the one that counts (it keeps YTV's own UI)
@@ -24,6 +24,8 @@
     '[data-a-target*="follow-button"],[data-a-target*="subscribe-button"],[data-a-target*="gift"],[data-test-selector*="follow-button"],[data-test-selector*="subscribe-button"],[data-test-selector*="gift"],[data-a-target="player-twitch-logo-button"],[data-a-target="player-stream-info-social-panel"],.ytv-hide{display:none!important}' +
     // Twitch's own top bar (picture, title, game: YTV's top bar shows those) and its big Play button and blurred
     // preview while starting (YTV presses Play itself) stay out of sight
+    // the volume always stays at full (YouTube's own volume is the one you set): its slider isn't needed, mute stays
+    '[data-a-target="player-volume-slider"],.volume-slider__slider-container{display:none!important}' +
     '.video-player__overlay .top-bar,[data-a-target="player-overlay-preview-background"]{display:none!important}[data-a-target="player-overlay-play-button"]{opacity:0!important}' +
     // while YTV picks the quality for you, Twitch's settings menu stays out of sight
     'html.ytv-q [data-a-target="player-settings-menu"],html.ytv-q [role="menu"]{opacity:0!important;pointer-events:none!important}';
@@ -90,6 +92,7 @@
   const begin = () => { obs.observe(document.documentElement, { childList: true, subtree: true }); for (const ev of ["playing", "loadeddata", "pause", "canplay"]) document.addEventListener(ev, onMedia, true); kick(); };
   if (document.documentElement) begin(); else document.addEventListener("readystatechange", begin, { once: true });
   setInterval(() => { if (warm || !started || (video() && video().muted && !unmuted)) kick(); }, 150);
+  setInterval(() => { const v = video(); if (v && !warm && v.volume < 1) v.volume = 1; }, 500); // always at full volume
   say({ hello: true, warm }); // (if YTV already wants this one playing, it answers "go")
   // a click on the picture would pause a live stream: not here. Double-click: YTV's full screen.
   window.addEventListener("click", (e) => { if (live && e.target && e.target.closest && e.target.closest('[data-a-target="player-overlay-click-handler"], video')) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
@@ -111,7 +114,7 @@
     if (c.cmd === "go") { if (warm) { warm = false; unmuted = false; started = false; kick(); } say({ going: true }); return; }
     if (!v) return;
     if (c.cmd === "mute") { v.muted = !!c.on; unmuted = true; }
-    else if (c.cmd === "volume" && Number.isFinite(c.v)) { v.volume = Math.max(0, Math.min(1, c.v)); }
+    else if (c.cmd === "volume") { v.volume = 1; } // (always full)
     else if (c.cmd === "pause") { held = true; v.pause(); }
     else if (c.cmd === "play") { held = false; v.play().catch(() => {}); }
   });

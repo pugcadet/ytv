@@ -1391,7 +1391,7 @@
     const fdot = el("span", "fdot"); fdot.hidden = true; filtB.append(fdot);
     const histPB = pbtn("history", "", "History: everything you watched (H)", () => togglePanel("history")); histPB.classList.add("histb");
     const sortB = pbtn("sort", "", "Sorting on (S)", () => toggleSorting()); sortB.classList.add("sortb"); // top right on every tab: shows whether the list sorts
-    const twsB = pbtn("search", "", "Find Twitch streamers to add", () => toggleTwSearch()); twsB.classList.add("twsb"); twsB.hidden = true;
+    const twsB = pbtn("search", "", "Live on Twitch: browse games (E) · Shift-click: find streamers (Shift+E)", (e) => (e && e.shiftKey ? toggleTwSearch() : toggleTwBrowse())); twsB.classList.add("twsb"); twsB.hidden = true;
     prow.append(ptabs, clearB, twsB, filtB, histPB, refB, sortB); // sorting last: it shows on every tab, so the corner never moves // (no ✕: the list goes with U, or by itself; how it hides is set in settings, or with H)
     const fstrip = el("div", "fstrip"); fstrip.hidden = true; // the filters that are on, as chips (× turns one off)
     phead.append(prow, fstrip);
@@ -2474,6 +2474,8 @@
     if (busyRows.has(w)) return;
     busyRows.add(w);
     w.style.overflowX = "hidden"; // the rest of this gesture can't move it
+    // the rest of this push, and the coasting after it, is swallowed (a scroll cancel): only a new push counts, and nudges
+    wg.no = w; wg.ldx = 1e9; wg.fell = false; wg.manual = false; clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.no = null; }, 160);
     w.classList.remove("armed", "toadd", "nextup"); w.classList.add("no"); w.style.setProperty("--p", "0");
     const d0 = w._R - w.scrollLeft; if (Math.abs(d0) > NO_GIVE) w.scrollLeft = w._R - Math.sign(d0) * NO_GIVE; // never further than a little give
     w.scrollTo({ left: w._R, behavior: motionOn() ? "smooth" : "auto" });
@@ -2572,6 +2574,7 @@
     const hit = e.target && e.target.closest && e.target.closest(".sw");
     if (hit && dx !== 0) hit._user = performance.now();
     shiftDown = e.shiftKey;
+    if (wg.no && hit !== wg.no) wg.no = null; // onto another row: that's a new push there
     const gap = e.timeStamp - wg.last; wg.last = e.timeStamp;
     const start = gap > 100 || (!wg.manual && !wg.no && e.cancelable);
     if (start) {
@@ -2579,7 +2582,7 @@
       if (hit && dx !== 0 && Math.abs(dx) <= Math.abs(dy) * (AXIS[cfg.tv.swipeAxis] || 2.2)) wg.manual = true;
       // sideways, from rest, the way this row can't go (what's playing can't be removed…): the row doesn't move at
       // all for the whole gesture, however fast; it just gives a little nudge and says why, once
-      else if (hit && dx !== 0 && !busyRows.has(hit) && Math.abs(hit.scrollLeft - hit._R) < 3) {
+      else if (hit && dx !== 0 && Math.abs(hit.scrollLeft - hit._R) < 3) { // (also while it's still settling from the last no)
         const api = rowApi.get(hit), act = api && actOf(hit, dx < 0);
         if (api && !can(api, act)) { wg.no = hit; wg.ldx = Math.abs(dx); wg.fell = false; nudge(api, act, dx < 0 ? 1 : -1); }
       }
@@ -3802,7 +3805,7 @@
     const k = e.key;
     if (k === " " || k === "k" || k === "K") return () => { tw.paused = !tw.paused; twCmd(tw.paused ? "pause" : "play"); toast(tw.paused ? "Paused" : "Playing"); };
     if (k === "m" || k === "M") return () => { tw.muted = !tw.muted; twCmd("mute", { on: tw.muted }); toast(tw.muted ? "Muted" : "Sound on"); };
-    if (k === "ArrowUp" || k === "ArrowDown") return () => { tw.vol = Math.max(0, Math.min(1, Math.round((tw.vol + (k === "ArrowUp" ? 0.1 : -0.1)) * 10) / 10)); if (tw.muted) { tw.muted = false; twCmd("mute", { on: false }); } twCmd("volume", { v: tw.vol }); toast(`Volume ${Math.round(tw.vol * 100)}%`); };
+    // (no volume keys: a Twitch stream always plays at full volume)
     return null;
   };
   const twSrc = (v, warm) => {

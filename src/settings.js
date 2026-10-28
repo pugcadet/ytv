@@ -608,7 +608,7 @@
       ...(tw.enabled ? [
         card({ title: "Streamers", noReset: true }, "Who’s in your Twitch channel. In YTV, drag a stream in the list to change the order.",
           twitchFinder(), h("div", { class: "list-editor" }, h("label", { text: "Your streamers" }), h("p", { text: "Their Twitch name (the end of twitch.tv/…), or paste the link." }), streamers)),
-        card({ title: "Watching streams", area: "stream" }, "Space pauses and plays a stream; a click on the picture never pauses it. M mutes, ↑ ↓ change the volume.",
+        card({ title: "Watching streams", area: "stream" }, "Space pauses and plays a stream; a click on the picture never pauses it. M mutes. Streams always play at full volume.",
           pick("Order in the list", "tv.twitch.sort", [["yours", "My order"], ["viewers", "Most viewers first"]]),
           pick("Quality", "tv.twitch.quality", [["chunked", "Source (best)"], ["1080p60", "1080p60"], ["720p60", "720p60"], ["720p30", "720p"], ["480p30", "480p"], ["360p30", "360p"], ["auto", "Auto"], ["keep", "Whatever I picked last in the player"]],
             "Each stream starts in this; the gear in YTV’s top bar changes it while you watch. Twitch only gives the top qualities to people logged in to twitch.tv."),
