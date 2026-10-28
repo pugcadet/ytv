@@ -269,8 +269,6 @@
     return row(label, h("span", { class: "inline numwrap" }, inp, unit ? h("span", { class: "hint", text: unit }) : null), hint, false, path ? [path] : null);
   };
 
-  const POPULAR_TOPICS = ["Minecraft", "League of Legends", "Fortnite", "Lo-fi music", "Live music", "Podcasts", "Cooking", "Science",
-    "Space", "History", "Nature documentary", "Comedy", "Football highlights", "Formula 1", "Tech reviews", "Woodworking", "Travel", "Cars"];
   let homeTopics = [];
   // A list of items you add one at a time: saved instantly, removable, no "click away to save".
   const chipEditor = ({ items, placeholder, normalize = (v) => v.trim(), onAdd, onRemove, empty, label, suggest }) => {
@@ -468,17 +466,15 @@
     const colCard = (c, i) => {
       const name = h("input", { type: "text", value: c.name, maxlength: 40, "aria-label": "Channel name", class: "col-name" });
       name.addEventListener("change", async () => { c.name = name.value; await save(); });
-      const topics = chipEditor({ label: "Topics and searches", items: () => c.subjects, placeholder: "Add a topic, e.g. Minecraft", empty: "No topics yet.",
+      const topics = chipEditor({ label: "Topics and searches", items: () => c.subjects, placeholder: "Add a topic", empty: "No topics yet.",
         onAdd: async (v) => { c.subjects.push(v.slice(0, 80)); await save(); drawPresets(); }, onRemove: async (v) => { c.subjects = c.subjects.filter((x) => x !== v); await save(); drawPresets(); } });
       const presetBox = h("div", { class: "presets" });
       const drawPresets = () => {
         const have = new Set(c.subjects.map((x) => x.toLowerCase()));
         const mk = (t) => h("button", { type: "button", class: "preset-chip", text: "+ " + t, title: `Add “${t}”`, onclick: async () => { c.subjects.push(t); await save(); topics.redraw(); drawPresets(); } });
         const mine = homeTopics.filter((t) => !have.has(t.toLowerCase()));
-        const pop = POPULAR_TOPICS.filter((t) => !have.has(t.toLowerCase()) && !homeTopics.some((m) => m.toLowerCase() === t.toLowerCase()));
-        presetBox.replaceChildren(...[ // (replaceChildren would print a null as text)
-          mine.length ? h("div", { class: "preset-row" }, h("span", { class: "preset-label", text: "From your YouTube home page" }), ...mine.slice(0, 16).map(mk)) : null,
-          h("div", { class: "preset-row" }, h("span", { class: "preset-label", text: "Popular" }), ...pop.slice(0, 18).map(mk))].filter(Boolean));
+        // suggestions come only from the signed-in user's own YouTube home page (nothing built in)
+        presetBox.replaceChildren(...(mine.length ? [h("div", { class: "preset-row" }, h("span", { class: "preset-label", text: "From your YouTube home page" }), ...mine.slice(0, 16).map(mk))] : []));
       };
       drawPresets();
       const creators = chipEditor({ label: "Creators", items: () => c.channels, placeholder: "@handle or channel link (or search below)", empty: "No creators yet.",

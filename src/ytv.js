@@ -336,7 +336,7 @@
       out.category = (mf && mf.category) || "";
       const k = pr.videoDetails && pr.videoDetails.keywords;
       out.keywords = Array.isArray(k) ? k.filter((x) => typeof x === "string").slice(0, 30) : [];
-      // #hashtags in the description say what a video is about (#Minecraft, #Nature)
+      // #hashtags in the description say what a video is about (#cooking, #travel)
       const desc = (pr.videoDetails && pr.videoDetails.shortDescription) || "";
       const GENERIC = new Set(["shorts", "short", "youtube", "subscribe", "like", "follow", "fyp", "viral", "trending", "video", "videos", "new", "live"]);
       out.tags = [...new Set([...desc.matchAll(/(?:^|\s)#([\p{L}\d_]{3,30})/gu)].map((m) => m[1].replace(/_/g, " ").replace(/([a-z\d])([A-Z])/g, "$1 $2").replace(/(\p{L})(\d)/gu, "$1 $2").trim().toLowerCase()).filter((t) => t && !GENERIC.has(t)))].slice(0, 4);
