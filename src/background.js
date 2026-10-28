@@ -70,6 +70,34 @@ const twitchLive = async (logins) => {
     return { live, offline, error: res.data ? "" : res.error };
   } catch (e) { return { live: [], error: String((e && e.message) || e).slice(0, 200) }; }
 };
+// ---- Browse what's live: games and categories by name, then who's streaming in one (public data, nothing about you)
+const twitchCategories = async (q) => {
+  if (!(await twitchAllowed())) return { found: [], error: "no-access" };
+  const term = String(q || "").trim().slice(0, 60);
+  if (term.length < 2) return { found: [] };
+  try {
+    const r = await gql("query($q:String!){searchCategories(query:$q,first:8){edges{node{id name displayName viewersCount boxArtURL(width:52,height:72)}}}}", { q: term });
+    const edges = r.data && r.data.searchCategories && Array.isArray(r.data.searchCategories.edges) ? r.data.searchCategories.edges : [];
+    const found = edges.map((e) => e && e.node).filter((g) => g && g.name).map((g) => ({ name: str(g.name, 100), title: str(g.displayName || g.name, 100), viewers: Number(g.viewersCount) || 0,
+      art: /^https:\/\/static-cdn\.jtvnw\.net\//.test(String(g.boxArtURL || "")) ? String(g.boxArtURL).slice(0, 300) : "" }));
+    return { found, error: found.length ? "" : r.error };
+  } catch (e) { return { found: [], error: String((e && e.message) || e).slice(0, 200) }; }
+};
+const twitchGame = async (name) => {
+  if (!(await twitchAllowed())) return { live: [], error: "no-access" };
+  const n = String(name || "").slice(0, 100);
+  if (!n) return { live: [] };
+  try {
+    const r = await gql("query($n:String!){game(name:$n){displayName streams(first:40){edges{node{title viewersCount createdAt previewImageURL(width:640,height:360) broadcaster{login displayName profileImageURL(width:70)}}}}}}", { n });
+    const edges = r.data && r.data.game && r.data.game.streams && Array.isArray(r.data.game.streams.edges) ? r.data.game.streams.edges : [];
+    const game = str(r.data && r.data.game && r.data.game.displayName, 80);
+    const pic = (u) => (/^https:\/\/static-cdn\.jtvnw\.net\//.test(String(u || "")) ? String(u) : "");
+    const live = edges.map((e) => e && e.node).filter((s) => s && s.broadcaster && LOGIN_RE.test(String(s.broadcaster.login || "").toLowerCase())).map((s) => ({
+      login: String(s.broadcaster.login).toLowerCase(), name: str(s.broadcaster.displayName, 60), avatar: pic(s.broadcaster.profileImageURL), title: str(s.title, 300),
+      viewers: Number(s.viewersCount) || 0, since: str(s.createdAt, 40), game, thumb: pic(s.previewImageURL) ? String(s.previewImageURL).replace(/\?.*$/, "") + "?t=" + Math.floor(Date.now() / 60000) : "" }));
+    return { live, game, error: live.length ? "" : r.error };
+  } catch (e) { return { live: [], error: String((e && e.message) || e).slice(0, 200) }; }
+};
 // ---- "tell me when they go live": a system notification for the streamers you picked, also while YouTube is closed.
 // Uses the optional "notifications" and "alarms" permissions, asked for in settings when you pick the first one.
 const ALERT_ALARM = "ytv-twitch-alerts";
@@ -237,6 +265,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.ytv === "twitchLive" && Array.isArray(msg.logins)) { twitchLive(msg.logins).then(sendResponse); return true; }
   if (msg.ytv === "twitchVods" && typeof msg.login === "string") { twitchVods(msg.login).then(sendResponse); return true; }
   if (msg.ytv === "twitchSearch" && typeof msg.q === "string" && msg.q.length <= 60) { twitchSearch(msg.q).then(sendResponse); return true; }
+  if (msg.ytv === "twitchCategories" && typeof msg.q === "string" && msg.q.length <= 60) { twitchCategories(msg.q).then(sendResponse); return true; }
+  if (msg.ytv === "twitchGame" && typeof msg.name === "string" && msg.name.length <= 100) { twitchGame(msg.name).then(sendResponse); return true; }
   if (msg.ytv === "openSettings") {
     const hash = typeof msg.hash === "string" && /^#[\w-]{0,24}$/.test(msg.hash) ? msg.hash : "";
     const url = chrome.runtime.getURL("settings.html" + hash);

@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.24.2";
+  SW.VERSION = "1.26.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -36,7 +36,7 @@
   /** YTV keyboard actions and their default keys. Escape (close / turn off) is always Escape. */
   SW.TV_ACTIONS = [
     ["chUp", "Next tab (with Shift: go there and play its first video)", "."], ["chDown", "Previous tab (with Shift: go there and play its first video)", ","], ["next", "Next video", "]"], ["prev", "Previous video", "["],
-    ["list", "Open / close the list", "u"], ["info", "Info (description, stream details)", "i"], ["comments", "Comments (on a stream: its chat)", "o"], ["toggle", "Turn YTV on / off", "`"], ["explore", "Explore topic", "e"], ["back", "Leave a topic, back to the channel", "b"], ["overview", "Channel overview", "g"], ["history", "History (everything you watched)", "h"], ["autohide", "Switch when the list hides (always / full screen / never)", ""], ["fullscreen", "Full screen", "f"],
+    ["list", "Open / close the list", "u"], ["info", "Info (description, stream details)", "i"], ["comments", "Comments (on a stream: its chat)", "o"], ["toggle", "Turn YTV on / off", "`"], ["explore", "Explore topic (on the Twitch tab: what’s live in a game; Shift: find streamers)", "e"], ["back", "Leave a topic, back to the channel", "b"], ["overview", "Channel overview", "g"], ["history", "History (everything you watched)", "h"], ["sorting", "Sorting on / off (off: the list stays exactly as it is)", "s"], ["autohide", "Switch when the list hides (always / full screen / never)", ""], ["fullscreen", "Full screen", "f"],
   ];
   /** Keys YouTube's player uses (left alone so they keep working); F is allowed because full screen is the same action. */
   // (, and . step frames in YouTube only while paused; YTV uses them for channels)
@@ -170,6 +170,11 @@
       swipeHoldMs: clampInt(tv.swipeHoldMs, 0, 3000, 280),
       swipeMove: true, // (a video on your Feed is in no other list, so adding always moves it there)
       swipeAddColor: typeof tv.swipeAddColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeAddColor) ? tv.swipeAddColor.toLowerCase() : "#17864a",
+      swipeNextColor: typeof tv.swipeNextColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeNextColor) ? tv.swipeNextColor.toLowerCase() : "#3d7be0", // Shift + swipe: plays next
+      fullPct: clampInt(tv.fullPct, 50, 100, 90), // a video counts as fully watched from here (%)
+      keepOrder: tv.keepOrder === true,
+      watchedFold: tv.watchedFold !== false, // watched videos fold away under a "Watched" bar (off: they stay in view, greyed out)
+      histMax: clampInt(tv.histMax, 10, 2000, 200), // how many videos History keeps // sorting off (S): the list stays exactly as it is (no greying, no Watched bar, nothing moves)
       swipeRmColor: typeof tv.swipeRmColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeRmColor) ? tv.swipeRmColor.toLowerCase() : "#d93a3f",
       swipeIconPx: clampInt(tv.swipeIconPx, 8, 120, 24),
       swipeFadeMs: tv.prefsV >= 4 ? clampInt(tv.swipeFadeMs, 0, 5000, 300) : 300, // the whole remove animation: fade, then close up (Motion Lab pick)

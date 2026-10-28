@@ -125,6 +125,7 @@ for f, c in js.items():
             if m.group(1) == "src" and 'const TW_PLAYER = "https://player.twitch.tv/"' in c and "const src = `${TW_PLAYER}?channel=${encodeURIComponent(v.login)}&parent=www.youtube.com" in c: continue  # Twitch's own player, for Twitch Live
             if m.group(1) == "url" and "const url = EMOTE_URL[kind](id); i.src = url;" in c and "if (!EMOTE_OK.test(id) || !EMOTE_URL[kind])" in c: continue  # an emote picture from the emote service's image server
             if m.group(1).startswith('chrome.runtime.getURL("settings.html" + ') and f == "src/ytv.js": continue  # YTV's own settings page, over TV
+            if m.group(1) == "safe" and r'const twPic = (url) => { const safe = String(url || ""); if (!/^https:\/\/static-cdn\.jtvnw\.net\//.test(safe)) return null;' in c: continue  # a Twitch picture, through the one helper that checks it comes from Twitch's image server
             if m.group(1) == "u.avatar" and r'if (/^https:\/\/static-cdn\.jtvnw\.net\//.test(u.avatar || ""))' in c: continue  # a streamer's picture, checked to come from Twitch's image server
             check(f"frames in {f} only load YouTube", "ORIGIN" in m.group(1), m.group(1))
     if "postMessage(" in c:

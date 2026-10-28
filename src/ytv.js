@@ -110,7 +110,12 @@
   const seen = new Set(lsGet("hush:tv:seen", []).filter((x) => ID_RE.test(x)));
   // A video only counts as watched (greyed in the list, left out of later lineups) once you've really watched some of it.
   const WATCHED_SECONDS = 25, WATCHED_FRACTION = 0.3;
-  const countWatched = (id) => { if (ID_RE.test(id)) { remember(id); markSeen(id); } };
+  // Sorting (S): on, watched videos grey out, fold away under "Watched" and leave up next. Off, the list is just a list:
+  // nothing greys, folds, moves or goes. Switching it never rearranges what's there; it counts from that moment on.
+  const sortOff = () => !!(cfg && cfg.tv.keepOrder);
+  const fullPct = () => (cfg ? cfg.tv.fullPct : 90); // from how far a video counts as fully watched (Settings → List → Rows)
+  const dumbPlayed = new Set(); // watched while sorting was off
+  const countWatched = (id) => { if (ID_RE.test(id)) { remember(id); markSeen(id); if (sortOff()) dumbPlayed.add(id); } };
   const markSeen = (id) => { if (seen.has(id)) return; seen.add(id); lsSet("hush:tv:seen", [...seen].slice(-5000)); };
   // how old a video is, in days: its exact publish date once it has played here, else what the list said ("3 weeks ago")
   const ageOf = (v) => { if (v && v.pub) { const t = Date.parse(v.pub); if (Number.isFinite(t)) return Math.max(0, (Date.now() - t) / 86400000); } return SW.yt.ageDays(v && v.age); };
@@ -154,7 +159,7 @@
   document.addEventListener("visibilitychange", () => { if (document.hidden) flushResume(); });
   const removed = new Set(); // taken out of the queue by hand this session
   const usable = (col, v) => v && isItem(v.id) && ((col.feed && v.f) || (!skipped.has(v.id) && !isBlocked(col, v) &&
-    !(col.skipSeen && (v.watched || seen.has(v.id) || progressOf(v) >= 90)) && !tooOld(col, v) &&
+    !(col.skipSeen && (v.watched || seen.has(v.id) || progressOf(v) >= fullPct())) && !tooOld(col, v) &&
     !(cfg && cfg.tv.skipMusic && !col.watchLater && !col.homeFeed && !col.watchedChip && !col.cont && musicLike(v)) && !removed.has(v.id) && // (Home shows what YouTube shows)
     (col.feed || !inFeed(v.id)))); // what's on your Feed plays there, not again on another channel
   const cacheKey = (col) => "tvcache:" + col.id + ":" + col.maxAge + ":" + SW.stableStringify([col.subjects, col.channels, col.home]).length;
@@ -670,6 +675,15 @@
     .twtx b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .twtx span{font-size:11.5px;color:#8d97ab}
     .twhit.tson .twtx span{color:#ff8a8a}
+    .twcat{display:flex;align-items:center;gap:10px;width:100%;min-height:0;padding:5px 4px;border:0;border-radius:8px;background:none;color:#e8ebf2;text-align:left;font:inherit}
+    .twcat:hover{background:rgba(255,255,255,.06)}
+    .twart{width:30px;height:40px;flex:none;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.08)}
+    .twart img{width:100%;height:100%;object-fit:cover}
+    .twback2{display:flex;align-items:center;gap:8px;width:100%;min-height:0;height:30px;margin:0 0 4px;padding:0 6px;border:0;border-radius:8px;background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:12.5px;font-weight:700}
+    .twback2 svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+    .twback2 i{margin-left:auto;font-style:normal;font-weight:600;color:#ff8a8a;font-size:11.5px}
+    .twstream{cursor:pointer}
+    .twstream .twtx span{color:#aab3c4 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .twadd{width:28px;height:28px;min-height:0;flex:none;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#fff;font-size:17px;font-weight:700;line-height:28px;text-align:center}
     .twadd:hover{background:var(--acc)}
     .twadd.on{background:color-mix(in srgb,#17864a 70%,var(--pnl));font-size:14px}
@@ -783,7 +797,7 @@
     .act.rm{background:color-mix(in srgb,var(--rmc,#d93a3f) calc(40% + var(--p,0) * 45%),var(--pnl))}
     .act.add{background:color-mix(in srgb,var(--addc,#17864a) calc(40% + var(--p,0) * 45%),var(--pnl))}
     .sw.armed .act.rm{background:var(--rmc,#d93a3f)} .sw.armed .act.add{background:var(--addc,#17864a)}
-    .sw.nextup .act.add{background:color-mix(in srgb,var(--acc) calc(40% + var(--p,0) * 45%),var(--pnl))} .sw.nextup.armed .act.add{background:var(--acc)}
+    .sw.nextup .act.add{background:color-mix(in srgb,var(--nxc,#3d7be0) calc(40% + var(--p,0) * 45%),var(--pnl))} .sw.nextup.armed .act.add{background:var(--nxc,#3d7be0)}
     .sw.no .act{background:color-mix(in srgb,#6b7385 30%,var(--pnl))}
     .act svg{width:var(--aico,24px);height:var(--aico,24px);fill:none;stroke:currentColor;stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;transform:scale(calc(.65 + var(--p,0) * .35));transition:transform .16s cubic-bezier(.4,0,.2,1)}
     .sw.armed .act svg{transform:scale(1.18)}
@@ -1041,6 +1055,10 @@
     .twvod .vtx b{font-size:13px;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .twvod .vtx span{font-size:11.5px;color:#aab3c4}
     .twback{margin-top:10px}
+    .twmine{display:inline-flex;align-items:center;gap:8px;min-height:0;height:30px;margin:10px 0 2px;padding:0 12px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#dfe3ec;font-size:12.5px;font-weight:600}
+    .twmine svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .twmine:hover{background:rgba(255,255,255,.14);color:#fff}
+    .twmine.on:hover{background:color-mix(in srgb,var(--rmc,#d93a3f) 70%,var(--pnl))}
     .twchatov .cstat{align-self:flex-start;padding:3px 9px;border-radius:999px;background:rgba(10,11,14,.6);color:#aab3c4;font-size:12px;font-style:italic}
     /* info and comments read as solidly as the list's rows (the video behind shouldn't wash them out) */
     .desc{margin:4px 2px;padding:12px 12px 10px;border-radius:var(--rrad,7px);background:var(--rowbg)}
@@ -1369,6 +1387,7 @@
     const setFrame = el("div", "setwrap"); setFrame.hidden = true; // settings, right here over TV (also in full screen)
     const chmenu = el("div", "chmenu"); chmenu.hidden = true; chmenu.setAttribute("role", "menu");
     const pbody = el("div", "pbody");
+    pbodyW = 0; try { new ResizeObserver((es) => { const w = es[0] && es[0].contentRect.width; if (w) pbodyW = w; }).observe(pbody); } catch {}
     // drag the panel's left edge to make it wider or narrower (double-click puts it back); the width is remembered
     const grip = el("div", "grip"); grip.title = "Drag to resize · double-click to reset";
     const PW_KEY = "hush:tv:panelw";
@@ -1431,7 +1450,7 @@
       "--rrad": px(L.rowRadius), "--gap": px(L.rowGap), "--ralpha": pc(L.rowAlpha),
       "--tabh": px(L.tabHeight), "--tabpad": px(L.tabPad), "--tabw": px(L.tabWidth), "--tabs": String(L.tabScale / 100) })) ui.root.style.setProperty(k, v);
     ui.root.classList.toggle("edgefade", L.edgeFade);
-    ui.root.style.setProperty("--addc", cfg.tv.swipeAddColor); ui.root.style.setProperty("--rmc", cfg.tv.swipeRmColor); ui.root.style.setProperty("--aico", cfg.tv.swipeIconPx + "px");
+    ui.root.style.setProperty("--addc", cfg.tv.swipeAddColor); ui.root.style.setProperty("--nxc", cfg.tv.swipeNextColor); ui.root.style.setProperty("--rmc", cfg.tv.swipeRmColor); ui.root.style.setProperty("--aico", cfg.tv.swipeIconPx + "px");
     ui.root.classList.toggle("dense", cfg.tv.density === "compact");
     ui.root.classList.toggle("motion", motionOn());
     const rowh = Math.round(Math.max(cfg.tv.rowPx, tw * 9 / 16 + 10)); // never shorter than its picture
@@ -1494,13 +1513,15 @@
       const inUse = !!ui.root.querySelector(".top:hover, .bar:hover, .top:has(:focus-visible), .bar:has(:focus-visible)");
       // the list hides along with them (Settings → Swiping & lists), unless you're pointing at it or using it
       const mode = cfg.tv.listHide, hides = mode === "always" || (mode === "fullscreen" && !!document.fullscreenElement);
-      const listStays = isListTab(state.panel) ? !hides || !!ui.root.querySelector(".panel:hover, .phide:hover, .panel:has(:focus-visible), .chmenu.on, .sw.gone, .pickbar.on") : !!state.panel;
+      const listStays = isListTab(state.panel) || PAGES.has(state.panel) ? !hides || !!ui.root.querySelector(".panel:hover, .phide:hover, .panel:has(:focus-visible), .chmenu.on, .sw.gone, .pickbar.on") : !!state.panel;
       const awake = performance.now() < (state.wakeUntil || 0); // you just pressed a key or clicked: stay up a moment
       // the mouse went off the page (to the browser's tabs or another window): nothing hides until it's back over the video
       const outNow = state.mouseOut && Date.now() - (state.mouseOutAt || 0) < 4000; // a quick overshoot to the browser's tabs keeps it up; a while away and it hides as usual
       if (outNow) { clearTimeout(state.outT); state.outT = setTimeout(sync, 4100); }
       const busy = outNow || awake || listStays || ui.root.classList.contains("show-guide") || !ui.explore.hidden || !ui.pop.hidden || !ui.fpop.hidden || !ui.twpop.hidden || !ui.setFrame.hidden || inUse;
-      ui.root.classList.toggle("fade", ytHidden && !busy);
+      const fadeNow = ytHidden && !busy;
+      if (fadeNow && !ui.root.classList.contains("fade")) setTimeout(pageHidden, 400); // (once it has faded out)
+      ui.root.classList.toggle("fade", fadeNow);
       stillOn = still; document.documentElement.classList.toggle("ytv-still", still && !busy);
     };
     // Mouse movement over YTV's controls is passed on to YouTube's player, so YouTube's own controls
@@ -1518,7 +1539,9 @@
     ui.root.addEventListener("mouseout", () => setTimeout(sync, 0));
     ui.root.addEventListener("focusin", () => sync());
     ui.root.addEventListener("focusout", () => setTimeout(sync, 0));
+    const mine = ui && ui.root;
     const attach = () => {
+      if (!ui || ui.root !== mine) return; // TV was closed (or opened again): this one stops waiting
       const mp = document.getElementById("movie_player");
       if (!mp) return setTimeout(attach, 500);
       controlsObs = new MutationObserver(sync);
@@ -2030,7 +2053,8 @@
     const R = restWidth(); list.style.setProperty("--R", R + "px");
     for (const n of list.children) if (!n.classList.contains("gone") && !busyRows.has(n)) { n._R = R; n.scrollLeft = R; }
   };
-  const restWidth = () => Math.round(Math.min(Math.max(thr() * 2, 80), Math.max(120, ((ui && ui.pbody.clientWidth) || 400) * 0.62)));
+  let pbodyW = 0; // the list's width, kept up to date by a ResizeObserver
+  const restWidth = () => Math.round(Math.min(Math.max(thr() * 2, 80), Math.max(120, (pbodyW || (ui && (pbodyW = ui.pbody.clientWidth)) || 400) * 0.62)));
   const flipped = () => !!(cfg && cfg.tv.swipeFlip);
   const makeRow = (v, kind, c) => {
     const wrap = el("div", "sw" + (v.tw ? " still" : "") + (v.off ? " twoff" : "")); wrap.dataset.id = v.id;
@@ -2066,15 +2090,20 @@
   };
   const updateRow = (api) => {
     const { row, v, kind } = api;
-    const i = kind === "live" ? state.queue.findIndex((x) => x.id === v.id) : -1;
+    const i = kind === "live" ? (qIdx ? (qIdx.has(v.id) ? qIdx.get(v.id) : -1) : state.queue.findIndex((x) => x.id === v.id)) : -1;
     const cur = kind === "live" ? i === state.pos : kind === "hist" && !!current() && current().id === v.id;
     row.classList.toggle("cur", cur);
     api.wrap.classList.toggle("curw", cur);
-    row.classList.toggle("done", kind === "live" && !cur && !v.tw && (i < state.pos || played.has(v.id))); // everything above what's playing is behind you
+    row.classList.toggle("done", kind === "live" && !cur && !v.tw && !sortOff() && (i < state.pos || played.has(v.id))); // everything above what's playing is behind you
     setLines(api);
   };
   // Make `list` show `items` (in order), reusing the rows already there. Rows that move glide to their new place.
+  let qIdx = null; // id → place in the playing list, only while a list is being redrawn
   const reconcile = (list, items, kind, c, animate) => {
+    if (kind === "live") { qIdx = new Map(); state.queue.forEach((x, k) => { if (x && !qIdx.has(x.id)) qIdx.set(x.id, k); }); }
+    try { return reconcile0(list, items, kind, c, animate); } finally { qIdx = null; }
+  };
+  const reconcile0 = (list, items, kind, c, animate) => {
     const old = new Map();
     for (const n of list.children) if (!n.classList.contains("gone") && n.classList.contains("sw")) old.set(n.dataset.id, n); // (rows only: the Watched bar stays)
     const glide = animate && motionOn();
@@ -2159,7 +2188,7 @@
     }
     const list = box.querySelector(".list"), empty = box.querySelector(".empty"), hint = box.querySelector(".hintline");
     let items = [];
-    if (kind === "live") items = state.queue.filter((v, i) => i <= state.pos || v.f || !played.has(v.id)); // up next never shows what you've already watched
+    if (kind === "live") items = sortOff() ? state.queue.slice() : state.queue.filter((v, i) => i <= state.pos || v.f || !played.has(v.id)); // up next never shows what you've already watched (sorting off: it's all there)
     else if (kind === "base") items = state.base || [];
     else if (kind === "idle") items = feedStore;
     else if (kind === "xbrowse") items = x.items;
@@ -2181,7 +2210,7 @@
     // what this channel wouldn't play any more (seen since the list loaded, a creator you hid, music…) isn't shown
     // either, so the list is what will really play
     const ucol = kind === "live" || kind === "base" ? currentCol() : kind === "browse" ? c : null;
-    if (ucol && !ucol.twitch) {
+    if (ucol && !ucol.twitch && !(sortOff() && kind === "live")) {
       const cur = current(), curAt0 = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
       items = items.filter((v, i) => i <= curAt0 || v.f || v.nx || usable(ucol, v));
     }
@@ -2202,7 +2231,7 @@
     let n;
     if (fresh && items.length > 70) {
       const curAt = kind === "live" ? items.findIndex((v) => current() && v.id === current().id) : -1;
-      const key0 = tab + "|" + kind + (kind === "live" ? "|" + ((current() || {}).id || "") : "");
+      const key0 = tab + "|" + kind + (kind === "live" && !sortOff() ? "|" + ((current() || {}).id || "") : "");
       const memAt = scrollMem.has(key0) ? Math.ceil(scrollMem.get(key0) / 60) : 0; // (rows are at least ~60px tall)
       const first = Math.min(items.length, Math.max(50, curAt + 30, memAt + 30));
       n = reconcile(list, items.slice(0, first), kind, c, false);
@@ -2218,7 +2247,7 @@
     // what you already watched on this channel sits folded away right above what's playing, under one "Watched" bar
     // (open or closed, as you left it)
     const curAtW = kind === "live" && !(c && c.twitch) && current() ? items.findIndex((v) => v.id === current().id) : -1;
-    const wIds = new Set(curAtW > 0 ? items.slice(0, curAtW).map((v) => v.id) : []);
+    const wIds = new Set(curAtW > 0 && !sortOff() && cfg.tv.watchedFold ? items.slice(0, curAtW).map((v) => v.id) : []); // (off in settings: they stay in view, greyed)
     for (const w of list.children) if (w.classList.contains("sw")) w.classList.toggle("wfold", wIds.has(w.dataset.id));
     let wb = box._wbar;
     if (wIds.size) {
@@ -2244,10 +2273,12 @@
     if (fresh) {
       // each tab remembers where you were; the first time, what's playing sits at the very top (what you
       // already watched is just above it, out of view: scroll up to see it)
-      const key = tab + "|" + kind + (kind === "live" ? "|" + ((current() || {}).id || "") : ""); // once something else plays, it's shown at the top again
+      // (sorting off: the list stays where you scrolled it, whatever plays)
+      const keepPlace = kind === "live" && sortOff();
+      const key = tab + "|" + kind + (kind === "live" && !keepPlace ? "|" + ((current() || {}).id || "") : ""); // once something else plays, it's shown at the top again
       ui.pbody.scrollTop = 0;
       if (scrollMem.has(key)) ui.pbody.scrollTop = scrollMem.get(key);
-      else { const cur = list.querySelector(".sw.curw:not(.still)"), wbar = list.querySelector(":scope > .wbar"); if (cur) ui.pbody.scrollTop = (wbar || cur).offsetTop; } // Twitch starts at the top
+      else if (!keepPlace) { const cur = list.querySelector(".sw.curw:not(.still)"), wbar = list.querySelector(":scope > .wbar"); if (cur) ui.pbody.scrollTop = (wbar || cur).offsetTop; } // Twitch starts at the top
       box.dataset.key = key;
     }
     markStuck();
@@ -2284,10 +2315,13 @@
       if (!ui || !box.isConnected || !rest.length) return;
       const frag = document.createDocumentFragment(), names = [], made = [];
       const have = new Set([...list.children].map((x) => x.dataset.id));
-      for (const v of rest.splice(0, 60)) {
-        if (!v || have.has(v.id)) continue;
-        const api = makeRow(v, kind, c); updateRow(api); frag.append(api.wrap); names.push([v, api]); made.push(api.wrap);
-      }
+      if (kind === "live") { qIdx = new Map(); state.queue.forEach((x, k) => { if (x && !qIdx.has(x.id)) qIdx.set(x.id, k); }); }
+      try {
+        for (const v of rest.splice(0, 40)) { // (small batches: the page stays smooth while a long list fills in)
+          if (!v || have.has(v.id)) continue;
+          const api = makeRow(v, kind, c); updateRow(api); frag.append(api.wrap); names.push([v, api]); made.push(api.wrap);
+        }
+      } finally { qIdx = null; }
       list.append(frag);
       for (const w of made) { w._R = R; w.scrollLeft = R; }
       if (names.length) fillNames(names);
@@ -2837,13 +2871,91 @@
         if (my === twsTok && ui) { twsLast = { q: q.value, r }; drawTwResults(out, r); }
       }, 300);
     });
+    pop.dataset.mode = "names";
     pop.replaceChildren(head, q, out);
     if (twsLast.r) drawTwResults(out, twsLast.r);
     pop.hidden = false; ui.twsB.classList.add("open"); wake();
     setTimeout(() => q.focus({ preventScroll: true }), 0);
   };
   const closeTwSearch = () => { if (!ui || !ui.twpop || ui.twpop.hidden) return false; ui.twpop.hidden = true; ui.twsB.classList.remove("open"); wake(); return true; };
-  const toggleTwSearch = () => (ui && !ui.twpop.hidden ? closeTwSearch() : openTwSearch());
+  const toggleTwSearch = () => (ui && !ui.twpop.hidden && ui.twpop.dataset.mode === "names" ? closeTwSearch() : openTwSearch());
+
+  // ---- Twitch: browse what's live in a game or category (E on the Twitch tab). Click a stream to watch it, + to add them.
+  let twbLast = { q: "", cats: null, game: null, streams: null }, twbTok = 0, twbT = 0;
+  const toLiveItem = (x) => ({ id: "tw:" + x.login, tw: true, login: x.login, title: String(x.title || "").slice(0, 200) || `${x.name || x.login} is live`, channel: String(x.name || x.login).slice(0, 60), creator: "",
+    len: x.viewers ? `${Intl.NumberFormat(undefined, { notation: "compact" }).format(x.viewers)} watching` : "live", age: String(x.game || "").slice(0, 60),
+    viewers: Number(x.viewers) || 0, since: Date.parse(x.since || "") || 0, game: String(x.game || "").slice(0, 60), avatar: /^https:\/\/static-cdn\.jtvnw\.net\//.test(x.avatar || "") ? x.avatar : "",
+    thumb: /^https:\/\/static-cdn\.jtvnw\.net\//.test(x.thumb || "") ? x.thumb : "", progress: 0, watched: false });
+  const watchStream = (v) => {
+    closeTwSearch();
+    const col = currentCol();
+    if (col && col.twitch) { let i = state.queue.findIndex((x) => x.id === v.id); if (i < 0) { state.queue.splice(state.pos + 1, 0, v); i = state.pos + 1; } return goTo(i); }
+    startOnTwitch(v);
+  };
+  // a picture from Twitch's image server only (anything else: no picture)
+  const twPic = (url) => { const safe = String(url || ""); if (!/^https:\/\/static-cdn\.jtvnw\.net\//.test(safe)) return null; const img = el("img"); img.alt = ""; img.loading = "lazy"; img.src = safe; return img; };
+  const compact = (n) => Intl.NumberFormat(undefined, { notation: "compact" }).format(n || 0);
+  const drawTwBrowse = (out) => {
+    const L = twbLast;
+    if (L.streams) { // who's live in the game you picked
+      const back = el("button", "twback2"); back.type = "button"; back.append(icon("back"), el("span", null, `${L.game}`), el("i", null, L.streams.length ? `${L.streams.length} live` : ""));
+      back.addEventListener("click", () => { twbLast = { ...twbLast, game: null, streams: null }; drawTwBrowse(out); });
+      const rows = L.streams.map((x) => {
+        const v = toLiveItem(x), have = () => cfg.tv.twitch.logins.includes(x.login);
+        const row = el("div", "twhit tson twstream"); row.title = `Watch ${x.name || x.login}`;
+        const av = el("span", "twav"); const pa = twPic(v.avatar); if (pa) av.append(pa);
+        const tx = el("span", "twtx"); tx.append(el("b", null, x.name || x.login), el("span", null, `${compact(x.viewers)} watching · ${String(x.title || "").slice(0, 90)}`));
+        const add = el("button", "twadd" + (have() ? " on" : ""), have() ? "✓" : "+"); add.type = "button"; add.title = have() ? "On your list" : `Add ${x.name || x.login} to Twitch Live`;
+        add.addEventListener("click", async (e) => { e.stopPropagation(); if (have()) return; cfg.tv.twitch.logins = [...cfg.tv.twitch.logins, x.login]; add.classList.add("on"); add.textContent = "✓"; await writeCfg(); twitchCache.at = 0; twitchTick(); });
+        row.addEventListener("click", () => watchStream(v));
+        row.append(av, tx, add);
+        return row;
+      });
+      return out.replaceChildren(back, ...(rows.length ? rows : [el("p", "fnote", "Nobody is live in this one right now.")]));
+    }
+    if (!L.cats) return out.replaceChildren();
+    if (!L.cats.length) return out.replaceChildren(el("p", "fnote", L.error ? `Twitch didn’t answer as expected (${L.error}).` : "No game or category by that name."));
+    out.replaceChildren(...L.cats.map((g) => {
+      const row = el("button", "twcat"); row.type = "button"; row.title = `Who’s live in ${g.title}`;
+      const art = el("span", "twart"); const pg = twPic(g.art); if (pg) art.append(pg);
+      const tx = el("span", "twtx"); tx.append(el("b", null, g.title), el("span", null, g.viewers ? `${compact(g.viewers)} watching` : ""));
+      row.append(art, tx);
+      row.addEventListener("click", async () => {
+        const my = ++twbTok; out.replaceChildren(el("p", "fnote", `Who’s live in ${g.title}…`));
+        let r = null; try { r = await chrome.runtime.sendMessage({ ytv: "twitchGame", name: g.name }); } catch {}
+        if (my !== twbTok || !ui) return;
+        twbLast = { ...twbLast, game: (r && r.game) || g.title, streams: r && Array.isArray(r.live) ? r.live.filter((x) => x && /^[a-z0-9_]{2,25}$/.test(x.login)) : [] };
+        drawTwBrowse(out);
+      });
+      return row;
+    }));
+  };
+  const openTwBrowse = () => {
+    if (!ui) return;
+    closeFilter(); closeChanMenu();
+    const pop = ui.twpop, head = el("h4"); head.append(el("b", null, "Live on Twitch"), el("span", "fcount", "Shift+E: find streamers"));
+    const q = el("input", "twq"); q.type = "search"; q.placeholder = "Game or category"; q.autocomplete = "off"; q.spellcheck = false; q.value = twbLast.q;
+    const out = el("div", "twres");
+    q.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); closeTwSearch(); } });
+    q.addEventListener("input", () => {
+      clearTimeout(twbT);
+      const v = q.value.trim();
+      if (v.length < 2) { twbLast = { q: q.value, cats: null, game: null, streams: null }; out.replaceChildren(); return; }
+      twbT = setTimeout(async () => {
+        const my = ++twbTok; out.replaceChildren(el("p", "fnote", "Searching…"));
+        let r = null; try { r = await chrome.runtime.sendMessage({ ytv: "twitchCategories", q: v }); } catch {}
+        if (my !== twbTok || !ui) return;
+        twbLast = { q: q.value, cats: r && Array.isArray(r.found) ? r.found : [], error: r ? r.error : "no answer", game: null, streams: null };
+        drawTwBrowse(out);
+      }, 300);
+    });
+    pop.dataset.mode = "browse";
+    pop.replaceChildren(head, q, out);
+    drawTwBrowse(out);
+    pop.hidden = false; ui.twsB.classList.add("open"); wake();
+    setTimeout(() => q.focus({ preventScroll: true }), 0);
+  };
+  const toggleTwBrowse = () => (ui && !ui.twpop.hidden && ui.twpop.dataset.mode === "browse" ? closeTwSearch() : openTwBrowse());
 
   // ---- Settings, opened right over TV (no new tab, so full screen stays as it is). Esc or ✕ closes it.
   const openSettings = (hash = "#channels") => {
@@ -2890,6 +3002,18 @@
       if (state.twVod && state.twVod.login === v.login) { const back = btn("● Back to live", "Back to the live stream", () => playTwitch(v)); back.classList.add("twback"); box.append(back); }
       else if (!(current() && current().login === v.login)) { const go = btn("● Watch live", `Watch ${v.channel} live`, () => { const i = state.queue.findIndex((x) => x.id === v.id); if (currentCol() && currentCol().twitch && i >= 0) goTo(i); else playTwitch(v); }); go.classList.add("twback"); box.append(go); }
     }
+    // on your list or not: add them, or take them off (what's playing keeps playing until you switch)
+    const onList = () => cfg.tv.twitch.logins.includes(v.login);
+    const mb = el("button", "twmine"); mb.type = "button";
+    const drawMine = () => { mb.replaceChildren(icon(onList() ? "trash-2" : "plus"), el("span", null, onList() ? `Remove ${v.channel} from Twitch Live` : `Add ${v.channel} to Twitch Live`)); mb.classList.toggle("on", onList()); };
+    mb.addEventListener("click", async () => {
+      const had = onList();
+      cfg.tv.twitch.logins = had ? cfg.tv.twitch.logins.filter((x) => x !== v.login) : [...cfg.tv.twitch.logins, v.login];
+      if (had) cfg.tv.twitch.alerts = (cfg.tv.twitch.alerts || []).filter((x) => x !== v.login); // (no go-live notes for someone you took off)
+      drawMine(); await writeCfg();
+      twitchCache.at = 0; twitchTick(); browse.delete(TWITCH_ID);
+    });
+    drawMine(); box.append(mb);
     const head = el("div", "twvh", `Past broadcasts${v.off ? "" : " from " + v.channel}`), list = el("div", "twvods");
     list.append(el("p", "muted", "Loading…"));
     box.append(head, list);
@@ -2926,7 +3050,7 @@
     for (const v of items) {
       if (!v || v.tw || !ID_RE.test(v.id) || partial[v.id]) continue;
       const p = Number(v.progress) || 0;
-      if (p >= 3 && p < 90) { partial[v.id] = { v: slimV(v), p, at: Date.now() }; changed = true; }
+      if (p >= 3 && p < fullPct()) { partial[v.id] = { v: slimV(v), p, at: Date.now() }; changed = true; }
     }
     if (!changed) return;
     const ids = Object.keys(partial); if (ids.length > 200) ids.sort((x, y) => partial[x].at - partial[y].at).slice(0, ids.length - 200).forEach((k) => delete partial[k]);
@@ -2939,7 +3063,7 @@
     const out = [];
     for (const x of by.values()) {
       const p = Math.max(progressOf(x.v), x.yp || 0), r = resumeOf(x.v.id);
-      if (p >= 90 || seen.has(x.v.id) && p === 0 && !r) continue; // finished (or YTV doesn't know how far)
+      if (p >= fullPct() || seen.has(x.v.id) && p === 0 && !r) continue; // finished (or YTV doesn't know how far)
       if (p >= 3 || r > 20) out.push({ ...x, p });
     }
     return out.sort((a, b) => b.at - a.at).slice(0, 100);
@@ -3277,8 +3401,7 @@
     panelRaf = requestAnimationFrame(() => {
       panelRaf = 0;
       if (!ui) return;
-      if (isListTab(state.panel)) renderPanel(false);
-      else renderTabs();
+      try { if (isListTab(state.panel)) renderPanel(false); else renderTabs(); } catch (err) { logErr("list", err); } // (one bad row never breaks the list for good)
       });
   };
   const refreshList = () => schedulePanel();
@@ -3307,10 +3430,16 @@
     wake();
   };
   let lastListTab = "";
+  const PAGES = new Set(["info", "comments", HIST_TAB]);
   const togglePanel = (which) => {
-    if (state.panel !== which) { if (isListTab(state.panel) && state.panel !== HIST_TAB) lastListTab = state.panel; return showPanel(which); }
-    showPanel(lastListTab && isListTab(lastListTab) ? lastListTab : playingTab()); // pressed again: back to the list you were on
+    if (state.panel !== which) { // from the list (or from nothing): remember that, so the same key brings you back there
+      if (!PAGES.has(state.panel)) lastListTab = isListTab(state.panel) ? state.panel : "";
+      return showPanel(which);
+    }
+    showPanel(lastListTab && isListTab(lastListTab) ? lastListTab : ""); // pressed again: the list you were on, or no panel at all
   };
+  // the panel hid by itself (the mouse went away) while Info, Comments or History was open: it comes back as the list
+  const pageHidden = () => { if (ui && PAGES.has(state.panel) && ui.root.classList.contains("fade")) showPanel(lastListTab && isListTab(lastListTab) ? lastListTab : playingTab()); };
   // The list key: opens the tab of what's playing (or closes the panel).
   const toggleList = () => showPanel(isListTab(state.panel) ? "" : playingTab());
 
@@ -3608,6 +3737,7 @@
   };
   // Keep only the last few videos you watched on this channel as a trail above what's playing (Settings → Lists).
   const trimTrail = () => {
+    if (sortOff()) return; // sorting off: everything stays where it is
     const col = currentCol(); if (col && col.twitch) return; // Twitch is a list you pick from: nothing is "behind" you
     const cut = state.pos - (cfg ? cfg.tv.trail : 5);
     if (cut <= 0) return;
@@ -3744,8 +3874,11 @@
   window.addEventListener("pagehide", () => saveLast(true));
   // (kept for this tab, so a reload or a page change doesn't lose it)
   const GHIST_KEY = "ytv:ghist";
-  const ghist = (() => { try { const g = lsGet(GHIST_KEY, null) || JSON.parse(sessionStorage.getItem(GHIST_KEY) || "null"); if (g && Array.isArray(g.list) && Number.isInteger(g.pos)) { const list = g.list.filter((e) => e && e.v && typeof e.v.id === "string").slice(-200); return { list, pos: Math.min(Math.max(-1, g.pos), list.length - 1) }; } } catch {} return { list: [], pos: -1 }; })();
-  const saveGhist = () => { lsSet(GHIST_KEY, ghist); if (ui && (state.panel === "history" || state.panel === "cont")) schedulePanel(); };
+  const ghist = (() => { try { const g = lsGet(GHIST_KEY, null) || JSON.parse(sessionStorage.getItem(GHIST_KEY) || "null"); if (g && Array.isArray(g.list) && Number.isInteger(g.pos)) { const list = g.list.filter((e) => e && e.v && typeof e.v.id === "string").slice(-2000); return { list, pos: Math.min(Math.max(-1, g.pos), list.length - 1) }; } } catch {} return { list: [], pos: -1 }; })();
+  let ghistT = 0;
+  // (written at most twice a second, never later than that)
+  const saveGhist = () => { if (!ghistT) ghistT = setTimeout(() => { ghistT = 0; lsSet(GHIST_KEY, ghist); }, 500); if (ui && (state.panel === "history" || state.panel === "cont")) schedulePanel(); };
+  window.addEventListener("pagehide", () => { if (ghistT) lsSet(GHIST_KEY, ghist); });
   const slimV = (v) => { const o = {}; for (const k of ["id", "title", "channel", "creator", "len", "age", "tw", "login", "vod", "off", "thumb"]) if (v[k] !== undefined) o[k] = v[k]; return o; };
   // Whatever plays is where you are in it: the same one as here (you stepped to it) or the next one changes nothing
   // but your place; anything else starts a new branch from here, like a browser's back and forward.
@@ -3755,7 +3888,8 @@
     if (here && here.v.id === v.id) return;
     if (next && next.v.id === v.id) { ghist.pos++; saveGhist(); return; }
     ghist.list = ghist.list.slice(0, ghist.pos + 1); ghist.list.push({ colId: state.colId, v: slimV(v), at: Date.now() });
-    if (ghist.list.length > 200) ghist.list.shift();
+    const max = cfg ? cfg.tv.histMax : 200; // (Settings → List → History)
+    while (ghist.list.length > max) { ghist.list.shift(); ghist.pos--; }
     ghist.pos = ghist.list.length - 1;
     saveGhist();
   };
@@ -3819,11 +3953,58 @@
   const jumpTo = (i) => {
     if (i === state.pos || i < 0 || i >= state.queue.length) return;
     state.pickedId = state.queue[i] && state.queue[i].id; // you picked this one: it plays whatever its date
-    const col = currentCol(); if (col && col.twitch) return goTo(i); // Twitch: nothing moves, you just switch
+    const col = currentCol(); if ((col && col.twitch) || sortOff()) return goTo(i); // Twitch, or sorting off: nothing moves, you just switch
     const [item] = state.queue.splice(i, 1);
     if (i < state.pos) state.pos -= 1;
     state.queue.splice(state.pos + 1, 0, item);
     goTo(state.pos + 1);
+  };
+  // Sorting back on: from now on watched videos grey, fold and leave as usual. What you fully watched in the tab you're
+  // on goes now (Cmd+Z brings it back, and sorting stays on); what's playing moves to the top, the rest keeps its order.
+  const toggleSorting = () => {
+    if (!cfg) return;
+    const turningOn = cfg.tv.keepOrder;
+    cfg.tv.keepOrder = !turningOn; writeCfg();
+    if (!turningOn) { toast("Sorting off: the list stays exactly as it is"); schedulePanel(); return; }
+    for (const id of dumbPlayed) { const it = state.queue.find((x) => x.id === id); if (progressOf(it || { id }) < fullPct()) played.delete(id); }
+    dumbPlayed.clear();
+    const tab = isListTab(state.panel) ? state.panel : playingTab(), kind = tabKind(tab), cur = current();
+    const full = (x) => x && !x.tw && !x.f && !(cur && x.id === cur.id) && progressOf(x) >= fullPct();
+    let gone = 0;
+    if (kind === "live") {
+      const ids0 = state.queue.map((x) => x.id), drop = state.queue.filter(full);
+      if (drop.length) {
+        const hist = idsOfHistory(); state.queue = state.queue.filter((x) => !full(x)); state.pos = Math.max(0, state.queue.findIndex((x) => cur && x.id === cur.id)); fixHistory(hist); gone = drop.length;
+        pushUndo("live", () => { // back where they were (you want to see them: they show and can play again)
+          const c2 = current(), h2 = idsOfHistory();
+          for (const x of drop) { // each goes back in front of whatever followed it before (everything else stays as it is now)
+            played.delete(x.id);
+            if (state.queue.some((y) => y.id === x.id)) continue;
+            const after = ids0.slice(ids0.indexOf(x.id) + 1).map((id) => state.queue.findIndex((y) => y.id === id)).find((k) => k >= 0);
+            state.queue.splice(after === undefined ? state.queue.length : after, 0, { ...x, nx: 1 });
+          }
+          state.pos = Math.max(0, state.queue.findIndex((x) => c2 && x.id === c2.id)); fixHistory(h2); saveSession(); schedulePanel();
+        });
+        saveSession();
+      }
+      // what's playing goes to the top; everything else keeps its order after it (and stays visible: nothing counts as
+      // "behind you" yet)
+      const ci = state.queue.findIndex((x) => cur && x.id === cur.id);
+      if (ci > 0) { const hist = idsOfHistory(), [c0] = state.queue.splice(ci, 1); state.queue.unshift(c0); state.pos = 0; fixHistory(hist); }
+      for (const x of state.queue) if (!(cur && x.id === cur.id)) played.delete(x.id);
+      saveSession();
+    } else if (kind === "browse" || kind === "base") {
+      const arr = kind === "base" ? state.base : (browse.get(tab.slice(4)) || {}).items;
+      if (arr) {
+        const before = arr.slice(), drop = arr.filter(full);
+        if (drop.length) {
+          arr.splice(0, arr.length, ...arr.filter((x) => !full(x))); gone = drop.length;
+          pushUndo(kind === "base" ? "live" : "browse", () => { const by = new Set(arr.map((x) => x.id)); arr.splice(0, arr.length, ...before.filter((x) => by.has(x.id) || drop.includes(x)), ...arr.filter((x) => !before.includes(x))); schedulePanel(); });
+        }
+      }
+    }
+    toast(gone ? `Sorting on · ${gone} fully watched video${gone === 1 ? "" : "s"} cleared (Cmd+Z brings them back)` : "Sorting on");
+    schedulePanel();
   };
   const remaining = () => state.queue.slice(state.pos + 1).filter((v) => !played.has(v.id)).length;
   // Fetch more videos for what's playing now: on-topic videos while exploring, similar ones while
@@ -3874,6 +4055,7 @@
     const col = currentCol(), fOn = filterFor(col);
     for (let i = state.pos + 1; i < state.queue.length; i++) {
       const v = state.queue[i];
+      if (sortOff()) { if (v.nx || ((!fOn || passFilter(v)) && (v.f || !col || !isBlocked(col, v)))) return i; continue; } // sorting off: simply the next one in the list
       if (v.nx && !played.has(v.id)) return i; // you put it there yourself
       if ((!col || usable(col, v)) && (!fOn || passFilter(v)) && (allowSeen || v.f || !played.has(v.id))) return i;
     }
@@ -3897,7 +4079,7 @@
       : "Nothing more to play on this channel right now");
     // videos jumped over (hidden by a filter, on your Feed, a creator you hid…) would otherwise end up above what's
     // playing as if you'd watched them: they leave the list instead
-    if (i > state.pos + 1) {
+    if (i > state.pos + 1 && !sortOff()) {
       const hist = idsOfHistory(), id = state.queue[i].id;
       const fOn = filterFor(col); // (only hidden by the list filter: they stay, for when you loosen it)
       state.queue = state.queue.filter((x, k) => k <= state.pos || k >= i || played.has(x.id) || (fOn && !passFilter(x) && (!col || usable(col, x))));
@@ -4298,7 +4480,7 @@
   const wlRemoveWatched = async () => {
     const wl = await SW.yt.watchLater();
     state.wlCtx = wl.ctx || state.wlCtx;
-    const done = wl.videos.filter((v) => progressOf(v) >= 90 || seen.has(v.id));
+    const done = wl.videos.filter((v) => progressOf(v) >= fullPct() || seen.has(v.id));
     if (!done.length) return toast("Nothing watched in your Watch Later list");
     if (!confirm(`Remove ${done.length} watched video${done.length > 1 ? "s" : ""} from your YouTube Watch Later list?`)) return;
     const ok = await SW.yt.removeFromWatchLater(done.map((v) => v.id), state.wlCtx);
@@ -4795,8 +4977,17 @@
   const keyName = (action) => { const k = keyOf(action); return !k || !cfg.tv.keysOn ? "the button" : k.length === 1 ? k.toUpperCase() : k.replace("Page", "Page "); };
   const ACTIONS = {
     chUp: () => stepTab(+1), chDown: () => stepTab(-1), next: () => nextVideo(), prev: () => prevVideo(),
-    list: () => toggleList(), info: () => togglePanel("info"), comments: () => commentsOrChat(), explore: () => (ui.explore.hidden ? openExplore() : closeExplore()),
-    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(),
+    list: () => toggleList(), info: () => togglePanel("info"), comments: () => commentsOrChat(), explore: () => exploreKey(),
+    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(),
+  };
+  // E: on the Twitch tab (or with a stream on and no panel open) it finds streamers; anywhere else it explores YouTube
+  const exploreKey = () => {
+    const twTab = "src:" + TWITCH_ID, onStream = !!(current() && current().tw) && !state.panel;
+    if (cfg.tv.twitch.enabled && (state.panel === twTab || onStream)) {
+      if (state.panel !== twTab) { showPanel(twTab); return setTimeout(() => openTwBrowse(), 0); }
+      return toggleTwBrowse();
+    }
+    return ui.explore.hidden ? openExplore() : closeExplore();
   };
   const escape = () => {
     if (clearPicks()) return;
@@ -4817,7 +5008,11 @@
     if (e.shiftKey && (e.code === "BracketLeft" || e.code === "BracketRight")) return () => historyStep(e.code === "BracketLeft" ? -1 : +1); // back / forward through everything you watched
     if (e.shiftKey) { // Shift + the tab keys: switch channel and play (Shift+, types "<", so look at the key itself too)
       const base = e.code === "Comma" ? "," : e.code === "Period" ? "." : e.code === "BracketLeft" ? "[" : e.code === "BracketRight" ? "]" : e.code && e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : e.code && e.code.startsWith("Digit") ? e.code.slice(5) : k;
-      if (keyOf("explore") && base === keyOf("explore")) return () => openSearch(); // Shift+E: search YouTube for videos
+      if (keyOf("explore") && base === keyOf("explore")) return () => { // Shift+E: search YouTube; on the Twitch tab, find streamers by name
+        const twTab = "src:" + TWITCH_ID;
+        if (cfg.tv.twitch.enabled && (state.panel === twTab || (current() && current().tw && !state.panel))) { if (state.panel !== twTab) { showPanel(twTab); return setTimeout(() => openTwSearch(), 0); } return toggleTwSearch(); }
+        return openSearch();
+      }; // Shift+E: search YouTube for videos
       if (keyOf("chUp") && base === keyOf("chUp")) return () => stepTab(+1, true);
       if (keyOf("chDown") && base === keyOf("chDown")) return () => stepTab(-1, true);
     }
@@ -4842,7 +5037,8 @@
       composedPath: () => [document.body], preventDefault() {}, stopImmediatePropagation() {}, stopPropagation() {} };
     keyHandler(fake);
   };
-  const keyHandler = (e) => {
+  const keyHandler = (e) => { try { keyHandler0(e); } catch (err) { logErr("key", err); } };
+  const keyHandler0 = (e) => {
     const t = e.composedPath()[0];
     if (!ui || (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || "") || t.isContentEditable))) return;
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === "z") { e.preventDefault(); e.stopImmediatePropagation(); undoLast(); return; }
