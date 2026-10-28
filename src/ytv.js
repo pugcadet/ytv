@@ -665,6 +665,12 @@
     .htx b{font-size:var(--fs1,13px);font-weight:600;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .htx span{font-size:var(--fs2,12px);color:#aab3c4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     /* Find Twitch streamers */
+    .fpop.twpop{top:0;right:0;left:0;bottom:0;width:auto;max-height:none;padding:14px 14px 12px;border:0;border-radius:0;box-shadow:none;background:color-mix(in srgb,var(--pnl) 96%,#000);z-index:12}
+    .twpop h4{align-items:center}
+    .twpop h4 .fcount{margin-left:auto}
+    .twpop .twx{width:28px;height:28px;min-height:0;flex:none;padding:0;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#cfd4de;display:inline-flex;align-items:center;justify-content:center}
+    .twpop .twx:hover{background:rgba(255,255,255,.16);color:#fff}
+    .twpop .twx svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
     .twpop .twq{width:100%;min-height:0;height:32px;margin:2px 0 8px;padding:0 10px;border:1px solid color-mix(in srgb,var(--pnl) 55%,#8a96ad);border-radius:8px;background:#0e121b;color:#fff;font:inherit;font-size:13px}
     .twres{display:flex;flex-direction:column;gap:2px}
     .twhit{display:flex;align-items:center;gap:9px;padding:5px 4px;border-radius:8px}
@@ -685,13 +691,14 @@
     .twback2 i{margin-left:auto;font-style:normal;font-weight:600;color:#ff8a8a;font-size:11.5px}
     .twstream{cursor:pointer}
     .twstream .twtx span{color:#aab3c4 !important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .twadd{width:28px;height:28px;min-height:0;flex:none;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#fff;font-size:17px;font-weight:700;line-height:28px;text-align:center}
+    .twadd{width:28px;height:28px;min-height:0;flex:none;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.1);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+    .twadd svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
     .twadd:hover{background:var(--acc)}
-    .twadd.on{background:color-mix(in srgb,#17864a 70%,var(--pnl));font-size:14px}
+    .twadd.on{background:color-mix(in srgb,#17864a 70%,var(--pnl))}
     /* Settings over TV */
     .setwrap{position:absolute;inset:0;z-index:30;display:grid;place-items:center;background:rgba(0,0,0,.55);backdrop-filter:blur(calc(6px * var(--bk,1)))}
     .setwrap[hidden]{display:none}
-    .setbox{width:min(1240px,94%);height:92%;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;background:#14161b;border:1px solid color-mix(in srgb,var(--pnl) 55%,#8a96ad);box-shadow:0 24px 70px rgba(0,0,0,.6)}
+    .setbox{width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;background:#14161b} /* the whole screen: the settings page lays itself out for its full width */
     .motion .setbox{animation:fpin .2s ease}
     .setbar{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 16px;border-bottom:1px solid color-mix(in srgb,var(--pnl) 60%,#8a96ad);color:#8d97ab;font-size:12px}
     .setbar b{color:#fff;font-size:13.5px}
@@ -1419,10 +1426,10 @@
     const pickbar = el("div", "pickbar"); // when you've picked several videos
     pickbar.append(el("span", "pn", ""), btn("Explore together", "Play the picked videos as their own topic", () => bulk("explore")), btn("Add to Feed", "Add the picked videos to your Feed", () => bulk("add")),
       btn("Remove", "Remove the picked videos", () => bulk("rm")), iconBtn("x", "Let go of them (Esc)", () => clearPicks(), "pclose"));
-    const pwrap = el("div", "pwrap"); pwrap.append(pbody, nowbar, totop, pickbar);
+    const pwrap = el("div", "pwrap"); pwrap.append(pbody, nowbar, totop, pickbar, twpop); // (Twitch search: it fills the list area)
     // a small arrow on the list's left edge: closes it with the mouse (U does it with the keyboard)
     const closeArrow = iconBtn("chevron", "Close the list (U)", () => showPanel(""), "phide");
-    panel.append(grip, phead, pwrap, chmenu, fpop, twpop);
+    panel.append(grip, phead, pwrap, chmenu, fpop);
     panel.addEventListener("pointerdown", (e) => { if (!e.composedPath().some((n) => n === chmenu || (n.classList && n.classList.contains("chtab")))) closeChanMenu(); });
     const start = el("div", "start");
     start.append(btn("▶  Start watching", "Start watching", () => { root.classList.remove("show-start"); cmd({ cmd: "play" }); }));
@@ -2459,7 +2466,8 @@
     : current() && api.v.id === current().id ? "What’s playing stays in the list" : "This one can’t be removed here";
   const nudge = (api, act, dir) => {
     const w = api.wrap;
-    if (motionOn() && !(w._nudge && performance.now() - w._nudge < 450)) { w._nudge = performance.now(); api.row.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dir * 12}px)` }, { transform: "translateX(0)" }], { duration: 280, easing: "cubic-bezier(.3,.7,.4,1)" }); }
+    if (motionOn() && !(w._nudge && performance.now() - w._nudge < 200)) { /* (a moment after the last one, the next push nudges again) */ w._nudge = performance.now(); api.row.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dir * 12}px)` }, { transform: "translateX(0)" }], { duration: 280, easing: "cubic-bezier(.3,.7,.4,1)" }); return true; }
+    return false;
   };
   const refuse = (api, act) => {
     const w = api.wrap;
@@ -2555,7 +2563,7 @@
   // could slide a row instead of scrolling the list. YTV looks at a gesture's first movement: unless it's clearly
   // sideways (Settings → Sideways detection), YTV scrolls the list itself for that gesture and the rows stay put.
   const AXIS = { strict: 2.2, normal: 1.4, loose: 1 };
-  const wg = { manual: false, last: 0, endT: 0 };
+  const wg = { manual: false, last: 0, endT: 0, no: null, ldx: 0 };
   let lastPt = { x: 0, y: 0 };
   const onWheel = (e) => {
     if (!ui) return;
@@ -2573,10 +2581,19 @@
       // all for the whole gesture, however fast; it just gives a little nudge and says why, once
       else if (hit && dx !== 0 && !busyRows.has(hit) && Math.abs(hit.scrollLeft - hit._R) < 3) {
         const api = rowApi.get(hit), act = api && actOf(hit, dx < 0);
-        if (api && !can(api, act)) { wg.no = hit; nudge(api, act, dx < 0 ? 1 : -1); }
+        if (api && !can(api, act)) { wg.no = hit; wg.ldx = Math.abs(dx); wg.fell = false; nudge(api, act, dx < 0 ? 1 : -1); }
       }
     }
-    if (wg.no) { if (e.cancelable) e.preventDefault(); clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.no = null; }, 160); return; }
+    if (wg.no) {
+      if (e.cancelable) e.preventDefault(); clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.no = null; }, 160);
+      // a new swipe while the last one still coasts (a trackpad keeps sending a fading tail for a second or so): the
+      // push picks up again instead of fading, so it gives its little nudge again, however quickly you swipe again
+      const ax = Math.abs(dx), rising = ax > wg.ldx + 1.5 && ax > 3 && wg.fell;
+      if (ax < wg.ldx) wg.fell = true; // (one nudge per push: it has to ease off before the next one counts)
+      if (rising && wg.no.isConnected && Math.abs(wg.no.scrollLeft - wg.no._R) < 3) { const api = rowApi.get(wg.no), act = api && actOf(wg.no, dx < 0); if (api && !can(api, act) && nudge(api, act, dx < 0 ? 1 : -1)) wg.fell = false; }
+      wg.ldx = ax;
+      return;
+    }
     if (!wg.manual) return;
     if (e.cancelable) e.preventDefault();
     ui.pbody.scrollTop += dy;
@@ -2842,18 +2859,19 @@
 
   // ---- Twitch: find streamers by name (the magnifier above the Twitch list) and add them with +
   let twsLast = { q: "", r: null }, twsTok = 0, twsT = 0;
+  const twAddIcon = (b, on) => b.replaceChildren(icon(on ? "check" : "plus")); // drawn, so it sits dead centre in its circle
   const twHit = (u) => {
     const have = () => cfg.tv.twitch.logins.includes(u.login);
     const row = el("div", "twhit" + (u.live ? " tson" : ""));
     const av = el("span", "twav"); if (/^https:\/\/static-cdn\.jtvnw\.net\//.test(u.avatar || "")) { const img = el("img"); img.alt = ""; img.loading = "lazy"; img.src = u.avatar; av.append(img); }
     const meta = [u.live ? `● live · ${Number(u.viewers || 0).toLocaleString()} watching` : "offline", u.followers ? `${Intl.NumberFormat(undefined, { notation: "compact" }).format(u.followers)} followers` : ""].filter(Boolean).join(" · ");
     const tx = el("span", "twtx"); tx.append(el("b", null, u.name || u.login), el("span", null, meta));
-    const add = el("button", "twadd" + (have() ? " on" : ""), have() ? "✓" : "+"); add.type = "button";
+    const add = el("button", "twadd" + (have() ? " on" : "")); add.type = "button"; twAddIcon(add, have());
     add.title = have() ? `Take ${u.name || u.login} off your list` : `Add ${u.name || u.login} to Twitch Live`;
     add.addEventListener("click", async () => {
       const L = cfg.tv.twitch.logins;
       cfg.tv.twitch.logins = have() ? L.filter((x) => x !== u.login) : [...L, u.login];
-      add.classList.toggle("on", have()); add.textContent = have() ? "✓" : "+";
+      add.classList.toggle("on", have()); twAddIcon(add, have());
       toast(have() ? `${u.name || u.login} added to Twitch Live` : `${u.name || u.login} taken off Twitch Live`);
       const fc = ui && ui.twpop.querySelector(".fcount"); if (fc) fc.textContent = `${cfg.tv.twitch.logins.length} on your list`;
       await writeCfg();
@@ -2870,7 +2888,7 @@
   const openTwSearch = () => {
     if (!ui) return;
     closeFilter(); closeChanMenu();
-    const pop = ui.twpop, head = el("h4"); head.append(el("b", null, "Find streamers"), el("span", "fcount", `${cfg.tv.twitch.logins.length} on your list`));
+    const pop = ui.twpop, head = el("h4"); head.append(el("b", null, "Find streamers"), el("span", "fcount", `${cfg.tv.twitch.logins.length} on your list`), iconBtn("x", "Close (Esc)", () => closeTwSearch(), "twx"));
     const q = el("input", "twq"); q.type = "search"; q.placeholder = "Twitch name or link"; q.autocomplete = "off"; q.spellcheck = false; q.value = twsLast.q;
     const out = el("div", "twres");
     q.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); closeTwSearch(); } });
@@ -2890,7 +2908,8 @@
     pop.hidden = false; ui.twsB.classList.add("open"); wake();
     setTimeout(() => q.focus({ preventScroll: true }), 0);
   };
-  const closeTwSearch = () => { if (!ui || !ui.twpop || ui.twpop.hidden) return false; ui.twpop.hidden = true; ui.twsB.classList.remove("open"); wake(); return true; };
+  const closeTwSearch = () => { if (!ui || !ui.twpop || ui.twpop.hidden) return false; ui.twpop.hidden = true;
+    twsLast = { q: "", r: null }; twbLast = { q: "", cats: null, game: null, streams: null }; twsTok++; twbTok++; clearTimeout(twsT); clearTimeout(twbT); /* closed: next time it starts empty */ ui.twsB.classList.remove("open"); wake(); return true; };
   const toggleTwSearch = () => (ui && !ui.twpop.hidden && ui.twpop.dataset.mode === "names" ? closeTwSearch() : openTwSearch());
 
   // ---- Twitch: browse what's live in a game or category (E on the Twitch tab). Click a stream to watch it, + to add them.
@@ -2918,8 +2937,8 @@
         const row = el("div", "twhit tson twstream"); row.title = `Watch ${x.name || x.login}`;
         const av = el("span", "twav"); const pa = twPic(v.avatar); if (pa) av.append(pa);
         const tx = el("span", "twtx"); tx.append(el("b", null, x.name || x.login), el("span", null, `${compact(x.viewers)} watching · ${String(x.title || "").slice(0, 90)}`));
-        const add = el("button", "twadd" + (have() ? " on" : ""), have() ? "✓" : "+"); add.type = "button"; add.title = have() ? "On your list" : `Add ${x.name || x.login} to Twitch Live`;
-        add.addEventListener("click", async (e) => { e.stopPropagation(); if (have()) return; cfg.tv.twitch.logins = [...cfg.tv.twitch.logins, x.login]; add.classList.add("on"); add.textContent = "✓"; await writeCfg(); twitchCache.at = 0; twitchTick(); });
+        const add = el("button", "twadd" + (have() ? " on" : "")); add.type = "button"; twAddIcon(add, have()); add.title = have() ? "On your list" : `Add ${x.name || x.login} to Twitch Live`;
+        add.addEventListener("click", async (e) => { e.stopPropagation(); if (have()) return; cfg.tv.twitch.logins = [...cfg.tv.twitch.logins, x.login]; add.classList.add("on"); twAddIcon(add, true); await writeCfg(); twitchCache.at = 0; twitchTick(); });
         row.addEventListener("click", () => watchStream(v));
         row.append(av, tx, add);
         return row;
@@ -2946,7 +2965,7 @@
   const openTwBrowse = () => {
     if (!ui) return;
     closeFilter(); closeChanMenu();
-    const pop = ui.twpop, head = el("h4"); head.append(el("b", null, "Live on Twitch"), el("span", "fcount", "Shift+E: find streamers"));
+    const pop = ui.twpop, head = el("h4"); head.append(el("b", null, "Live on Twitch"), el("span", "fcount", "Shift+E: find streamers"), iconBtn("x", "Close (Esc)", () => closeTwSearch(), "twx"));
     const q = el("input", "twq"); q.type = "search"; q.placeholder = "Game or category"; q.autocomplete = "off"; q.spellcheck = false; q.value = twbLast.q;
     const out = el("div", "twres");
     q.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Escape") { e.preventDefault(); closeTwSearch(); } });
@@ -3952,6 +3971,20 @@
     armStart(5000);
     showNow();
   };
+  // A streamer you only looked in on (watched from search or a game, never added): once something else plays, they
+  // leave the Twitch list again. Added with + while watching: they stay.
+  const dropDropIns = () => {
+    const col = currentCol(), cur = current();
+    if (!col || !col.twitch || !cur || !cfg) return;
+    const mine = new Set(cfg.tv.twitch.logins);
+    const gone = (x) => x && x.tw && x.login && !x.vod && !mine.has(x.login) && x.id !== cur.id;
+    if (!state.queue.some(gone)) return;
+    const hist = idsOfHistory();
+    state.queue = state.queue.filter((x) => !gone(x));
+    state.pos = Math.max(0, state.queue.findIndex((x) => x.id === cur.id));
+    fixHistory(hist);
+    browse.delete(TWITCH_ID); saveSession(); schedulePanel();
+  };
   const goTo = (i, { pushHistory = true } = {}) => {
     if (i < 0 || i >= state.queue.length) return;
     const was = current();
@@ -3959,7 +3992,8 @@
     if (pushHistory && i !== state.pos) state.history.push(state.pos);
     state.pos = i;
     state.lastEvt = "";
-    playCurrent(resumeOf(state.queue[i].id)); // carries on where you left it
+    dropDropIns(); // (can shift the list: from here on it's state.pos, not i)
+    playCurrent(resumeOf(state.queue[state.pos].id)); // carries on where you left it
   };
   // Picking a video in Up next plays it now without passing over the ones before it: it moves to
   // right after the current video, and the list carries on from where it was afterwards.
