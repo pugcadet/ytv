@@ -2455,10 +2455,17 @@
     w.classList.toggle("nextup", act === "add" && nextMode());
     if (instant && ok && a >= thr()) fire(api, act);
   };
+  // A row that moves a little on its own (the nudge, the shake): its swipe track stops snapping meanwhile. Otherwise the
+  // browser keeps snapping the track after the moving row, and the two fight (a shake on every swipeable row).
+  const wobble = (w, r, frames, opts) => {
+    w.style.scrollSnapType = "none"; clearTimeout(w._wobT);
+    const end = () => { clearTimeout(w._wobT); w._wobT = setTimeout(() => { if (w.isConnected && !busyRows.has(w)) { if (Math.abs(w.scrollLeft - w._R) > 1 && !userSwiped(w)) w.scrollLeft = w._R; } w.style.scrollSnapType = ""; }, 30); };
+    try { const an = r.animate(frames, opts); an.onfinish = end; an.oncancel = end; } catch { end(); }
+  };
   // Feedback stays on the row: a short flash when it worked, a small shake when that way isn't possible. No notes.
   const rowMark = (api, kind) => {
     const r = api && api.row; if (!r || !r.isConnected || !motionOn()) return;
-    if (kind === "no") { r.animate([{ transform: "translateX(0)" }, { transform: "translateX(-7px)" }, { transform: "translateX(5px)" }, { transform: "translateX(0)" }], { duration: 260, easing: "ease-out" }); return; }
+    if (kind === "no") { wobble(api.wrap, r, [{ transform: "translateX(0)" }, { transform: "translateX(-7px)" }, { transform: "translateX(5px)" }, { transform: "translateX(0)" }], { duration: 260, easing: "ease-out" }); return; }
     r.classList.remove("flash"); void r.offsetWidth; r.classList.add("flash");
   };
   const sayNo = (api) => rowMark(api, "no");
@@ -2466,7 +2473,7 @@
     : current() && api.v.id === current().id ? "What’s playing stays in the list" : "This one can’t be removed here";
   const nudge = (api, act, dir) => {
     const w = api.wrap;
-    if (motionOn() && !(w._nudge && performance.now() - w._nudge < 320)) { /* (never restarted halfway: the last one finishes first) */ w._nudge = performance.now(); api.row.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dir * 12}px)` }, { transform: "translateX(0)" }], { duration: 280, easing: "cubic-bezier(.3,.7,.4,1)" }); return true; }
+    if (motionOn() && !(w._nudge && performance.now() - w._nudge < 320)) { /* (never restarted halfway: the last one finishes first) */ w._nudge = performance.now(); wobble(w, api.row, [{ transform: "translateX(0)" }, { transform: `translateX(${dir * 12}px)` }, { transform: "translateX(0)" }], { duration: 280, easing: "cubic-bezier(.3,.7,.4,1)" }); return true; }
     return false;
   };
   const refuse = (api, act) => {
