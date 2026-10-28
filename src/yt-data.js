@@ -400,14 +400,30 @@
    * "3 days ago" / "2 weken geleden" / "Streamed 1 year ago" → age in days (null when unknown).
    * English and Dutch, plus German, French and Spanish basics.
    */
+  // (each unit at the start of the word only: "dia" must not match "media", "an" must not match "Andrew")
   const UNIT_DAYS = [
-    [/(second|seconde|sekunde|segundo)/i, 1 / 86400], [/(minute|minuut|minuten|minute|minuto)/i, 1 / 1440], [/(hour|uur|stunde|heure|hora)/i, 1 / 24],
-    [/(day|dag|tag|jour|día|dia)/i, 1], [/(week|woche|semaine|semana)/i, 7], [/(month|maand|monat|mois|mes)/i, 30], [/(year|jaar|jahr|an|año)/i, 365],
+    [/^(sec|second|seconde|sekunde|segundo)/i, 1 / 86400], [/^(min|minute|minuut|minuten|minuto)/i, 1 / 1440], [/^(hour|hr|uur|stunde|heure|hora)/i, 1 / 24],
+    [/^(day|dag|tag|jour|día|dia|giorn)/i, 1], [/^(week|weken|wk|woche|semaine|semana|settiman)/i, 7], [/^(month|mo$|maand|monat|mois|mes|mês|mese)/i, 30], [/^(year|yr|jaar|jahr|ans?$|año|ano|anno|ann)/i, 365],
   ];
+  // words without a number: "yesterday", "last month", "vorige week" (how browsers write it)
+  const WORD_DAYS = [[/^(today|vandaag|heute|aujourd|hoy|hoje|oggi)/i, 0], [/^(yesterday|gisteren|gestern|hier|ayer|ontem|ieri)/i, 1],
+    [/\b(last|previous|vorige?|letzte[nr]?|dernier|derni\u00e8re|pasad[oa]|passad[oa]|scors[oa])\s+(week|woche|semaine|semana|settimana)/i, 7],
+    [/\b(last|previous|vorige?|letzte[nr]?|dernier|derni\u00e8re|pasad[oa]|passad[oa]|scors[oa])\s+(month|maand|monat|mois|mes|m\u00eas|mese)/i, 30],
+    [/\b(last|previous|vorige?|letzte[nr]?|dernier|derni\u00e8re|pasad[oa]|passad[oa]|scors[oa])\s+(year|jaar|jahr|ann\u00e9e|a\u00f1o|ano|anno)/i, 365]];
+  const MONTHS = { jan: 0, feb: 1, mar: 2, mrt: 2, apr: 3, may: 4, mei: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, okt: 9, nov: 10, dec: 11 };
+  /** "3 weeks ago", "1 maand geleden", "last month", "Premiered Oct 3, 2026", "3 okt. 2026" → days (null when it doesn't say). */
   const ageDays = (t) => {
-    const m = String(t || "").match(/(\d+)\s*([\p{L}]+)/u);
-    if (!m) return null;
-    for (const [re, d] of UNIT_DAYS) if (re.test(m[2])) return Number(m[1]) * d;
+    const s = String(t || "").trim();
+    if (!s) return null;
+    for (const [re, d] of WORD_DAYS) if (re.test(s)) return d;
+    // every number + word in it, the first with a time unit (so "1.2K views · 3 weeks ago" reads as 3 weeks)
+    for (const m of s.matchAll(/(\d+)\s*([\p{L}]+)/gu)) for (const [re, d] of UNIT_DAYS) if (re.test(m[2])) return Number(m[1]) * d;
+    // a date written out
+    const ab = s.match(/(\d{1,2})\s+([\p{L}]{3,})\.?\s+(\d{4})|([\p{L}]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})/u);
+    if (ab) {
+      const day = Number(ab[1] || ab[5]), mon = MONTHS[String(ab[2] || ab[4]).slice(0, 3).toLowerCase()], year = Number(ab[3] || ab[6]);
+      if (mon !== undefined) { const at = new Date(year, mon, day).getTime(); if (Number.isFinite(at)) return Math.max(0, (Date.now() - at) / 86400000); }
+    }
     return null;
   };
 
@@ -485,7 +501,7 @@
     const diff = (t - Date.now()) / 1000;
     const units = [["year", 31536000], ["month", 2592000], ["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]];
     try {
-      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "always" }); // ("1 month ago", never "last month": the date filters read the number)
       for (const [u, s] of units) if (Math.abs(diff) >= s || u === "minute") return rtf.format(Math.round(diff / s), u);
     } catch {}
     return "";

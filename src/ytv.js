@@ -112,7 +112,9 @@
   const WATCHED_SECONDS = 25, WATCHED_FRACTION = 0.3;
   const countWatched = (id) => { if (ID_RE.test(id)) { remember(id); markSeen(id); } };
   const markSeen = (id) => { if (seen.has(id)) return; seen.add(id); lsSet("hush:tv:seen", [...seen].slice(-5000)); };
-  const tooOld = (col, v) => { const max = SW.MAX_AGE_DAYS[col.maxAge] || Infinity; if (max === Infinity) return false; const d = SW.yt.ageDays(v.age); return d !== null && d > max; };
+  // how old a video is, in days: its exact publish date once it has played here, else what the list said ("3 weeks ago")
+  const ageOf = (v) => { if (v && v.pub) { const t = Date.parse(v.pub); if (Number.isFinite(t)) return Math.max(0, (Date.now() - t) / 86400000); } return SW.yt.ageDays(v && v.age); };
+  const tooOld = (col, v) => { const max = SW.MAX_AGE_DAYS[col.maxAge] || Infinity; if (max === Infinity) return false; const d = ageOf(v); return d !== null && d > max; };
   // YTV's own record of how far you got in a video (for the progress bar in Up next).
   const progress = lsGet("hush:tv:progress", {});
   const progressOf = (v) => Math.max(Number(v.progress) || 0, Number(progress[v.id]) || 0);
@@ -961,7 +963,8 @@
     .thumb .twlive{position:absolute;left:5px;top:5px;display:inline-flex;align-items:center;gap:4px;height:16px;padding:0 6px 0 5px;border-radius:999px;background:var(--acc);color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.06em;box-shadow:0 2px 6px rgba(0,0,0,.35);z-index:1}
     .thumb .twlive i,.twpill i{width:5px;height:5px;border-radius:50%;background:#fff}
     @keyframes livedot{50%{opacity:.35}}
-    .thumb .twv{position:absolute;right:5px;bottom:5px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.72);color:#fff;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;z-index:1}
+    .thumb .twv{position:absolute;right:5px;bottom:5px;display:inline-flex;align-items:center;gap:3px;padding:1px 5px;border-radius:4px;background:rgba(0,0,0,.72);color:#fff;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;z-index:1}
+    .thumb .twv svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
     .sw.twoff .item{min-height:0;padding-top:4px;padding-bottom:4px;opacity:.55;transition:opacity .15s}
     .sw.twoff .item:hover{opacity:.85}
     .sw.twoff .thumb{width:44px;height:44px;aspect-ratio:auto;flex:none;margin-left:calc((var(--tw) - 44px) / 2);margin-right:calc((var(--tw) - 44px) / 2);border-radius:50%;overflow:hidden;filter:grayscale(1)}
@@ -1138,13 +1141,14 @@
   const SHORT_UNIT = [[/^(sec|second|seconde|sekunde|segundo)/i, "s"], [/^(min|minute|minuut|minuto)/i, "m"], [/^(hour|uur|stunde|heure|hora)/i, "h"], [/^(day|dag|tag|jour|día|dia)/i, "d"],
     [/^(week|woche|semaine|semana)/i, "w"], [/^(month|maand|monat|mois|mes)/i, "mo"], [/^(year|jaar|jahr|an|año)/i, "y"]];
   const shortAge = (t) => { const m = String(t || "").match(/(\d+)\s*([\p{L}]+)/u); if (!m) return t; for (const [re, u] of SHORT_UNIT) if (re.test(m[2])) return m[1] + u; return t; };
-  const FIELDS = { title: (v) => v.title || "Video", creator: (v) => whoOf(v), age: (v) => (!v.tw && cfg && cfg.tv.shortAge ? shortAge(v.age) : v.age), len: (v) => v.len,
+  const FIELDS = { title: (v) => v.title || "Video", creator: (v) => whoOf(v), age: (v) => (!v.tw && cfg && cfg.tv.shortAge ? shortAge(v.age) : v.age), len: (v) => (liveTw(v) ? liveFor(v.since) : v.len), // (a live stream: how long they've been live; how many watch is on its picture)
     watched: (v) => { if (v.tw) return ""; const p = progressOf(v); return p >= 3 && p < 95 ? `${Math.round(p)}% watched` : ""; } };
   // a row's line as nodes: the title as plain text, the other bits smaller, each with its little icon
+  const liveTw = (v) => !!(v && v.tw && !v.off && !v.vod && v.since);
   const BIT_ICON = { creator: "user", age: "cal", len: "clock" }, TW_ICON = { creator: "user", age: "game", len: "eye", up: "clock" }; // on Twitch: time live, the game and how many are watching
   const bitNode = (f, t, cls, tw) => { const sp = el("span", cls), k = tw === "off" ? "" : (tw ? TW_ICON : BIT_ICON)[f]; if (k) { const ic = el("span", "ico"); ic.append(icon(k)); sp.append(ic); } sp.append(document.createTextNode(t)); return sp; };
   const fillLine = (node, v, n) => {
-    const parts = (cfg ? cfg.tv.rowFields : SW.ROW_FIELDS_DEFAULT).filter(([, l]) => l === n).map(([f]) => [f, FIELDS[f] && FIELDS[f](v)]).filter(([, t]) => t);
+    const parts = (cfg ? cfg.tv.rowFields : SW.ROW_FIELDS_DEFAULT).filter(([, l]) => l === n).map(([f]) => [f === "len" && liveTw(v) ? "up" : f, FIELDS[f] && FIELDS[f](v)]).filter(([, t]) => t);
     const sig = parts.map((p) => p.join("\u0001")).join("\u0002");
     node.hidden = !parts.length;
     if (node._sig === sig) return;
@@ -1605,7 +1609,7 @@
     img.addEventListener("load", () => img.classList.add("ok"));
     if (v.tw) { // a Twitch stream: its live preview with a LIVE pill and how many watch; someone offline: their picture
       if (v.thumb) img.src = v.thumb;
-      if (!v.off && v.viewers) box.append(el("span", "twv", Intl.NumberFormat(undefined, { notation: "compact" }).format(v.viewers))); // (no LIVE pill: everything up top is live)
+      if (!v.off && v.viewers) { const tv0 = el("span", "twv"); tv0.title = `${v.viewers.toLocaleString()} watching`; tv0.append(icon("eye"), document.createTextNode(Intl.NumberFormat(undefined, { notation: "compact" }).format(v.viewers))); box.append(tv0); } // how many watch, with an eye (no LIVE pill: everything up top is live)
     }
     else img.src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
     if (img.complete && img.naturalWidth) img.classList.add("ok");
@@ -2672,7 +2676,7 @@
     const f = flt();
     if (!v || v.tw) return true;
     if (f.under || f.over) { const s = lenSecs(v.len); if (s !== null) { if (f.under && s >= f.underMin * 60) return false; if (f.over && s <= f.overMin * 60) return false; } }
-    if (f.age !== "any") { const d = SW.yt.ageDays(v.age); if (d !== null) { const lim = f.ageN * (F_UNIT[f.ageUnit] || 7); if (f.age === "within" ? d > lim : d <= lim) return false; } }
+    if (f.age !== "any") { const d = ageOf(v); if (d !== null) { const lim = f.ageN * (F_UNIT[f.ageUnit] || 7); if (f.age === "within" ? d > lim : d <= lim) return false; } }
     if (f.watched !== "any") { const w = progressOf(v) >= f.watchedPct; if (f.watched === "yes" ? !w : w) return false; }
     if (f.subbed !== "any") { const s = isSubbed(v); if (s !== null && (f.subbed === "yes" ? !s : s)) return false; }
     return true;
@@ -3252,6 +3256,7 @@
   };
   // From the list you left behind: pick a video there and the topic closes, then it plays.
   const playFromMain = (v) => {
+    state.pickedId = v && v.id;
     if (!state.stay) return;
     state.from = null;
     state.base = [v, ...(state.base || []).filter((x) => x.id !== v.id)];
@@ -3813,6 +3818,7 @@
   // right after the current video, and the list carries on from where it was afterwards.
   const jumpTo = (i) => {
     if (i === state.pos || i < 0 || i >= state.queue.length) return;
+    state.pickedId = state.queue[i] && state.queue[i].id; // you picked this one: it plays whatever its date
     const col = currentCol(); if (col && col.twitch) return goTo(i); // Twitch: nothing moves, you just switch
     const [item] = state.queue.splice(i, 1);
     if (i < state.pos) state.pos -= 1;
@@ -4885,7 +4891,14 @@
         // Fill in anything the lineup didn't know (e.g. after "resume" on a fresh page).
         if (!v.title && d.title) v.title = String(d.title).slice(0, 200);
         if ((!v.channel || SW.yt.isStat(v.channel)) && d.author) v.channel = String(d.author).slice(0, 100);
-        if (typeof d.publishDate === "string" && d.publishDate) { const rel = SW.yt.relativeDate(d.publishDate); if (rel) v.age = rel; }
+        if (typeof d.publishDate === "string" && d.publishDate) { const rel = SW.yt.relativeDate(d.publishDate); if (rel) v.age = rel; if (Number.isFinite(Date.parse(d.publishDate))) v.pub = d.publishDate.slice(0, 40); }
+        // the list didn't say how old it was (or said it wrongly): now YouTube does. Outside your date filter, or this
+        // channel's "only videos from", and it came up by itself (you didn't pick it)? On to the next one.
+        if (v.pub && !v.f && !v.nx && state.pickedId !== v.id) {
+          const f0 = flt(), d0 = ageOf(v), lim0 = f0.ageN * (F_UNIT[f0.ageUnit] || 7);
+          const outFilter = filterFor(col0) && f0.age !== "any" && d0 !== null && (f0.age === "within" ? d0 > lim0 : d0 <= lim0);
+          if (outFilter || (col0 && !col0.feed && tooOld(col0, v))) { toast(outFilter ? "Skipping — outside your date filter" : "Skipping — older than this channel allows"); return void nextVideo(); } // (not remembered as skipped: change the filter and it can play again)
+        }
         if (typeof d.desc === "string" && d.desc) state.desc[v.id] = d.desc.slice(0, 20000);
         if (Array.isArray(d.keywords) && d.keywords.length) v.keywords = d.keywords.filter((k) => typeof k === "string").slice(0, 30);
         if (!v.creator && typeof d.channelId === "string" && /^UC[\w-]{20,24}$/.test(d.channelId)) v.creator = "channel/" + d.channelId;
