@@ -625,13 +625,14 @@
     .phead .pb:hover{color:#fff;background:color-mix(in srgb,var(--pnl) 70%,#5a6680)}
     .phead .pb svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
     .phead .pb[hidden]{display:none}
-    .prow > .pb:last-child{margin-right:-4px} /* the sync button sits flush in the top-right corner */
+    .prow{margin-right:-4px} /* history (always there) sits flush in the top-right corner, on every tab */
     /* the list filter: a funnel (with how many filters are on), chips under the tabs, and its panel */
     .phead .filtb{position:relative}
     .phead .filtb.on{color:#fff}
     .phead .filtb.open{color:#fff;background:color-mix(in srgb,var(--pnl) 70%,#5a6680)}
     .fdot{position:absolute;top:0;right:-2px;min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:var(--acc);color:#fff;font-size:9.5px;font-weight:800;line-height:14px;text-align:center;pointer-events:none}
-    .fdot[hidden],.fstrip[hidden],.fpop[hidden]{display:none}
+    .sdot{position:absolute;right:3px;bottom:3px;width:7px;height:7px;border-radius:50%;background:#ffb020;box-shadow:0 0 0 2px color-mix(in srgb,var(--pnl) 80%,#000);pointer-events:none}
+    .sdot[hidden],.fdot[hidden],.fstrip[hidden],.fpop[hidden]{display:none}
     .fpill{display:inline-flex;align-items:center;gap:2px;height:22px;padding:0 4px 0 2px;border-radius:999px;background:rgba(255,255,255,.1)}
     .fpill .fpw{min-height:0;height:22px;padding:0 4px 0 8px;border:0;background:none;color:#dfe3ec;font-size:11.5px;font-weight:600}
     .fpill .fdotsep{color:#8d97ab}
@@ -643,6 +644,7 @@
     .pop .ml{flex:1}
     .pop .mk{color:#7d8699;font-size:11.5px;font-weight:600}
     .acts .moreb[aria-pressed="true"]{background:rgba(255,255,255,.18)}
+    .phead .histb{position:relative}
     .phead .twsb.open,.phead .histb[aria-pressed="true"]{color:#fff;background:color-mix(in srgb,var(--pnl) 70%,#5a6680)}
     /* History */
     .hpage{padding:6px 6px 12px}
@@ -1380,8 +1382,9 @@
     const filtB = pbtn("filter", "", "Filter the list", () => toggleFilter()); filtB.classList.add("filtb");
     const fdot = el("span", "fdot"); fdot.hidden = true; filtB.append(fdot);
     const histPB = pbtn("history", "", "History: everything you watched (H)", () => togglePanel("history")); histPB.classList.add("histb");
+    const sdot = el("span", "sdot"); sdot.hidden = true; histPB.append(sdot); // sorting is off (it's on every page, the funnel isn't)
     const twsB = pbtn("search", "", "Find Twitch streamers to add", () => toggleTwSearch()); twsB.classList.add("twsb"); twsB.hidden = true;
-    prow.append(ptabs, clearB, twsB, filtB, histPB, refB); // (no ✕: the list goes with U, or by itself; how it hides is set in settings, or with H)
+    prow.append(ptabs, clearB, twsB, filtB, refB, histPB); // history last: it shows on every tab, so it (and the sorting-off dot) never moves. // (no ✕: the list goes with U, or by itself; how it hides is set in settings, or with H)
     const fstrip = el("div", "fstrip"); fstrip.hidden = true; // the filters that are on, as chips (× turns one off)
     phead.append(prow, fstrip);
     const fpop = el("div", "fpop"); fpop.hidden = true; fpop.setAttribute("role", "dialog"); fpop.setAttribute("aria-label", "Filter the list");
@@ -1433,7 +1436,7 @@
     root.append(curtain, top, bar, panel, closeArrow, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
     shadow.append(style, root);
     document.documentElement.appendChild(host);
-    ui = { hideB, host, root, curtain, tTitle, tSub, nT, nC, nowbar, totop, pickbar, stay, stayTxt, stayBtn, prevB, addB, wlRemove, wlClear, pbody, ptabs, tabInd, chmenu, clearB, refB, filtB, fdot, fstrip, fpop, histPB, twsB, twpop, setFrame, bar, infoB, comB, msg, guide, explore, pop, toast: toastEl };
+    ui = { hideB, host, root, curtain, tTitle, tSub, nT, nC, nowbar, totop, pickbar, stay, stayTxt, stayBtn, prevB, addB, wlRemove, wlClear, pbody, ptabs, tabInd, chmenu, clearB, refB, filtB, sdot, fdot, fstrip, fpop, histPB, twsB, twpop, setFrame, bar, infoB, comB, msg, guide, explore, pop, toast: toastEl };
     applyTheme();
     watchControls();
   };
@@ -2755,7 +2758,9 @@
     ui.filtB.hidden = !can;
     ui.filtB.classList.toggle("on", n > 0);
     ui.fdot.hidden = !n; ui.fdot.textContent = n ? String(n) : "";
+    const off = sortOff(); ui.sdot.hidden = !off;
     ui.filtB.title = n ? `Filter the list (${n} on)` : "Filter the list";
+    ui.histPB.title = "History: everything you watched (H)" + (off ? " · Sorting off (S)" : "");
     ui.fstrip.hidden = !(can && n);
     if (can && n) {
       const sig = JSON.stringify(flt());
@@ -3969,7 +3974,7 @@
     if (!cfg) return;
     const turningOn = cfg.tv.keepOrder;
     cfg.tv.keepOrder = !turningOn; writeCfg();
-    if (!turningOn) { toast("Sorting off: the list stays exactly as it is"); schedulePanel(); return; }
+    if (!turningOn) { toast("Sorting off"); updateFilterUi(); schedulePanel(); return; }
     for (const id of dumbPlayed) { const it = state.queue.find((x) => x.id === id); if (progressOf(it || { id }) < fullPct()) played.delete(id); }
     dumbPlayed.clear();
     const tab = isListTab(state.panel) ? state.panel : playingTab(), kind = tabKind(tab), cur = current();
@@ -4007,7 +4012,7 @@
         }
       }
     }
-    toast(gone ? `Sorting on · ${gone} fully watched video${gone === 1 ? "" : "s"} cleared (Cmd+Z brings them back)` : "Sorting on");
+    updateFilterUi(); toast(gone ? `Sorting on · ${gone} watched cleared (Cmd+Z)` : "Sorting on");
     schedulePanel();
   };
   const remaining = () => state.queue.slice(state.pos + 1).filter((v) => !played.has(v.id)).length;
