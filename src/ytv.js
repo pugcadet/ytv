@@ -953,7 +953,9 @@
     /* the right edge that brings the list out */
     .edge{position:absolute;top:0;right:0;bottom:0;width:var(--edgew,12px);z-index:6;display:none;transition:background .25s ease}
     .edgeon:not(.show-panel) .edge{display:block}
-    .edge:hover{background:linear-gradient(270deg,color-mix(in srgb,var(--acc) 30%,transparent),transparent)}
+    .edgeglow{position:absolute;top:0;right:0;bottom:0;width:var(--edgew,12px);z-index:6;display:none;pointer-events:none;opacity:0;transition:opacity .25s ease;background:linear-gradient(270deg,color-mix(in srgb,var(--acc) 30%,transparent),transparent)}
+    .edgeon:not(.show-panel) .edgeglow{display:block}
+    .tv:has(> .edge:hover) > .edgeglow{opacity:1}
     /* the channel overview takes the panel's look: see-through and blurred */
     /* the overview: your panel colour, darker and more blurred than the list so the cards stand out */
     .guide{background:color-mix(in srgb,color-mix(in srgb,var(--pnl) 70%,#000) min(100%,calc(var(--palpha,80%) + 45%)),transparent);backdrop-filter:blur(calc(max(28px,var(--pblur,16px) * 2.5) * var(--bk,1))) saturate(1.1);scrollbar-width:none}
@@ -1553,7 +1555,9 @@
     const onFs = () => sync();
     document.addEventListener("fullscreenchange", onFs);
     // the right edge: point at it and the list slides out; leave the list and it goes again after a moment
-    const edge = el("div", "edge"); ui.root.append(edge);
+    // the strip you point at only covers the middle (not the top bar's buttons, not YouTube's controls), but its glow
+    // runs the full height of the screen edge, so it looks like one edge
+    const edge = el("div", "edge"), edgeGlow = el("div", "edgeglow"); ui.root.append(edgeGlow, edge);
     let edgeT = 0, leaveT = 0;
     // (not from the top bar's buttons above it, nor YouTube's player controls below it: only the strip in between)
     const bandTop = () => { const acts = ui.root.querySelector(".top .acts"), ab = acts ? acts.getBoundingClientRect().bottom : 0; return Math.max(ab + 8, 70); };
