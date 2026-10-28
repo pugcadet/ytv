@@ -783,6 +783,7 @@
     /* what's playing, as a slim bar over the top of the list once its row scrolls away (scroll-linked, no layout changes) */
     .nowbar{position:absolute;left:6px;right:6px;top:0;z-index:3;display:flex;align-items:center;gap:9px;min-height:0;height:calc(var(--rowh) * .56);padding:3px 10px 3px 4px;border:0;border-radius:0 0 9px 9px;background:color-mix(in srgb,var(--acc) 34%,var(--pnl));box-shadow:inset 4px 0 0 var(--acc),0 8px 18px -6px rgba(0,0,0,.6);text-align:left;opacity:0;transform:translateY(-105%);pointer-events:none;will-change:transform,opacity}
     .nowbar.on{pointer-events:auto}
+    .nowbar.ease{transition:opacity .28s ease,transform .3s cubic-bezier(.4,0,.2,1)}
     .nowbar:hover{background:color-mix(in srgb,var(--acc) 44%,var(--pnl))}
     .nowbar .nth{flex:none;height:100%;aspect-ratio:16/9;border-radius:5px;background:#111 center/cover no-repeat}
     .nowbar .nt{flex:1;min-width:0;font-size:var(--fs,13px);font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3973,8 +3974,42 @@
   };
   // Sorting back on: from now on watched videos grey, fold and leave as usual. What you fully watched in the tab you're
   // on goes now (Cmd+Z brings it back, and sorting stays on); what's playing moves to the top, the rest keeps its order.
+  // S keeps your place: what's playing (or, if it's out of view, the first row you see) stays where it is on screen
+  // (half under the top: it settles at the top), and every row that shifts glides to its new place.
+  let sortAt = -1e9;
   const toggleSorting = () => {
     if (!cfg) return;
+    sortAt = performance.now();
+    const b = ui && isListTab(state.panel) ? ui.pbody : null;
+    if (!b || !b.isConnected) return toggleSorting0();
+    const bt = b.getBoundingClientRect().top, bh = b.clientHeight;
+    const rows = [...b.querySelectorAll(".sw:not(.gone)")];
+    const before = new Map(rows.map((n) => [n.dataset.id, n.getBoundingClientRect().top]));
+    const inView = (n) => { const q = n.getBoundingClientRect(); return q.height > 0 && q.bottom > bt + 1 && q.top < bt + bh - 1; };
+    let anchor = b.querySelector(".sw.curw:not(.gone)");
+    if (anchor && !inView(anchor)) anchor = null;
+    if (!anchor) anchor = rows.find(inView) || null;
+    const id = anchor && anchor.dataset.id;
+    let off = anchor ? before.get(id) - bt : 0;
+    if (anchor && anchor.classList.contains("curw") && off < 0) off = 0; // half under the top: it settles at the top
+    toggleSorting0();
+    if (panelRaf) { cancelAnimationFrame(panelRaf); panelRaf = 0; }
+    try { renderPanel(false); } catch (err) { logErr("list", err); }
+    const a2 = id ? [...b.querySelectorAll(".sw:not(.gone)")].find((n) => n.dataset.id === id) : null;
+    if (a2) b.scrollTop += a2.getBoundingClientRect().top - bt - off;
+    if (!motionOn()) return;
+    ui.nowbar.classList.add("ease"); clearTimeout(ui.nowbar._ease); ui.nowbar._ease = setTimeout(() => ui && ui.nowbar.classList.remove("ease"), 360);
+    for (const n of b.querySelectorAll(".sw:not(.gone)")) {
+      const t0 = before.get(n.dataset.id);
+      if (t0 === undefined) continue;
+      const dy = t0 - n.getBoundingClientRect().top;
+      if (Math.abs(dy) < 1 || Math.abs(dy) > bh * 1.5) continue; // far off screen: nothing to see
+      n.style.transition = "none"; n.style.transform = `translateY(${dy}px)`;
+      requestAnimationFrame(() => { n.style.transition = "transform .3s cubic-bezier(.4,0,.2,1)"; n.style.transform = ""; });
+      clearTimeout(n._sortT); n._sortT = setTimeout(() => { n.style.transition = ""; }, 380);
+    }
+  };
+  const toggleSorting0 = () => {
     const turningOn = cfg.tv.keepOrder;
     cfg.tv.keepOrder = !turningOn; writeCfg();
     if (!turningOn) { toast("Sorting off"); updateFilterUi(); schedulePanel(); return; }
@@ -5509,7 +5544,10 @@
   };
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "local" && changes.cfg) {
-      cfg = SW.sanitizeConfig(changes.cfg.newValue);
+      const next = SW.sanitizeConfig(changes.cfg.newValue);
+      // S already redrew the list (keeping your place, with the rows gliding): its own save coming back needs nothing more
+      if (performance.now() - sortAt < 3000 && cfg && JSON.stringify(next) === JSON.stringify(cfg)) return;
+      cfg = next;
       lsSet("ytv:btns", btnPrefs());
       dropChans(); tabsSig = "";
       syncButtons(); refreshCreatorButton(); applyTheme();
