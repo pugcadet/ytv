@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>YTV</title>
+  <link rel="stylesheet" href="src/ui.css">
+  <link rel="stylesheet" href="src/popup.css">
+</head>
+<body>
+  <header class="head">
+    <img class="logo" src="icons/icon-32.png" alt="">
+    <h1>YTV</h1>
+    <label class="switch" title="Turn YTV on or off">
+      <input id="enabled" type="checkbox" aria-label="YTV on">
+      <span></span>
+    </label>
+  </header>
+  <main class="body">
+    <section class="card">
+      <div class="card-head"><span class="eyebrow">Channels</span><a href="#" id="edit" class="link">Edit</a></div>
+      <div id="channels" class="channels"></div>
+    </section>
+    <button id="settings" class="wide" type="button">Settings</button>
+  </main>
+  <script src="src/common.js"></script>
+  <script src="src/popup.js"></script>
+</body>
+</html>

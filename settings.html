@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YTV settings</title>
+  <link rel="icon" href="icons/icon-32.png">
+  <link rel="stylesheet" href="src/ui.css">
+  <link rel="stylesheet" href="src/settings.css">
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="topbar">
+      <img class="logo" src="icons/icon-32.png" alt="">
+      <span class="name">YTV</span>
+      <input id="search" class="search" type="search" placeholder="Search settings" aria-label="Search settings" autocomplete="off" spellcheck="false">
+      <span class="spacer"></span>
+      <label class="master"><span id="master-text">YTV is on</span>
+        <span class="switch"><input id="master" type="checkbox" aria-label="YTV on"><span></span></span>
+      </label>
+    </header>
+    <div class="layout">
+      <nav id="nav-list" class="nav" aria-label="Settings sections"></nav>
+      <main id="main" class="main"></main>
+      <aside id="preview" class="preview hidden" aria-label="Preview"></aside>
+    </div>
+  </div>
+  <script src="src/common.js"></script>
+  <script src="src/yt-data.js"></script>
+  <script src="src/settings.js"></script>
+</body>
+</html>

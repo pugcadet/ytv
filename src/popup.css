@@ -1,0 +1,20 @@
+body { width: 340px; }
+.head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; background: var(--surface); }
+.head h1 { flex: 1; font-size: 17px; font-weight: 800; }
+.body { display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px 12px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.link { color: #ff9a9a; font-size: 12px; font-weight: 600; text-decoration: none; }
+.link:hover { color: #fff; }
+.channels { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.chan { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--strong); font-weight: 600; font-size: 13px; text-align: left; cursor: pointer; }
+.chan:hover { background: var(--brand); border-color: var(--brand); }
+.chan .n { color: #ff9a9a; font-weight: 800; min-width: 12px; }
+.chan:hover .n { color: #fff; }
+.chan span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.wide { width: 100%; min-height: 42px; }
+.chan.feed { grid-column: 1 / -1; background: var(--brand); border-color: var(--brand); }
+.chan.feed .n { color: #fff; }
+.head .logo { width: 26px; height: 26px; }
+.chan .live { width: 6px; height: 6px; border-radius: 50%; background: #ff2d2d; flex: none; }

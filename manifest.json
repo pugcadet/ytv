@@ -1,0 +1,99 @@
+{
+  "manifest_version": 3,
+  "name": "YTV",
+  "short_name": "YTV",
+  "version": "1.24.0",
+  "description": "Watch YouTube like TV: your own channels that keep playing, with a swipeable list of what's next. 100% local.",
+  "minimum_chrome_version": "114",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "src/common.js",
+        "src/yt-data.js",
+        "src/ytv.js"
+      ],
+      "run_at": "document_start",
+      "exclude_matches": [
+        "https://www.youtube.com/live_chat*",
+        "https://www.youtube.com/live_chat_replay*",
+        "https://www.youtube.com/embed/*"
+      ]
+    },
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "src/main-world.js"
+      ],
+      "run_at": "document_idle",
+      "world": "MAIN",
+      "exclude_matches": [
+        "https://www.youtube.com/live_chat*",
+        "https://www.youtube.com/live_chat_replay*",
+        "https://www.youtube.com/embed/*"
+      ]
+    },
+    {
+      "matches": [
+        "https://player.twitch.tv/*"
+      ],
+      "js": [
+        "src/twitch-frame.js"
+      ],
+      "all_frames": true,
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_title": "YTV",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  },
+  "content_security_policy": {
+    "extension_pages": "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' blob: data: https://yt3.ggpht.com https://yt3.googleusercontent.com; object-src 'none'; base-uri 'none'; form-action 'none'; connect-src https://www.youtube.com https://gql.twitch.tv wss://irc-ws.chat.twitch.tv https://api.betterttv.net https://api.frankerfacez.com https://7tv.io https://recent-messages.robotty.de"
+  },
+  "optional_host_permissions": [
+    "https://gql.twitch.tv/*"
+  ],
+  "optional_permissions": [
+    "notifications",
+    "alarms"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "settings.html"
+      ],
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "use_dynamic_url": true
+    }
+  ]
+}
