@@ -2466,7 +2466,7 @@
     : current() && api.v.id === current().id ? "What’s playing stays in the list" : "This one can’t be removed here";
   const nudge = (api, act, dir) => {
     const w = api.wrap;
-    if (motionOn() && !(w._nudge && performance.now() - w._nudge < 200)) { /* (a moment after the last one, the next push nudges again) */ w._nudge = performance.now(); api.row.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dir * 12}px)` }, { transform: "translateX(0)" }], { duration: 280, easing: "cubic-bezier(.3,.7,.4,1)" }); return true; }
+    if (motionOn() && !(w._nudge && performance.now() - w._nudge < 320)) { /* (never restarted halfway: the last one finishes first) */ w._nudge = performance.now(); api.row.animate([{ transform: "translateX(0)" }, { transform: `translateX(${dir * 12}px)` }, { transform: "translateX(0)" }], { duration: 280, easing: "cubic-bezier(.3,.7,.4,1)" }); return true; }
     return false;
   };
   const refuse = (api, act) => {
@@ -2475,7 +2475,7 @@
     busyRows.add(w);
     w.style.overflowX = "hidden"; // the rest of this gesture can't move it
     // the rest of this push, and the coasting after it, is swallowed (a scroll cancel): only a new push counts, and nudges
-    wg.no = w; wg.ldx = 1e9; wg.fell = false; wg.manual = false; clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.no = null; }, 160);
+    wg.no = w; wg.peak = 1e9; wg.fell = false; wg.manual = false; clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.no = null; }, 160);
     w.classList.remove("armed", "toadd", "nextup"); w.classList.add("no"); w.style.setProperty("--p", "0");
     const d0 = w._R - w.scrollLeft; if (Math.abs(d0) > NO_GIVE) w.scrollLeft = w._R - Math.sign(d0) * NO_GIVE; // never further than a little give
     w.scrollTo({ left: w._R, behavior: motionOn() ? "smooth" : "auto" });
@@ -2565,7 +2565,7 @@
   // could slide a row instead of scrolling the list. YTV looks at a gesture's first movement: unless it's clearly
   // sideways (Settings → Sideways detection), YTV scrolls the list itself for that gesture and the rows stay put.
   const AXIS = { strict: 2.2, normal: 1.4, loose: 1 };
-  const wg = { manual: false, last: 0, endT: 0, no: null, ldx: 0 };
+  const wg = { manual: false, last: 0, endT: 0, no: null, peak: 0, low: 0, fell: false };
   let lastPt = { x: 0, y: 0 };
   const onWheel = (e) => {
     if (!ui) return;
@@ -2584,17 +2584,22 @@
       // all for the whole gesture, however fast; it just gives a little nudge and says why, once
       else if (hit && dx !== 0 && Math.abs(hit.scrollLeft - hit._R) < 3) { // (also while it's still settling from the last no)
         const api = rowApi.get(hit), act = api && actOf(hit, dx < 0);
-        if (api && !can(api, act)) { wg.no = hit; wg.ldx = Math.abs(dx); wg.fell = false; nudge(api, act, dx < 0 ? 1 : -1); }
+        if (api && !can(api, act)) { wg.no = hit; wg.peak = Math.abs(dx); wg.fell = false; nudge(api, act, dx < 0 ? 1 : -1); }
       }
     }
     if (wg.no) {
       if (e.cancelable) e.preventDefault(); clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.no = null; }, 160);
       // a new swipe while the last one still coasts (a trackpad keeps sending a fading tail for a second or so): the
       // push picks up again instead of fading, so it gives its little nudge again, however quickly you swipe again
-      const ax = Math.abs(dx), rising = ax > wg.ldx + 1.5 && ax > 3 && wg.fell;
-      if (ax < wg.ldx) wg.fell = true; // (one nudge per push: it has to ease off before the next one counts)
-      if (rising && wg.no.isConnected && Math.abs(wg.no.scrollLeft - wg.no._R) < 3) { const api = rowApi.get(wg.no), act = api && actOf(wg.no, dx < 0); if (api && !can(api, act) && nudge(api, act, dx < 0 ? 1 : -1)) wg.fell = false; }
-      wg.ldx = ax;
+      // A new push is clear, not a wobble: the coasting has to fall well below the push's peak first, and then pick up
+      // to at least three times its lowest point since (and to a real push, 8+). The jitter in a coast never does that.
+      const ax = Math.abs(dx);
+      if (!wg.fell) { if (ax > wg.peak) wg.peak = ax; else if (ax < wg.peak * 0.45) { wg.fell = true; wg.low = ax; } }
+      else if (ax < wg.low) wg.low = ax;
+      else if (ax >= Math.max(8, wg.low * 3) && wg.no.isConnected && Math.abs(wg.no.scrollLeft - wg.no._R) < 3) {
+        const api = rowApi.get(wg.no), act = api && actOf(wg.no, dx < 0);
+        if (api && !can(api, act) && nudge(api, act, dx < 0 ? 1 : -1)) { wg.fell = false; wg.peak = ax; }
+      }
       return;
     }
     if (!wg.manual) return;
