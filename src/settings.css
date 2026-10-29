@@ -291,7 +291,12 @@ details.tv-col[open] .col-body { animation: colin .22s ease; }
 .card[data-area]:hover, .card[data-area]:focus-within { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
 .row.changed > .label > span:first-child::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px -14px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 .row.changed > .label > span:first-child { margin-left: 14px; }
-.row.changed > .label > span:first-child::after { content: "changed"; margin-left: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); opacity: .85; }
+/* the ↺ next to a changed setting's name: puts that one setting back to its default */
+.rreset { display: none; margin-left: 8px; width: 22px; height: 22px; min-height: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-size: 13px; font-weight: 800; line-height: 20px; text-align: center; vertical-align: middle; cursor: pointer; }
+.rreset:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+.changed .rreset { display: inline-block; }
+.fields.changed > .rreset { position: absolute; top: 6px; right: 6px; }
+.fields.changed { position: relative; }
 .fields.changed { box-shadow: inset 3px 0 0 var(--accent); padding-left: 8px; border-radius: 4px; }
 .keyrows { display: flex; flex-direction: column; }
 /* the part of the preview a block changes */

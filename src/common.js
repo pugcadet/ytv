@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.26.15";
+  SW.VERSION = "1.27.1";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -193,6 +193,7 @@
         return out;
       })(),
       uiScale: clampInt(tv.uiScale, 25, 400, 110), // percent
+      videoQuality: ["premium", "hd1080", "hd720", "auto"].includes(tv.videoQuality) ? tv.videoQuality : "premium", // premium: 1080p Premium (higher bitrate) where it plays, else 1080p
       hbSize: clampInt(tv.hbSize, 8, 120, 20), // the explore / Watch Later buttons on a picture
       hbExplore: typeof tv.hbExplore === "boolean" ? tv.hbExplore : true,
       hbWl: typeof tv.hbWl === "boolean" ? tv.hbWl : true,
