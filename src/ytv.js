@@ -796,6 +796,7 @@
     .nowbar .nt{flex:1;min-width:0;font-size:var(--fs,13px);font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .sw.moved .item{background:color-mix(in srgb,#17864a 30%,var(--pnl))}
     .sw.dragslot{opacity:.25}
+    .tv.dragging .nowbar,.tv.dragging .totop{pointer-events:none} /* (while you drag, the copy of what's playing never gets in the way of where it lands) */
     .dragghost{position:absolute;z-index:9;margin:0;pointer-events:none;box-shadow:0 14px 34px rgba(0,0,0,.55);border-radius:10px;will-change:transform;opacity:.96}
     .track{display:grid;grid-template-columns:var(--R,200px) 100cqw var(--R,200px)}
     .act{display:flex;align-items:center;color:#fff;scroll-snap-align:start}
@@ -814,7 +815,8 @@
     .item{position:relative;display:flex;gap:10px;align-items:center;min-width:0;min-height:var(--rowh);padding:5px;border:1px solid transparent;border-radius:var(--rrad,7px);background:var(--rowbg);text-align:left;cursor:pointer;scroll-snap-align:start;scroll-initial-target:nearest;transition:background .15s}
     .item:hover{background:color-mix(in srgb,var(--pnl) 70%,#5a6680)}
     .item.cur{background:color-mix(in srgb,var(--acc) 34%,var(--pnl));border-color:var(--acc)}
-    .item.done{opacity:.5}
+    .item.done{opacity:var(--wop,.5);position:relative}
+    .item.done::after{content:"";position:absolute;inset:0;border-radius:inherit;background:#000;opacity:var(--wdk,0);pointer-events:none} /* (Settings → List → Rows: how watched videos look) */
     .item.flash{animation:flash .55s ease}
     @keyframes flash{25%{background:color-mix(in srgb,#17864a 38%,var(--pnl))}}
     .sw.enter{animation:enter .32s cubic-bezier(.4,0,.2,1) both}
@@ -1126,24 +1128,19 @@
     .guide.gl-wall .cb:not(:has(img)) .nx{white-space:normal}
     /* Twitch: who's offline, folded away under one line */
     .tv:not(.twoff-open) .pbody .list > .sw.twoff{display:none}
-    .twoffbar{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;margin:6px 0 2px;padding:0 10px;border:0;border-radius:9px;background:rgba(255,255,255,.06);color:#aab3c4;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}
-    .twoffbar:hover{background:rgba(255,255,255,.12);color:#fff}
+    .twoffbar{display:flex;align-items:center;gap:8px;width:100%;min-height:34px;margin:6px 0 2px;padding:0 10px;border:0;border-radius:9px;background:rgba(0,0,0,.2);color:#b4bccb;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}
+    .twoffbar:hover{background:rgba(255,255,255,.1);color:#fff}
     .twoffbar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:rotate(0deg);transition:transform .18s cubic-bezier(.4,0,.2,1)}
     .twoffbar.open svg{transform:rotate(180deg)}
-    .wbar{display:flex;align-items:center;gap:8px;width:100%;min-height:30px;margin:2px 0 4px;padding:0 10px;border:0;border-radius:9px;background:rgba(255,255,255,.05);color:#8d97ab;font:inherit;font-size:12px}
-    .wbar:hover{background:rgba(255,255,255,.11);color:#fff}
+    .wbar{display:flex;align-items:center;gap:8px;width:100%;min-height:30px;margin:2px 0 4px;padding:0 10px;border:0;border-radius:9px;background:rgba(0,0,0,.2);color:#b4bccb;font:inherit;font-size:12px} /* (a touch darker than the rows' see-through background, so it reads over bright pictures) */
+    .wbar:hover{background:rgba(255,255,255,.1);color:#fff}
+    .wbar.drop-before{box-shadow:inset 0 3px 0 var(--acc)} .wbar.drop-after{box-shadow:inset 0 -3px 0 var(--acc)} .wbar.dragslot{opacity:.25} .wbar.dragghost{background:var(--pnl);color:#fff}
     .wbar svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:rotate(180deg);transition:transform .18s cubic-bezier(.4,0,.2,1)}
     .wbar.open svg{transform:rotate(0deg)}
     .tv:not(.wopen) .sw.wfold{display:none}
     .motion.wopen .sw.wfold,.motion.twoff-open .pbody .list > .sw.twoff{animation:foldin .16s ease-out}
     @keyframes foldin{from{opacity:0;transform:translateY(-4px)}}
     .twoffbar i{margin-left:auto;font-style:normal;padding:0 7px;border-radius:999px;background:rgba(255,255,255,.12);color:#fff;font-size:11px}
-    /* the arrow on the list's left edge that closes it */
-    .phide{position:absolute;right:calc(var(--pw) + var(--pgap,0px));top:50%;z-index:7;width:20px;height:52px;min-height:0;padding:0;margin-top:-26px;border:0;border-radius:9px 0 0 9px;display:none;place-items:center;background:color-mix(in srgb,var(--pnl) 82%,transparent);color:#fff;opacity:.7;cursor:pointer;pointer-events:auto;box-shadow:-4px 0 12px rgba(0,0,0,.25);transition:opacity .3s ease,background .15s}
-    .show-panel .phide{display:grid}
-    .fade .phide{opacity:0;pointer-events:none}
-    .phide:hover,.phide:focus-visible{opacity:1;background:var(--acc)}
-    .phide svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transform:rotate(-90deg)}
     .guide .nxv{display:none}
     .guide.gl-guide .nxv{flex:1;min-width:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
     .guide .nv{display:flex;align-items:center;gap:8px;min-width:0}
@@ -1427,8 +1424,6 @@
     pickbar.append(el("span", "pn", ""), btn("Explore together", "Play the picked videos as their own topic", () => bulk("explore")), btn("Add to Feed", "Add the picked videos to your Feed", () => bulk("add")),
       btn("Remove", "Remove the picked videos", () => bulk("rm")), iconBtn("x", "Let go of them (Esc)", () => clearPicks(), "pclose"));
     const pwrap = el("div", "pwrap"); pwrap.append(pbody, nowbar, totop, pickbar, twpop); // (Twitch search: it fills the list area)
-    // a small arrow on the list's left edge: closes it with the mouse (U does it with the keyboard)
-    const closeArrow = iconBtn("chevron", "Close the list (U)", () => showPanel(""), "phide");
     panel.append(grip, phead, pwrap, chmenu, fpop);
     panel.addEventListener("pointerdown", (e) => { if (!e.composedPath().some((n) => n === chmenu || (n.classList && n.classList.contains("chtab")))) closeChanMenu(); });
     const start = el("div", "start");
@@ -1441,7 +1436,7 @@
     const toastEl = el("div", "toast"); toastEl.setAttribute("role", "status");
     const scrim = el("div", "scrim"); // catches clicks outside an open dialog / menu so they only close it
     scrim.addEventListener("click", (e) => { e.stopPropagation(); closeExplore(); closePop(); });
-    root.append(curtain, top, bar, panel, closeArrow, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
+    root.append(curtain, top, bar, panel, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
     shadow.append(style, root);
     document.documentElement.appendChild(host);
     ui = { hideB, host, root, curtain, tTitle, tSub, nT, nC, nowbar, totop, pickbar, stay, stayTxt, stayBtn, prevB, addB, wlRemove, wlClear, pbody, ptabs, tabInd, chmenu, clearB, refB, filtB, sortB, fdot, fstrip, fpop, histPB, twsB, twpop, setFrame, bar, infoB, comB, msg, guide, explore, pop, toast: toastEl };
@@ -1463,7 +1458,7 @@
       "--rrad": px(L.rowRadius), "--gap": px(L.rowGap), "--ralpha": pc(L.rowAlpha),
       "--tabh": px(L.tabHeight), "--tabpad": px(L.tabPad), "--tabw": px(L.tabWidth), "--tabs": String(L.tabScale / 100) })) ui.root.style.setProperty(k, v);
     ui.root.classList.toggle("edgefade", L.edgeFade);
-    ui.root.style.setProperty("--addc", cfg.tv.swipeAddColor); ui.root.style.setProperty("--nxc", cfg.tv.swipeNextColor); ui.root.style.setProperty("--rmc", cfg.tv.swipeRmColor); ui.root.style.setProperty("--aico", cfg.tv.swipeIconPx + "px");
+    ui.root.style.setProperty("--addc", cfg.tv.swipeAddColor); ui.root.style.setProperty("--nxc", cfg.tv.swipeNextColor); ui.root.style.setProperty("--wop", String(cfg.tv.watchedOpacity / 100)); ui.root.style.setProperty("--wdk", String(cfg.tv.watchedDark / 100)); ui.root.style.setProperty("--rmc", cfg.tv.swipeRmColor); ui.root.style.setProperty("--aico", cfg.tv.swipeIconPx + "px");
     ui.root.classList.toggle("dense", cfg.tv.density === "compact");
     ui.root.classList.toggle("motion", motionOn());
     const rowh = Math.round(Math.max(cfg.tv.rowPx, tw * 9 / 16 + 10)); // never shorter than its picture
@@ -1526,7 +1521,7 @@
       const inUse = !!ui.root.querySelector(".top:hover, .bar:hover, .top:has(:focus-visible), .bar:has(:focus-visible)");
       // the list hides along with them (Settings → Swiping & lists), unless you're pointing at it or using it
       const mode = cfg.tv.listHide, hides = mode === "always" || (mode === "fullscreen" && !!document.fullscreenElement);
-      const listStays = isListTab(state.panel) || PAGES.has(state.panel) ? !hides || !!ui.root.querySelector(".panel:hover, .phide:hover, .panel:has(:focus-visible), .chmenu.on, .sw.gone, .pickbar.on") : !!state.panel;
+      const listStays = isListTab(state.panel) || PAGES.has(state.panel) ? !hides || !!ui.root.querySelector(".panel:hover, .panel:has(:focus-visible), .chmenu.on, .sw.gone, .pickbar.on") : !!state.panel;
       const awake = performance.now() < (state.wakeUntil || 0); // you just pressed a key or clicked: stay up a moment
       // the mouse went off the page (to the browser's tabs or another window): nothing hides until it's back over the video
       const outNow = state.mouseOut && Date.now() - (state.mouseOutAt || 0) < 4000; // a quick overshoot to the browser's tabs keeps it up; a while away and it hides as usual
@@ -1593,7 +1588,7 @@
       if (leaveT || !state.edgeOpened || !cfg.tv.edgeHideMs) return;
       leaveT = setTimeout(() => {
         leaveT = 0;
-        if (!ui || !state.edgeOpened || state.mouseOut || ui.root.querySelector(".panel:hover, .phide:hover, .edge:hover, .chmenu.on, .pickbar.on, .sw.gone") || !ui.explore.hidden || !ui.pop.hidden) return;
+        if (!ui || !state.edgeOpened || state.mouseOut || ui.root.querySelector(".panel:hover, .edge:hover, .chmenu.on, .pickbar.on, .sw.gone") || !ui.explore.hidden || !ui.pop.hidden) return;
         state.edgeOpened = false; showPanel("");
       }, cfg.tv.edgeHideMs);
     };
@@ -1778,9 +1773,18 @@
     schedulePanel();
   };
   // Move a video in the playing list (`to` = the gap it goes in).
-  const moveItem = (from, to) => {
-    if (from < 0 || from >= state.queue.length || from === to || from + 1 === to) return;
-    const ids0 = state.queue.map((x) => x.id);
+  // Sorting off: `side` says whether it landed above the Watched bar ("above": it's in Watched, greyed) or below it.
+  const wSnap = () => { const m = new Map(state.queue.map((x) => [x.id, !!x.w])); return () => { for (const x of state.queue) if (m.has(x.id)) { if (m.get(x.id)) x.w = 1; else delete x.w; } }; };
+  const moveItem = (from, to, side) => {
+    if (from < 0 || from >= state.queue.length) return;
+    const off = sortOff();
+    if (from === to || from + 1 === to) { // same place: maybe just over the Watched bar
+      const it = state.queue[from];
+      if (!off || !side || (side === "above") === !!it.w) return;
+      const back = wSnap(); if (side === "above") it.w = 1; else delete it.w;
+      pushUndo("live", () => { back(); saveSession(); schedulePanel(); }); saveSession(); schedulePanel(); return;
+    }
+    const ids0 = state.queue.map((x) => x.id), wBack = wSnap();
     const hist = idsOfHistory(), cur = state.pos;
     const [it] = state.queue.splice(from, 1);
     const dest = to > from ? to - 1 : to;
@@ -1789,8 +1793,16 @@
     else if (from < cur && dest >= cur) state.pos--;
     else if (from > cur && dest <= cur) state.pos++;
     fixHistory(hist);
-    if (dest > state.pos) { played.delete(it.id); removed.delete(it.id); it.nx = 1; } // put there by you: it shows and plays, even one you've seen
-    pushUndo("live", () => restoreOrder(ids0));
+    if (off) { // sorting off: only the bar decides what's watched
+      if (dest > state.pos) { played.delete(it.id); removed.delete(it.id); it.nx = 1; }
+      if (side === "above") it.w = 1; else if (side === "below") delete it.w;
+    } else {
+    if (dest > state.pos) { played.delete(it.id); removed.delete(it.id); it.nx = 1; delete it.w; } // put there by you: it shows and plays, even one you've seen
+    // what's playing moved up past some videos: those are back in up next (out of the Watched bar, in their order), so
+    // the Watched bar is always right above what's playing. Nothing else moves.
+    if (from === cur && dest < from) for (let k = dest + 1; k <= from; k++) { const x = state.queue[k]; if (!x) continue; played.delete(x.id); removed.delete(x.id); delete x.w; if (seen.has(x.id) || progressOf(x) > 0) x.nx = 1; }
+    }
+    pushUndo("live", () => { wBack(); restoreOrder(ids0); });
     saveSession();
     schedulePanel();
   };
@@ -1909,12 +1921,16 @@
     const idx = () => state.queue.findIndex((x) => x.id === v.id);
     if (kind === "live") return {
       feedRow: () => onFeed() && !state.stay,
-      canRm: () => { const i = idx(); return i >= 0 && i !== state.pos; },
+      canRm: () => idx() >= 0, // (what's playing too: the next one in the list plays, and it goes)
       canAdd: () => (onFeed() && !state.stay ? idx() > state.pos + 1 : !inFeed(v.id)),
-      rm: () => { const it = state.queue[idx()]; removeLive(v.id); if (onFeed() && !state.stay) backToSource(it); },
+      rm: () => {
+        const it = state.queue[idx()], feed = onFeed() && !state.stay;
+        if (idx() !== state.pos) { removeLive(v.id); if (feed) backToSource(it); return; }
+        (async () => { await nextVideo(); if (state.queue[state.pos] && state.queue[state.pos].id === v.id) return schedulePanel(); removeLive(v.id); if (feed) backToSource(it); })(); // (nothing after it: it stays)
+      },
       add: () => { if (onFeed() && !state.stay) { const i = idx(); if (i <= state.pos + 1) return false; moveItem(i, state.pos + 1); return true; } return addToFeed(v, { c: state.colId, i: idx() }); },
       open: () => jumpTo(idx()),
-      drop: (fromId, after) => { const f = state.queue.findIndex((x) => x.id === fromId), t = idx(); if (f >= 0 && t >= 0) moveItem(f, t + (after ? 1 : 0)); },
+      drop: (fromId, after) => { const f = state.queue.findIndex((x) => x.id === fromId), t = idx(); if (f >= 0 && t >= 0) moveItem(f, t + (after ? 1 : 0), dropSide); },
     };
     if (kind === "hist") return { // History: plus adds to your Feed (it stays here), the bin forgets it, a click plays it again
       keepOnAdd: true, feedRow: () => false,
@@ -2010,11 +2026,21 @@
   // Reordering: hold a row and move it. A copy follows the pointer every frame (pointer events, not the browser's
   // drag-and-drop, which only updates a few times a second), a line shows where it will land, and the list
   // scrolls smoothly when you hold it near the top or bottom.
-  let dragging = false;
-  const dragRow = (api, e) => {
+  let dragging = false, dropSide; // dropSide: (sorting off) above or below the Watched bar, for the drop being made
+  // the Watched bar: before it is the gap after the row above it; after it, the same gap but below the bar
+  const barGap = (bar) => {
+    let p = bar.previousElementSibling; while (p && !p.classList.contains("sw")) p = p.previousElementSibling;
+    let n = bar.nextElementSibling; while (n && !n.classList.contains("sw")) n = n.nextElementSibling;
+    const q = (r) => state.queue.findIndex((x) => x.id === r.dataset.id);
+    return p ? q(p) + 1 : n ? q(n) : state.queue.length;
+  };
+  // Dragging the Watched bar while it's closed: it opens while you drag (so you see what's above it and where it lands),
+  // and closes again once you let go, with the list kept still around where you dropped.
+  let wPeek = false;
+  const dragRow = (api, e, barEl, fromBar) => {
     if (e.button !== 0 || e.pointerType === "touch" || e.target.closest(".hb") || dragging) return;
-    const w = api.wrap, x0 = e.clientX, y0 = e.clientY, z = (cfg ? cfg.tv.uiScale : 100) / 100;
-    let on = false, ghost = null, lastY = y0, raf = 0, target = null, after = false;
+    const w = barEl || api.wrap, x0 = e.clientX, y0 = e.clientY, z = (cfg ? cfg.tv.uiScale : 100) / 100;
+    let on = false, ghost = null, lastY = y0, raf = 0, target = null, after = false, overEl = null;
     const frame = () => {
       raf = 0;
       if (!on || !ui) return;
@@ -2024,11 +2050,13 @@
       else if (lastY > b.bottom - edge) auto = Math.ceil((lastY - (b.bottom - edge)) * 0.35);
       if (auto) ui.pbody.scrollTop += auto;
       ghost.style.transform = `translate3d(0, ${(lastY - y0) / z}px, 0) scale(1.02)`;
-      const n = ui.root.getRootNode().elementFromPoint(x0, lastY), over = n && n.closest ? n.closest(".sw") : null;
-      clearMarks(); target = null;
-      if (over && over !== w && over.parentNode === w.parentNode && !over.classList.contains("gone")) {
+      const n = ui.root.getRootNode().elementFromPoint(x0, lastY), over = n && n.closest ? n.closest(".sw, .wbar") : null;
+      clearMarks(); target = null; overEl = null;
+      if (over && over !== w && over.parentNode === w.parentNode && !over.classList.contains("gone") && !(barEl && over.classList.contains("wbar"))) {
         const r = over.getBoundingClientRect(); after = lastY > r.top + r.height / 2;
-        target = rowApi.get(over); if (target) over.querySelector(".item").classList.add(after ? "drop-after" : "drop-before");
+        const isBar = over.classList.contains("wbar");
+        target = isBar ? (api && api.drop ? { bar: true } : null) : rowApi.get(over);
+        if (target) { overEl = over; (isBar ? over : over.querySelector(".item")).classList.add(after ? "drop-after" : "drop-before"); }
       }
       if (auto) raf = requestAnimationFrame(frame);
     };
@@ -2036,7 +2064,9 @@
       lastY = ev.clientY;
       if (!on) {
         if (Math.abs(ev.clientY - y0) < 6 || Math.abs(ev.clientX - x0) > Math.abs(ev.clientY - y0)) return;
-        on = dragging = true;
+        on = dragging = true; ui.root.classList.add("dragging");
+        const bar0 = (barEl || fromBar) && !ui.root.classList.contains("wopen") ? w.parentNode && w.parentNode.querySelector(":scope > .wbar") : null;
+        if (bar0) { ui.pbody.style.overflowAnchor = "none"; const t0 = bar0.getBoundingClientRect().top; wPeek = true; ui.root.classList.add("wopen"); recenterRows("wfold"); ui.pbody.scrollTop += bar0.getBoundingClientRect().top - t0; }
         const r = w.getBoundingClientRect(), rr = ui.root.getBoundingClientRect();
         ghost = w.cloneNode(true); ghost.classList.add("dragghost"); ghost.classList.remove("enter", "gone");
         Object.assign(ghost.style, { left: (r.left - rr.left) / z + "px", top: (r.top - rr.top) / z + "px", width: r.width / z + "px" });
@@ -2049,16 +2079,47 @@
       window.removeEventListener("pointermove", move, true); window.removeEventListener("pointerup", up, true); window.removeEventListener("pointercancel", up, true);
       cancelAnimationFrame(raf); raf = 0;
       if (!on) return;
-      dragging = false;
+      dragging = false; if (ui) ui.root.classList.remove("dragging");
       const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; // the release isn't a click
       window.addEventListener("click", eat, true); setTimeout(() => window.removeEventListener("click", eat, true), 0);
       w.classList.remove("dragslot"); clearMarks();
       if (ghost) ghost.remove();
-      if (target && target.drop) target.drop(api.v.id, after);
+      const peeked = wPeek;
+      try { dropNow(); } finally {
+        if (peeked && ui) {
+          if (panelRaf) { cancelAnimationFrame(panelRaf); panelRaf = 0; }
+          try { renderPanel(false); } catch (err) { logErr("list", err); } // (still open: everything where you dropped it)
+          const list = ui.pbody.querySelector(":scope > .lbox > .list"), id = !barEl && api && api.v.id;
+          const anc = list && (id ? [...list.querySelectorAll(":scope > .sw:not(.gone)")].find((n) => n.dataset.id === id) : list.querySelector(":scope > .wbar"));
+          const t1 = anc ? anc.getBoundingClientRect().top : 0;
+          wPeek = false; drawWatched(); // closed again, as you had it, with that spot kept still
+          if (anc && anc.isConnected) ui.pbody.scrollTop += anc.getBoundingClientRect().top - t1;
+          ui.pbody.style.overflowAnchor = ""; // (the browser's own keeping-still is ours to do here)
+        }
+      }
+    };
+    const dropNow = () => {
+      if (!target) return;
+      const bar = w.parentNode && w.parentNode.querySelector(":scope > .wbar");
+      dropSide = sortOff() && bar && !barEl ? (target.bar ? (after ? "below" : "above") : overEl.compareDocumentPosition(bar) & Node.DOCUMENT_POSITION_FOLLOWING ? "above" : "below") : undefined;
+      try {
+        if (barEl) moveBar(overEl, after);
+        else if (target.bar) { const f = state.queue.findIndex((x) => x.id === api.v.id); if (f >= 0) moveItem(f, barGap(overEl), dropSide); }
+        else if (target.drop) target.drop(api.v.id, after);
+      } finally { dropSide = undefined; }
     };
     window.addEventListener("pointermove", move, true); window.addEventListener("pointerup", up, true); window.addEventListener("pointercancel", up, true);
   };
   const clearMarks = () => { if (ui) for (const r of ui.pbody.querySelectorAll(".drop-before,.drop-after")) r.classList.remove("drop-before", "drop-after"); };
+  // sorting off: the Watched bar dragged to a new place: everything above it is watched (greyed, folds away), the rest isn't
+  const moveBar = (over, after) => {
+    const k = state.queue.findIndex((x) => x.id === over.dataset.id) + (after ? 1 : 0);
+    if (k < 0) return;
+    const back = wSnap();
+    state.queue.forEach((x, j) => { if (j < k) x.w = 1; else delete x.w; });
+    pushUndo("live", () => { back(); saveSession(); schedulePanel(); });
+    saveSession(); schedulePanel();
+  };
   const thr = () => (cfg ? cfg.tv.swipeThreshold : 100);
   // how far a row slides open: twice the threshold, so letting go past the threshold lands on the action
   // the panel changed width: rows keep resting on their video, nothing is rebuilt (so nothing slides in again)
@@ -2109,7 +2170,7 @@
     const cur = kind === "live" ? i === state.pos : kind === "hist" && !!current() && current().id === v.id;
     row.classList.toggle("cur", cur);
     api.wrap.classList.toggle("curw", cur);
-    row.classList.toggle("done", kind === "live" && !cur && !v.tw && !sortOff() && (i < state.pos || played.has(v.id))); // everything above what's playing is behind you
+    row.classList.toggle("done", kind === "live" && !cur && !v.tw && (sortOff() ? !!v.w : i < state.pos || played.has(v.id))); // everything above what's playing is behind you (sorting off: what's above the Watched bar)
     setLines(api);
   };
   // Make `list` show `items` (in order), reusing the rows already there. Rows that move glide to their new place.
@@ -2247,7 +2308,8 @@
     if (fresh && items.length > 70) {
       const curAt = kind === "live" ? items.findIndex((v) => current() && v.id === current().id) : -1;
       const key0 = tab + "|" + kind + (kind === "live" && !sortOff() ? "|" + ((current() || {}).id || "") : "");
-      const memAt = scrollMem.has(key0) ? Math.ceil(scrollMem.get(key0) / 60) : 0; // (rows are at least ~60px tall)
+      const m0 = scrollMem.get(key0), aAt = m0 && m0.id ? items.findIndex((v) => v.id === m0.id) : -1;
+      const memAt = m0 != null ? Math.max(aAt, Math.ceil(memTop(m0) / 60)) : 0; // (rows are at least ~60px tall)
       const first = Math.min(items.length, Math.max(50, curAt + 30, memAt + 30));
       n = reconcile(list, items.slice(0, first), kind, c, false);
       if (first < items.length) appendLater(box, list, items.slice(first), kind, c);
@@ -2262,15 +2324,33 @@
     // what you already watched on this channel sits folded away right above what's playing, under one "Watched" bar
     // (open or closed, as you left it)
     const curAtW = kind === "live" && !(c && c.twitch) && current() ? items.findIndex((v) => v.id === current().id) : -1;
-    const wIds = new Set(curAtW > 0 && !sortOff() && cfg.tv.watchedFold ? items.slice(0, curAtW).map((v) => v.id) : []); // (off in settings: they stay in view, greyed)
-    for (const w of list.children) if (w.classList.contains("sw")) w.classList.toggle("wfold", wIds.has(w.dataset.id));
+    const wIds = new Set(!cfg.tv.watchedFold || kind !== "live" ? [] : sortOff() ? items.filter((v) => v.w && !(current() && v.id === current().id)).map((v) => v.id) // (sorting off: what the bar held, where it is)
+      : curAtW > 0 ? items.slice(0, curAtW).map((v) => v.id) : []); // (off in settings: they stay in view, greyed)
+    const unfolded = []; // (out of the Watched fold just now: back in view, and back on the video)
+    for (const w of list.children) if (w.classList.contains("sw")) { const was = w.classList.contains("wfold"); if (w.classList.toggle("wfold", wIds.has(w.dataset.id)) !== was && was) unfolded.push(w); }
     let wb = box._wbar;
-    if (wIds.size) {
-      if (!wb) { wb = box._wbar = el("button", "wbar"); wb.type = "button"; wb.addEventListener("click", () => foldToggle("ytv:wopen", "wfold", drawWatched)); }
+    // the bar is always there on a YouTube playing list (also with nothing watched yet: then at the very top)
+    if (cfg.tv.watchedFold && kind === "live" && !(c && c.twitch) && (sortOff() || curAtW >= 0)) {
+      if (!wb) {
+        wb = box._wbar = el("button", "wbar"); wb.type = "button"; wb.addEventListener("click", () => foldToggle("ytv:wopen", "wfold", drawWatched));
+        // drag it: sorting off, it moves on its own (what's above it is watched); sorting on, it's stuck to what's playing
+        wb.addEventListener("pointerdown", (e) => {
+          if (sortOff()) return dragRow(null, e, wb);
+          const cw = wb.parentNode && wb.parentNode.querySelector(":scope > .sw.curw"), a = cw && rowApi.get(cw);
+          if (a && a.drop) dragRow(a, e, null, true);
+        });
+      }
       wb.dataset.n = wIds.size;
-      const curRow = list.querySelector(".sw.curw"); if (curRow && wb.nextSibling !== curRow) list.insertBefore(wb, curRow);
+      // right under the last watched one (with sorting on, that's right above what's playing)
+      const rowsNow = [...list.children].filter((n) => n.classList.contains("sw") && !n.classList.contains("gone"));
+      let last = null;
+      if (sortOff()) { const wset = new Set(items.filter((v) => v.w).map((v) => v.id)); for (const r of rowsNow) if (wset.has(r.dataset.id)) last = r; }
+      else for (const r of rowsNow) { if (r.classList.contains("curw")) break; last = r; }
+      const want = last ? last.nextSibling : list.firstChild;
+      if (want !== wb && !(last ? wb.previousSibling === last && wb.parentNode === list : list.firstChild === wb)) list.insertBefore(wb, want);
       drawWatched();
     } else if (wb) wb.remove();
+    for (const w of unfolded) if (w._R != null && !busyRows.has(w) && w.offsetParent && Math.abs(w.scrollLeft - w._R) > 1) { w.scrollLeft = w._R; w._user = 0; w._side = 0; }
     const offN = c && c.twitch ? items.filter((v) => v.off).length : 0;
     let ob = box.querySelector(".twoffbar");
     if (offN) {
@@ -2285,6 +2365,11 @@
     } else if (ob) ob.hidden = true;
     if (!n && fOn && fTotal) empty.replaceChildren(el("b", null, "Nothing here matches your filters"), document.createTextNode(`${fTotal} video${fTotal === 1 ? "" : "s"} hidden. Loosen the filter (the funnel above), or load more.`));
     else if (!n) { const [b, t] = EMPTY[kind] || EMPTY.browse; empty.replaceChildren(el("b", null, b), document.createTextNode(t)); }
+    if (!fresh && kind === "live" && box.dataset.key) { // sorting switched while you look: carry on remembering under the right name
+      const kp = sortOff(), k2 = tab + "|" + kind + (!kp ? "|" + ((current() || {}).id || "") : "");
+      if (kp) box.dataset.anchor = "1"; else delete box.dataset.anchor;
+      if (k2 !== box.dataset.key) { box.dataset.key = k2; markStuck(); }
+    }
     if (fresh) {
       // each tab remembers where you were; the first time, what's playing sits at the very top (what you
       // already watched is just above it, out of view: scroll up to see it)
@@ -2292,7 +2377,10 @@
       const keepPlace = kind === "live" && sortOff();
       const key = tab + "|" + kind + (kind === "live" && !keepPlace ? "|" + ((current() || {}).id || "") : ""); // once something else plays, it's shown at the top again
       ui.pbody.scrollTop = 0;
-      if (scrollMem.has(key)) ui.pbody.scrollTop = scrollMem.get(key);
+      if (keepPlace) box.dataset.anchor = "1"; else delete box.dataset.anchor;
+      const m = scrollMem.get(key), an = m && m.id ? [...list.children].find((r) => r.dataset.id === m.id && r.offsetHeight) : null;
+      if (an) ui.pbody.scrollTop = an.offsetTop + m.d;
+      else if (m != null) ui.pbody.scrollTop = memTop(m);
       else if (!keepPlace) { const cur = list.querySelector(".sw.curw:not(.still)"), wbar = list.querySelector(":scope > .wbar"); if (cur) ui.pbody.scrollTop = (wbar || cur).offsetTop; } // Twitch starts at the top
       box.dataset.key = key;
     }
@@ -2311,10 +2399,18 @@
     const done = () => { if (--left > 0) return; lsSet(key, false); draw(); };
     for (const r of rows) r.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-4px)" }], { duration: 120, easing: "ease-in" }).onfinish = done;
   };
+  // A folded row is out of the layout, and the browser forgets how far it was scrolled sideways: shown again, it would
+  // rest on its swipe action (the bin or the plus) instead of the video. Put those back on the video.
+  const recenterRows = (cls) => {
+    if (!ui) return;
+    const fix = () => { if (ui) for (const w of ui.pbody.querySelectorAll(".lbox > .list > .sw" + (cls ? "." + cls : "") + ":not(.gone)")) if (w._R != null && !busyRows.has(w) && !userSwiped(w) && w.offsetParent && Math.abs(w.scrollLeft - w._R) > 1) { w.scrollLeft = w._R; w._side = 0; w.classList.remove("armed", "no", "toadd", "nextup"); w.style.setProperty("--p", "0"); } };
+    fix(); requestAnimationFrame(fix); // (and once more after the browser has laid them out and snapped them)
+  };
   const drawWatched = () => {
     if (!ui) return;
     const open = !!lsGet("ytv:wopen", false), wb = ui.pbody.querySelector(".wbar");
-    ui.root.classList.toggle("wopen", open);
+    ui.root.classList.toggle("wopen", open || wPeek);
+    recenterRows(""); // (every row in view rests on its video, whatever happened while it was folded away)
     if (wb) { if (!wb.firstChild) wb.append(icon("chevron"), el("span", null, "Watched")); wb.classList.toggle("open", open); wb.title = open ? "Fold away what you watched" : "Show what you watched on this channel"; }
     markStuck();
   };
@@ -2322,6 +2418,7 @@
     if (!ui) return;
     const open = !!lsGet("ytv:twoff", false), ob = ui.pbody.querySelector(".twoffbar");
     ui.root.classList.toggle("twoff-open", open);
+    if (open) recenterRows("twoff");
     if (ob) { if (!ob.firstChild) ob.append(icon("chevron"), el("span", null, "Offline"), el("i")); ob.lastChild.textContent = ob.dataset.n || ""; ob.title = open ? "Fold away who’s offline" : "Show who’s offline"; ob.classList.toggle("open", open); }
   };
   const appendLater = (box, list, rest, kind, c) => {
@@ -2645,13 +2742,20 @@
   // scrolling (only opacity and transform change, so it stays smooth). Scrolling the other way, it slides back out.
   // Never at the bottom.
   const scrollMem = new Map(); // tab → how far down you were
+  // (sorting off: remembered as "this row, this far down" rather than pixels, so rows above it changing size, like the
+  // playing one moving, can't shift where you were)
+  const memAnchor = (box, st) => {
+    for (const n of box.querySelectorAll(".list > .sw:not(.gone)")) { const h = n.offsetHeight; if (h && n.offsetTop + h > st) return { st, id: n.dataset.id, d: st - n.offsetTop }; }
+    return { st };
+  };
+  const memTop = (m) => (typeof m === "number" ? m : m.st);
   let stuckRaf = 0;
   const markStuck = () => { if (!stuckRaf) stuckRaf = requestAnimationFrame(updateNowBar); };
   const updateNowBar = () => {
     stuckRaf = 0;
     if (!ui) return;
     const box = ui.pbody.querySelector(":scope > .lbox");
-    if (box && box.dataset.key) scrollMem.set(box.dataset.key, ui.pbody.scrollTop);
+    if (box && box.dataset.key && ui.pbody.clientHeight) scrollMem.set(box.dataset.key, box.dataset.anchor ? memAnchor(box, ui.pbody.scrollTop) : ui.pbody.scrollTop);
     const b = ui.pbody, st = b.scrollTop, more = b.scrollHeight - b.clientHeight - st;
     b.classList.toggle("ft", st > 2); b.classList.toggle("fb", more > 2); // the soft fades at the edges
     ui.totop.classList.toggle("on", st > b.clientHeight * 1.5); // far down: a way back up
@@ -2871,6 +2975,23 @@
     if (!ui.fpop.hidden && !path.some((n) => n === ui.fpop || n === ui.filtB)) closeFilter();
     if (!ui.twpop.hidden && !path.some((n) => n === ui.twpop || n === ui.twsB)) closeTwSearch();
   }, true);
+
+  // the list (or info, comments…) is open (with its key, not the screen edge) and you click on the video itself: it just
+  // closes, the video keeps playing. Opened from the screen edge, a click on the video pauses it as always.
+  // (YouTube's own controls still work as always)
+  let eatVid = 0;
+  const eatVidEv = (e) => { if (!eatVid) return; e.stopPropagation(); e.preventDefault(); if (e.type === "click") eatVid = 0; };
+  window.addEventListener("pointerdown", (e) => {
+    eatVid = 0;
+    if (!ui || !state.panel || state.edgeOpened || e.button !== 0 || ui.root.classList.contains("fade") || !ui.root.classList.contains("show-panel")) return;
+    const path = e.composedPath();
+    if (path.some((n) => n === ui.host || (n.id && n.id.startsWith("ytv")))) return; // on YTV itself
+    if (!path.some((n) => n.id === "movie_player")) return; // only the video
+    if (path.some((n) => n.classList && (n.classList.contains("ytp-chrome-bottom") || n.classList.contains("ytp-chrome-top") || n.classList.contains("ytp-ce-element") || n.tagName === "BUTTON" || n.tagName === "A"))) return;
+    eatVid = 1; eatVidEv(e); showPanel("");
+    setTimeout(() => { eatVid = 0; }, 800);
+  }, true);
+  for (const t of ["mousedown", "mouseup", "pointerup", "click", "dblclick"]) window.addEventListener(t, eatVidEv, true);
 
   // ---- Twitch: find streamers by name (the magnifier above the Twitch list) and add them with +
   let twsLast = { q: "", r: null }, twsTok = 0, twsT = 0;
@@ -4058,49 +4179,28 @@
       clearTimeout(n._sortT); n._sortT = setTimeout(() => { n.style.transition = ""; }, 380);
     }
   };
+  // Sorting never rewrites the past. Off: the list stays exactly as it is (and what's in the Watched bar is remembered as
+  // such). Back on: what's playing goes to the top, right under the Watched bar, which holds just what it held before;
+  // everything else keeps its place and stays in view. From then on, each video you leave goes into the Watched bar.
   const toggleSorting0 = () => {
     const turningOn = cfg.tv.keepOrder;
-    cfg.tv.keepOrder = !turningOn; writeCfg();
-    if (!turningOn) { toast("Sorting off"); updateFilterUi(); schedulePanel(); return; }
-    for (const id of dumbPlayed) { const it = state.queue.find((x) => x.id === id); if (progressOf(it || { id }) < fullPct()) played.delete(id); }
-    dumbPlayed.clear();
-    const tab = isListTab(state.panel) ? state.panel : playingTab(), kind = tabKind(tab), cur = current();
-    const full = (x) => x && !x.tw && !x.f && !(cur && x.id === cur.id) && progressOf(x) >= fullPct();
-    let gone = 0;
-    if (kind === "live") {
-      const ids0 = state.queue.map((x) => x.id), drop = state.queue.filter(full);
-      if (drop.length) {
-        const hist = idsOfHistory(); state.queue = state.queue.filter((x) => !full(x)); state.pos = Math.max(0, state.queue.findIndex((x) => cur && x.id === cur.id)); fixHistory(hist); gone = drop.length;
-        pushUndo("live", () => { // back where they were (you want to see them: they show and can play again)
-          const c2 = current(), h2 = idsOfHistory();
-          for (const x of drop) { // each goes back in front of whatever followed it before (everything else stays as it is now)
-            played.delete(x.id);
-            if (state.queue.some((y) => y.id === x.id)) continue;
-            const after = ids0.slice(ids0.indexOf(x.id) + 1).map((id) => state.queue.findIndex((y) => y.id === id)).find((k) => k >= 0);
-            state.queue.splice(after === undefined ? state.queue.length : after, 0, { ...x, nx: 1 });
-          }
-          state.pos = Math.max(0, state.queue.findIndex((x) => c2 && x.id === c2.id)); fixHistory(h2); saveSession(); schedulePanel();
-        });
-        saveSession();
-      }
-      // what's playing goes to the top; everything else keeps its order after it (and stays visible: nothing counts as
-      // "behind you" yet)
-      const ci = state.queue.findIndex((x) => cur && x.id === cur.id);
-      if (ci > 0) { const hist = idsOfHistory(), [c0] = state.queue.splice(ci, 1); state.queue.unshift(c0); state.pos = 0; fixHistory(hist); }
-      for (const x of state.queue) if (!(cur && x.id === cur.id)) played.delete(x.id);
-      saveSession();
-    } else if (kind === "browse" || kind === "base") {
-      const arr = kind === "base" ? state.base : (browse.get(tab.slice(4)) || {}).items;
-      if (arr) {
-        const before = arr.slice(), drop = arr.filter(full);
-        if (drop.length) {
-          arr.splice(0, arr.length, ...arr.filter((x) => !full(x))); gone = drop.length;
-          pushUndo(kind === "base" ? "live" : "browse", () => { const by = new Set(arr.map((x) => x.id)); arr.splice(0, arr.length, ...before.filter((x) => by.has(x.id) || drop.includes(x)), ...arr.filter((x) => !before.includes(x))); schedulePanel(); });
-        }
-      }
+    if (!turningOn) {
+      state.queue.forEach((x, k) => { if (x && k < state.pos) x.w = 1; }); // (the Watched bar as it is now)
+      cfg.tv.keepOrder = true; writeCfg(); saveSession();
+      toast("Sorting off"); updateFilterUi(); schedulePanel(); return;
     }
-    updateFilterUi(); toast(gone ? `Sorting on · ${gone} watched cleared (Cmd+Z)` : "Sorting on");
-    schedulePanel();
+    cfg.tv.keepOrder = false; writeCfg();
+    dumbPlayed.clear();
+    const tab = isListTab(state.panel) ? state.panel : playingTab(), cur = current();
+    if (cur && (tabKind(tab) === "live" || tabKind(playingTab()) === "live")) {
+      const hist = idsOfHistory();
+      const fold = state.queue.filter((x) => x && x.w && x.id !== cur.id), rest = state.queue.filter((x) => x && !x.w && x.id !== cur.id);
+      delete cur.w;
+      state.queue = [...fold, cur, ...rest]; state.pos = fold.length; fixHistory(hist);
+      for (const x of rest) { played.delete(x.id); if (seen.has(x.id) || progressOf(x) > 0) x.nx = 1; } // played while sorting was off: still in view, as you left it (even where seen videos are skipped)
+      saveSession();
+    }
+    updateFilterUi(); toast("Sorting on"); schedulePanel();
   };
   const remaining = () => state.queue.slice(state.pos + 1).filter((v) => !played.has(v.id)).length;
   // Fetch more videos for what's playing now: on-topic videos while exploring, similar ones while

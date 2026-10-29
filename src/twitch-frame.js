@@ -13,7 +13,10 @@
   const params = new URLSearchParams(location.search);
   const live = params.has("channel") && !params.has("video"), quality = /^[\w]{1,12}$/.test(params.get("ytvq") || "") ? params.get("ytvq") : "chunked";
   let warm = params.get("ytvwarm") === "1"; // loaded ahead (when you point at a stream): it already plays, muted and out of sight, until YTV says go
-  try { localStorage.setItem("video-muted", JSON.stringify({ default: false })); localStorage.setItem("volume", "1"); } catch {} // Twitch's player: sound on, at full volume
+  // Twitch's player: sound on, at full volume. (It remembers "muted" for every next stream, so whenever YTV mutes a stream
+  // loaded ahead, this is put back: the next one still starts with sound.)
+  const soundPref = () => { try { localStorage.setItem("video-muted", JSON.stringify({ default: false })); localStorage.setItem("volume", "1"); } catch {} };
+  soundPref();
   const say = (m) => { try { window.parent.postMessage({ ytvTw: m }, PARENT); } catch {} };
   const video = () => document.querySelector("video");
   // a live stream has no pause; YTV's full screen is the one that counts (it keeps YTV's own UI)
@@ -31,7 +34,7 @@
     'html.ytv-q [data-a-target="player-settings-menu"],html.ytv-q [role="menu"]{opacity:0!important;pointer-events:none!important}';
   const hideWatchOn = () => { for (const b of document.querySelectorAll("button:not(.ytv-hide), a:not(.ytv-hide)")) if (/^watch on twitch$/i.test((b.textContent || "").trim())) b.classList.add("ytv-hide"); };
   (document.head || document.documentElement).append(style);
-  let started = false, lastTry = 0, unmuted = false, held = false; // held: you paused it with Space (only then does a live stream stay paused)
+  let started = false, lastTry = 0, unmuted = false, held = false, soundTries = 0; // held: you paused it with Space (only then does a live stream stay paused)
   const START_BUTTONS = ['[data-a-target="player-overlay-mature-accept"]', '[data-a-target*="mature"] button', 'button[data-a-target*="mature"]', '[data-a-target*="start-watching"]', '[data-test-selector*="start-watching"]',
     '[data-a-target*="content-classification"] button', '[data-test-selector*="content-classification"] button', '[data-a-target*="gate"] button', '[data-test-selector*="gate"] button', '[data-a-target="player-overlay-play-button"]'];
   const START_WORDS = /start watching|begin watching|watch now|i understand|continue|kijken|begin met|starten|afspelen|ansehen|regarder|^play$|^watch$/i;
@@ -50,12 +53,15 @@
     const sb = startButton(); if (sb) { sb.click(); return; } // "start watching" (adult content notice) and Play, as you would
     const v = video();
     if (!v) return;
-    if (warm) { if (!v.muted) v.muted = true; if (v.paused && v.readyState > 0 && performance.now() - lastTry > 300) { lastTry = performance.now(); v.play().catch(() => {}); } return; } // silent until it's wanted
+    if (warm) { if (!v.muted) { v.muted = true; setTimeout(soundPref, 0); setTimeout(soundPref, 400); } if (v.paused && v.readyState > 0 && performance.now() - lastTry > 300) { lastTry = performance.now(); v.play().catch(() => {}); } return; } // silent until it's wanted
+    // sound on from the very start (not muted first, then on): as soon as the player is there
+    if (v.muted && !unmuted && soundTries < 3) { // (if the browser says no, it stays muted and YTV tells you)
+      soundTries++; const wasOn = !v.paused; v.muted = false; soundPref();
+      const noSound = () => { unmuted = true; v.muted = true; v.play().catch(() => {}); say({ playing: true, muted: true }); };
+      if (wasOn) setTimeout(() => { if (v.paused) noSound(); }, 150);
+      else { lastTry = performance.now(); v.play().catch((e) => { if (e && e.name === "NotAllowedError") noSound(); }); }
+    }
     if (!v.paused && v.readyState > 2) {
-      if (v.muted && !unmuted) { // started without sound: turn it on (if the browser says no, it stays muted and YTV tells you)
-        unmuted = true; v.muted = false;
-        setTimeout(() => { if (v.paused) { v.muted = true; v.play().catch(() => {}); say({ playing: true, muted: true }); } }, 150);
-      }
       if (!started) { started = true; say({ playing: true, muted: v.muted }); setTimeout(pickQuality, 600); }
       return;
     }
@@ -111,7 +117,7 @@
   window.addEventListener("message", (e) => {
     if (e.origin !== PARENT || !e.data || typeof e.data !== "object" || !e.data.ytvTw || typeof e.data.ytvTw !== "object") return;
     const c = e.data.ytvTw, v = video();
-    if (c.cmd === "go") { if (warm) { warm = false; unmuted = false; started = false; kick(); } say({ going: true }); return; }
+    if (c.cmd === "go") { if (warm) { warm = false; unmuted = false; soundTries = 0; started = false; soundPref(); kick(); } say({ going: true }); return; }
     if (!v) return;
     if (c.cmd === "mute") { v.muted = !!c.on; unmuted = true; }
     else if (c.cmd === "volume") { v.volume = 1; } // (always full)

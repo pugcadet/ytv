@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.26.8";
+  SW.VERSION = "1.26.15";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -173,6 +173,8 @@
       swipeNextColor: typeof tv.swipeNextColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeNextColor) ? tv.swipeNextColor.toLowerCase() : "#3d7be0", // Shift + swipe: plays next
       fullPct: clampInt(tv.fullPct, 50, 100, 90), // a video counts as fully watched from here (%)
       keepOrder: tv.keepOrder === true,
+      watchedOpacity: clampInt(tv.watchedOpacity, 0, 100, 50), // how watched videos look in the list: 100 and 0 darkness = as any other
+      watchedDark: clampInt(tv.watchedDark, 0, 100, 0),
       watchedFold: tv.watchedFold !== false, // watched videos fold away under a "Watched" bar (off: they stay in view, greyed out)
       histMax: clampInt(tv.histMax, 10, 2000, 200), // how many videos History keeps // sorting off (S): the list stays exactly as it is (no greying, no Watched bar, nothing moves)
       swipeRmColor: typeof tv.swipeRmColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeRmColor) ? tv.swipeRmColor.toLowerCase() : "#d93a3f",
