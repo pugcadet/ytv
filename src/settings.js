@@ -45,7 +45,19 @@
   const P = (path) => ({ get: () => getAt(cfg, path), set: (v) => setAt(cfg, path, v) });
   const pathsOf = (el) => (el.dataset.paths || "").split(" ").filter(Boolean);
   const isChanged = (paths) => paths.some((p) => !same(getAt(cfg, p), getAt(defaults(), p)));
-  const tagRow = (el, paths) => { if (paths && paths.length) { el.dataset.paths = paths.join(" "); el.classList.toggle("changed", isChanged(paths)); } return el; };
+  // Each setting you changed gets a small ↺ next to its name: one click puts just that setting back to how YTV comes.
+  const tagRow = (el, paths) => {
+    if (!paths || !paths.length) return el;
+    el.dataset.paths = paths.join(" "); el.classList.toggle("changed", isChanged(paths));
+    const b = h("button", { type: "button", class: "rreset", text: "↺", title: "Back to default", "aria-label": "Put this setting back to its default", onclick: async (e) => {
+      e.preventDefault(); e.stopPropagation(); // (inside a label: don't flip the switch as well)
+      for (const p of paths) setAt(cfg, p, structuredClone(getAt(defaults(), p)));
+      await save(); render();
+    } });
+    const name = el.querySelector(":scope > .label > span:first-child");
+    (name || el).append(b);
+    return el;
+  };
   const allPaths = (el) => [...new Set([...(el.matches("[data-paths]") ? [el] : []), ...el.querySelectorAll("[data-paths]")].flatMap(pathsOf))];
   const refreshMarks = () => {
     for (const r of document.querySelectorAll("#main [data-paths]")) r.classList.toggle("changed", isChanged(pathsOf(r)));
@@ -809,6 +821,9 @@
     page("Playing", "What plays, and the controls while it does. To filter the list itself (length, upload date, watched, subscribed), use the funnel at the top of the list.",
       card("What plays", null,
         toggle("Skip music videos", "Leaves out official music videos, lyric videos, “– Topic” and VEVO channels, and anything YouTube labels as Music. Never on Home, Watched or Watch Later: those show what YouTube shows.", "tv.skipMusic")),
+      card("Picture", null,
+        pick("Video quality", "tv.videoQuality", [["premium", "1080p Premium"], ["hd1080", "1080p"], ["hd720", "720p"], ["auto", "Auto"]],
+          "1080p Premium is YouTube’s higher-bitrate 1080p (with YouTube Premium); where a video doesn’t have it, it plays in 1080p. A video without 1080p plays in the best it has.")),
       card("Controls", null,
         toggle("Buttons above the player bar", "Prev, Next, list, info and comments. They always show when keyboard shortcuts are off.", "tv.showBar")));
   };

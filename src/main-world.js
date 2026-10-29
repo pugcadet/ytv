@@ -20,6 +20,7 @@
     const p = tvPlayer();
     if (!p) return;
     try {
+      if ((c.cmd === "load" || c.cmd === "announce") && QUAL.includes(c.q)) { wantQ = c.q; qDoneFor = ""; }
       if (c.cmd === "load" && /^[\w-]{11}$/.test(c.id) && typeof p.loadVideoById === "function") {
         endedFor = ""; playingFor = ""; errorFor = "";
         const start = Number(c.start) > 0 ? Math.floor(Number(c.start)) : 0;
@@ -45,6 +46,25 @@
     } catch {}
   });
   let endedFor = "", errorFor = "", playingFor = "", tick = 0;
+  // Video quality, once per video as soon as it plays: "premium" is 1080p Premium (YouTube's higher-bitrate 1080p,
+  // playable with YouTube Premium) where the video has it, else 1080p; a video without 1080p plays in the best it has.
+  const QUAL = ["premium", "hd1080", "hd720", "auto"], ORDER = ["hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny"];
+  let wantQ = "premium", qDoneFor = "";
+  const applyQuality = (p, id) => {
+    if (!id || qDoneFor === id || wantQ === "auto" || typeof p.setPlaybackQualityRange !== "function") return;
+    const cap = wantQ === "hd720" ? "hd720" : "hd1080";
+    const data = typeof p.getAvailableQualityData === "function" ? p.getAvailableQualityData() || [] : [];
+    const levels = (typeof p.getAvailableQualityLevels === "function" ? p.getAvailableQualityLevels() || [] : []).filter((l) => ORDER.includes(l));
+    if (!levels.length) return; // not known yet: next tick
+    qDoneFor = id;
+    if (wantQ === "premium") {
+      const prem = data.find((q) => q && q.quality === "hd1080" && /premium/i.test(q.qualityLabel || "") && q.isPlayable !== false && !q.paygatedQualityDetails && q.formatId);
+      if (prem) { p.setPlaybackQualityRange("hd1080", "hd1080", prem.formatId); return; }
+    }
+    const target = levels.find((l) => ORDER.indexOf(l) >= ORDER.indexOf(cap)) || levels[levels.length - 1];
+    p.setPlaybackQualityRange(target, target);
+    if (typeof p.setPlaybackQuality === "function") p.setPlaybackQuality(target);
+  };
   setInterval(() => {
     if (!tvOn()) return;
     const p = tvPlayer();
@@ -68,6 +88,7 @@
       } catch {}
       emit("playing", { id, title: vd.title || "", author: vd.author || "", desc, channelId, keywords, publishDate, category });
     }
+    if (s === 1 && !isAd && id && qDoneFor !== id) { try { applyQuality(p, id); } catch { qDoneFor = id; } }
     if (s === 1 && !isAd && id && ++tick % 3 === 0) emit("time", { id, t: Math.floor(t), d: Math.floor(d) }); // ~every second, so a channel can resume where you left it
     const nearEnd = !isAd && d > 5 && t >= d - 0.8;
     if ((s === 0 || nearEnd) && id && endedFor !== id) { endedFor = id; emit("ended", { id }); }

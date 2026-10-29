@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "YTV",
   "short_name": "YTV",
-  "version": "1.26.8",
+  "version": "1.27.0",
   "description": "Watch YouTube like TV: your own channels that keep playing, with a swipeable list of what's next. 100% local.",
   "minimum_chrome_version": "114",
   "icons": {

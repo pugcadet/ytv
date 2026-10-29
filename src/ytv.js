@@ -747,7 +747,6 @@
     .chmenu .more .nm{color:#aab3c4}
     .pwrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
     .pbody{position:relative;flex:1;min-height:0;overflow:auto;padding:4px 6px;overscroll-behavior:contain}
-    /* the shelf under a list: pull it into view to load more */
     /* the end of a list: load more */
     .endline{margin:10px 0 16px;text-align:center;font-size:12px;color:#8d97ab}
     .endline[hidden]{display:none}
@@ -2177,9 +2176,9 @@
     hist: ["Nothing watched yet", "Everything you watch shows up here, across channels and Twitch."],
     cont: ["Nothing half-watched", "YouTube videos you start and don’t finish show up here, also ones from YouTube itself."],
     idle: ["Your Feed is empty", "Swipe a video in any channel to add it here."],
-    live: ["Nothing here yet", "Pull past the end of the list to load more."],
+    live: ["Nothing here yet", "Press ↻ (top right) to look for videos."],
     base: ["Nothing to go back to yet", ""],
-    browse: ["Nothing on this channel right now", "Pull down past the top to try again."],
+    browse: ["Nothing on this channel right now", "Press ↻ (top right) to try again."],
     xbrowse: ["Nothing left in this topic", ""],
   };
   const canPull = (kind) => !!kind && kind !== "idle" && kind !== "xbrowse" && kind !== "hist" && kind !== "cont" && !(onFeed() && (kind === "base" || (kind === "live" && !state.stay)));
@@ -3135,6 +3134,8 @@
     if (ghist.pos < 0) ghist.pos = ghist.list.length - 1;
     saveGhist();
   };
+  // Info and Comments open at the top: each time you open them, and for each new video (a redraw of the same one keeps your place)
+  const atTopOnOpen = (v) => { const k = state.panel + "|" + (v ? v.id : ""); if (ui.pbody._ik !== k) { ui.pbody._ik = k; ui.pbody.scrollTop = 0; } };
   const renderInfo = async () => {
     const v = current();
     state.panelVid = v ? v.id : "";
@@ -3147,7 +3148,7 @@
     ownerOf(v.id).then((o) => { if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
     const body = el("div", null, state.desc[v.id] || "Loading description…");
     box.append(body);
-    ui.pbody.replaceChildren(box);
+    ui.pbody.replaceChildren(box); atTopOnOpen(v); // always opens at the top (the list's own place is kept for when you go back)
     if (state.desc[v.id] === undefined) {
       const d = await descriptionOf(v.id);
       state.desc[v.id] = d || "This video has no description.";
@@ -3161,7 +3162,7 @@
     if (!v) return ui.pbody.replaceChildren(el("p", "empty", "Nothing playing."));
     if (v.tw) return renderTwitchChatPanel(v); // a stream's chat, YTV style
     const comBox = el("div", "coms");
-    ui.pbody.replaceChildren(comBox);
+    ui.pbody.replaceChildren(comBox); atTopOnOpen(v); // always opens at the top (the list's own place is kept for when you go back)
     loadComments(v, comBox);
   };
   const fetchComments = (v) => { // also called quietly after ~10 s of watching so the tab opens ready
@@ -3473,6 +3474,7 @@
     ui.comB.setAttribute("aria-pressed", String(which === "comments"));
     ui.histPB.setAttribute("aria-pressed", String(which === "history"));
     lsSet("ytv:lastpanel", which && which !== "explore" && !which.startsWith("x:") ? which : ""); // opened again like this next time
+    ui.pbody._ik = ""; // (opened again: Info and Comments start at the top)
     if (which) renderPanel(changed); else renderTabs();
     wake();
   };
@@ -3975,12 +3977,12 @@
     if (!onWatchTv()) { location.assign(`/watch?v=${v.id}${start > 5 ? "&t=" + Math.floor(start) + "s" : ""}`); return; } // TV continues on that page (from where you were in it)
     if (keep) { // TV was switched on over this very video: it simply keeps playing
       state.lastEvt = "playing";
-      cmd({ cmd: "announce" });
+      cmd({ cmd: "announce", q: cfg ? cfg.tv.videoQuality : "premium" });
       ui.curtain.style.display = "none";
       showNow();
       return;
     }
-    cmd({ cmd: "load", id: v.id, start });
+    cmd({ cmd: "load", id: v.id, start, q: cfg ? cfg.tv.videoQuality : "premium" });
     ui.curtain.style.display = "none";
     clearTimeout(state.startTimer);
     armStart(5000);
