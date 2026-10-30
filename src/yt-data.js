@@ -25,7 +25,7 @@
    * Ask YouTube's own web API for more data — the same request YouTube's page makes, e.g. to
    * load comments or the next page of a list. Only these endpoints on youtube.com are allowed.
    */
-  const API_ENDPOINTS = ["next", "browse/edit_playlist", "browse", "search"]; // comments; your Watch Later; more of a list ("browse"/"search" continuations)
+  const API_ENDPOINTS = ["next", "browse/edit_playlist", "browse", "search", "feedback"]; // comments; your Watch Later; more of a list ("browse"/"search" continuations); Not interested / Don't recommend channel
   const apiPost = async (endpoint, body, headers = {}) => {
     if (!API_ENDPOINTS.includes(endpoint)) throw new Error("YTV only uses YouTube's next, browse, search and edit_playlist endpoints");
     const url = new URL(`/youtubei/v1/${endpoint}?prettyPrint=false`, ORIGIN);
@@ -102,6 +102,43 @@
    * { id, title, channel, creator (@handle or channel/UC…), len ("12:34"), age ("3 days ago") }.
    * Skips ads, Shorts and live streams.
    */
+  /**
+   * YouTube's own "Not interested" and "Don't recommend channel" for one video card, when it offers them (only on your
+   * recommendations, signed in): { ni, dr } tokens, sent back with sendFeedback when you pick one. Recognised by the
+   * menu entry's icon (the same in every language); without icons, YouTube's own order (Not interested comes first).
+   */
+  const feedbackOf = (card) => {
+    const out = {}, loose = [];
+    const stack = [card];
+    while (stack.length) {
+      const n = stack.pop();
+      if (!n || typeof n !== "object") continue;
+      if (Array.isArray(n)) { for (let i = n.length - 1; i >= 0; i--) stack.push(n[i]); continue; } // (in the menu's own order)
+      const item = n.menuServiceItemRenderer || n.listItemViewModel;
+      if (item) {
+        const fb = findKey(item, "feedbackEndpoint"), tok = fb && typeof fb.feedbackToken === "string" ? fb.feedbackToken : "";
+        if (tok && tok.length < 2000) {
+          const ic = String((item.icon && item.icon.iconType) || findKey(item, "imageName") || findKey(item, "iconName") || "");
+          if (/NOT_INTERESTED/i.test(ic)) out.ni = out.ni || tok;
+          else if (/REMOVE|BLOCK|DISLIKE|CHANNEL/i.test(ic)) out.dr = out.dr || tok;
+          else loose.push(tok);
+        }
+        continue;
+      }
+      const vals = Object.values(n); for (let i = vals.length - 1; i >= 0; i--) if (vals[i] && typeof vals[i] === "object") stack.push(vals[i]);
+    }
+    if (!out.ni && loose.length) out.ni = loose.shift();
+    if (!out.dr && loose.length) out.dr = loose.shift();
+    return out.ni || out.dr ? out : null;
+  };
+  /** Tell YouTube "Not interested" / "Don't recommend channel" (the same request its own menu makes). */
+  const sendFeedback = async (token) => {
+    if (typeof token !== "string" || !token || token.length > 2000) return false;
+    const auth = await authHeader(), ctx = await watchLaterCtx();
+    if (!auth || !ctx) return false;
+    try { const res = await apiPost("feedback", { context: ctx, feedbackTokens: [token], isFeedbackTokenUnencrypted: false, shouldMerge: false }, auth); return !!res && !res.error; } catch { return false; }
+  };
+  const fbField = (v) => { const fb = feedbackOf(v); return fb ? { fb } : {}; };
   const extractVideos = (data) => {
     const out = [], seen = new Set();
     const add = (v) => { if (v && ID_RE.test(v.id) && !seen.has(v.id)) { seen.add(v.id); out.push(v); } };
@@ -121,7 +158,7 @@
           const info = (v.videoInfo && v.videoInfo.runs || []).map((r) => r.text).filter((t) => t && t.trim() !== "•");
           const progress = progressOf(v);
           add({ id: v.videoId, title: text(v.title), channel: owner[0] && !isStat(owner[0].text) ? owner[0].text : "", creator: handleFrom(be),
-            len: text(v.lengthText), age: text(v.publishedTimeText) || info.find((t) => AGE_RE.test(t)) || "", progress, watched: progress >= 90 });
+            len: text(v.lengthText), age: text(v.publishedTimeText) || info.find((t) => AGE_RE.test(t)) || "", progress, watched: progress >= 90, ...fbField(v) });
           continue;
         }
         if (k === "lockupViewModel" && v && v.contentId && /VIDEO/.test(v.contentType || "")) {
@@ -144,7 +181,7 @@
           const parts = rows.flat();
           const age = parts.find((p) => AGE_RE.test(p)) || (rows.length > 1 ? rows[rows.length - 1].slice(-1)[0] : "");
           const progress = progressOf(v);
-          add({ id: v.contentId, title: text(meta.title), channel, creator, len: badge ? text(badge.text) : "", age: age || "", progress, watched: progress >= 90 });
+          add({ id: v.contentId, title: text(meta.title), channel, creator, len: badge ? text(badge.text) : "", age: age || "", progress, watched: progress >= 90, ...fbField(v) });
           continue;
         }
         if (v && typeof v === "object") stack.push(v);
@@ -508,6 +545,6 @@
   };
 
   SW.yt = { ORIGIN, ID_RE, fetchPage, embeddedJson, extractVideos, extractChannels, videosAt, pageVideos, searchChannels, relatedChannels, relativeDate, ageDays, text, findKey,
-    commentsFor, parseComments, isMusic, watchLater, homeChip, subscribedChannels, removeFromWatchLater, addToWatchLater, isMembersOnly, isStat, channelNameOf,
+    commentsFor, parseComments, sendFeedback, isMusic, watchLater, homeChip, subscribedChannels, removeFromWatchLater, addToWatchLater, isMembersOnly, isStat, channelNameOf,
     videosPage, moreVideos, findToken };
 })();

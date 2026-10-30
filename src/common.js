@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.27.1";
+  SW.VERSION = "1.28.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -153,6 +153,7 @@
           age: tri(f.age, "within", "older"), ageN: clampInt(f.ageN, 1, 999, 2), ageUnit: ["days", "weeks", "months"].includes(f.ageUnit) ? f.ageUnit : "weeks",
           watched: tri(f.watched, "yes", "no"), watchedPct: clampInt(f.watchedPct, 1, 100, 80),
           subbed: tri(f.subbed, "yes", "no"),
+          orderBy: ["none", "uploaded", "length", "watched"].includes(f.orderBy) ? f.orderBy : "none", orderDir: f.orderDir === "asc" ? "asc" : "desc",
         }; })(),
       skipMusic: typeof tv.skipMusic === "boolean" ? tv.skipMusic : true,
       keysOn: typeof tv.keysOn === "boolean" ? tv.keysOn : true,

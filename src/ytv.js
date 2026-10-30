@@ -641,6 +641,8 @@
     .pop .mic{display:inline-flex;width:18px;height:18px;opacity:.85}
     .pop .mic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .pop .ml{flex:1}
+    .pop .msep{height:1px;margin:5px 4px;background:rgba(255,255,255,.12)}
+    .pop .ph{padding:4px 10px 6px;color:#8d97ab;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
     .pop .mk{color:#7d8699;font-size:11.5px;font-weight:600}
     .acts .moreb[aria-pressed="true"]{background:rgba(255,255,255,.18)}
     .phead .sortb[aria-pressed="true"]{color:#fff}
@@ -719,6 +721,7 @@
     .fsec{padding:9px 0;border-top:1px solid color-mix(in srgb,var(--pnl) 60%,#8a96ad)}
     .flbl{font-size:11.5px;font-weight:700;color:#aab3c4;margin-bottom:6px}
     .fseg{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(0,0,0,.3)}
+    .fodir{margin-top:6px}.fodir[hidden]{display:none}
     .fseg button{flex:1;min-height:0;height:26px;padding:0 4px;border:0;border-radius:6px;background:none;color:#aab3c4;font-size:12px;font-weight:600;white-space:nowrap}
     .fseg button.on{background:var(--acc);color:#fff}
     .fseg button:not(.on):hover{color:#fff;background:rgba(255,255,255,.08)}
@@ -1207,6 +1210,9 @@
     else if (kind === "up") add("path", { d: "M12 19V6M6 11l6-6 6 6" });
     else if (kind === "play-half") { add("circle", { cx: 12, cy: 12, r: 9 }); add("path", { d: "M10 8.5v7l5.5-3.5z" }); add("path", { d: "M12 3a9 9 0 0 1 0 18", "stroke-dasharray": "2 3" }); }
     else if (kind === "fwd") add("path", { d: "M9 5l7 7-7 7" });
+    else if (kind === "play") add("path", { d: "M8 5v14l11-7z" });
+    else if (kind === "thumb-down") add("path", { d: "M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" });
+    else if (kind === "slash") { add("circle", { cx: 12, cy: 12, r: 9 }); add("path", { d: "M5.6 5.6l12.8 12.8" }); }
     else if (kind === "user-plus") { add("circle", { cx: 9, cy: 8, r: 4 }); add("path", { d: "M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6" }); }
     else if (kind === "eye-off") { add("path", { d: "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.7 9.7 0 0 0 4.4-1" }); add("path", { d: "M9.9 9.9a3 3 0 0 0 4.2 4.2" }); }
     else if (kind === "eye") { add("path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" }); add("circle", { cx: 12, cy: 12, r: 3 }); }
@@ -2263,6 +2269,7 @@
     }
     const list = box.querySelector(".list"), empty = box.querySelector(".empty"), hint = box.querySelector(".hintline");
     let items = [];
+    if (kind === "live") orderQueue();
     if (kind === "live") items = sortOff() ? state.queue.slice() : state.queue.filter((v, i) => i <= state.pos || v.f || !played.has(v.id)); // up next never shows what you've already watched (sorting off: it's all there)
     else if (kind === "base") items = state.base || [];
     else if (kind === "idle") items = feedStore;
@@ -2296,6 +2303,11 @@
       if (flt().subbed !== "any") loadSubs();
       const cur = current(), curAt = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
       items = items.filter((v, i) => i <= curAt || v.nx || passFilter(v));
+    }
+    // the order you picked: for the playing list it's already the queue's own order (see orderQueue); other tabs are
+    // sorted here (what's playing and above it stay put)
+    if (fOn && orderOn()) {
+      if (kind !== "live") items = ordered(items);
     }
     state.fShown = { tab, shown: items.length, total: fTotal };
     hint.hidden = kind !== "base" && kind !== "xbrowse";
@@ -2781,6 +2793,11 @@
     ui.pbody._hw = true;
     ui.nowbar.addEventListener("click", () => { const cur = ui.pbody.querySelector(".sw.curw"); if (cur) ui.pbody.scrollTo({ top: cur.offsetTop, behavior: motionOn() ? "smooth" : "auto" }); });
     ui.pbody.addEventListener("wheel", onWheel, { passive: false });
+    ui.pbody.addEventListener("contextmenu", (e) => {
+      const w = e.target.closest && e.target.closest(".sw"), api = w && rowApi.get(w);
+      if (!api || e.shiftKey) return; // (Shift + right-click: the browser's own menu)
+      if (openRowMenu(api, e.clientX, e.clientY)) e.preventDefault();
+    });
     ui.pbody.addEventListener("scroll", (e) => { if (e.target === ui.pbody) { markStuck(); autoMore(); } else onRowScroll(e); }, true);
     ui.pbody.addEventListener("scrollend", onRowScrollEnd, true);
     let lastMove = 0;
@@ -2819,10 +2836,40 @@
 
   // ---- the list filter (the funnel above the list): one set for every YouTube tab, kept in settings and used for
   // everything that loads later too. Never your Feed, never Twitch, and what's playing always stays.
-  const F_DEFAULT = { under: false, underMin: 10, over: false, overMin: 8, age: "any", ageN: 2, ageUnit: "weeks", watched: "any", watchedPct: 80, subbed: "any" };
+  const F_DEFAULT = { under: false, underMin: 10, over: false, overMin: 8, age: "any", ageN: 2, ageUnit: "weeks", watched: "any", watchedPct: 80, subbed: "any", orderBy: "none", orderDir: "desc" };
   const F_UNIT = { days: 1, weeks: 7, months: 30 };
   const flt = () => (cfg && cfg.tv.filter) || F_DEFAULT;
-  const filterCount = () => { const f = flt(); return (f.under ? 1 : 0) + (f.over ? 1 : 0) + (f.age !== "any" ? 1 : 0) + (f.watched !== "any" ? 1 : 0) + (f.subbed !== "any" ? 1 : 0); };
+  const filterCount = () => { const f = flt(); return (f.under ? 1 : 0) + (f.over ? 1 : 0) + (f.age !== "any" ? 1 : 0) + (f.watched !== "any" ? 1 : 0) + (f.subbed !== "any" ? 1 : 0) + (f.orderBy && f.orderBy !== "none" ? 1 : 0); };
+  // ---- the order (also in the funnel): newest / oldest, shortest / longest, least / most watched. It decides what
+  // plays next too, not just how the list looks. What's playing and what's above it stay; videos you put next yourself
+  // stay first; anything YouTube didn't give a date or length for goes to the end, in its own order.
+  const ORDER_DIRS = { uploaded: [["desc", "Newest"], ["asc", "Oldest"]], length: [["asc", "Shortest"], ["desc", "Longest"]], watched: [["asc", "Least watched"], ["desc", "Most watched"]] };
+  const orderLabel = () => { const f = flt(), d = ORDER_DIRS[f.orderBy]; if (!d) return ""; const x = d.find(([v]) => v === f.orderDir) || d[0]; return x[1] + " first"; };
+  const orderKey = (v) => { const by = flt().orderBy; if (!v) return null; if (by === "uploaded") { const d = ageOf(v); return d === null ? null : -d; } if (by === "length") return lenSecs(v.len); if (by === "watched") return progressOf(v); return null; };
+  const orderOn = () => { const f = flt(); return !!ORDER_DIRS[f.orderBy]; };
+  /** Sorts a list by the order you picked (a stable sort: equal ones keep their place). */
+  const ordered = (arr) => {
+    if (!orderOn() || arr.length < 2) return arr;
+    const dir = flt().orderDir === "asc" ? 1 : -1;
+    const keyed = arr.map((v, i) => ({ v, i, k: orderKey(v) }));
+    keyed.sort((a, b) => (a.k === null) - (b.k === null) || (a.k !== null && b.k !== null && a.k !== b.k ? (a.k - b.k) * dir : 0) || a.i - b.i);
+    return keyed.map((x) => x.v);
+  };
+  /** The playing list in your order: only what comes after what's playing moves (and what you put next stays first).
+   *  Each video remembers where it was in YouTube's order (oi), so "As is" puts them back the way they came. */
+  const orderQueue = () => {
+    const col = currentCol(), on = orderOn() && filterFor(col);
+    const rest = state.queue.slice(state.pos + 1);
+    if (!on && !rest.some((v) => v.oi)) return;
+    let seq = state.queue.reduce((m, v) => Math.max(m, v.oi || 0), 0);
+    if (on) for (const v of state.queue) if (!v.oi) v.oi = ++seq; // (new ones join in YouTube's order)
+    const head = state.queue.slice(0, state.pos + 1), mine = rest.filter((v) => v.nx), others = rest.filter((v) => !v.nx);
+    const back = (arr) => arr.map((v, i) => ({ v, i })).sort((a, b) => (a.v.oi ? 0 : 1) - (b.v.oi ? 0 : 1) || (a.v.oi && b.v.oi ? a.v.oi - b.v.oi : a.i - b.i)).map((x) => x.v);
+    const next = [...head, ...mine, ...(on ? ordered(back(others)) : back(others))];
+    if (!on) for (const v of state.queue) delete v.oi;
+    if (next.every((v, i) => v === state.queue[i])) return;
+    const hist = idsOfHistory(); state.queue = next; fixHistory(hist); saveSession();
+  };
   /** "12:34" / "1:02:03" → seconds (null when it isn't a length, e.g. a live stream). */
   const lenSecs = (t) => { const m = String(t || "").trim().match(/^(\d{1,3})(?::(\d{2}))(?::(\d{2}))?$/); if (!m) return null; return [m[1], m[2], m[3]].filter((x) => x != null).map(Number).reduce((a, b) => a * 60 + b, 0); };
   // who you're subscribed to: read from YouTube once a day, only when the Subscribed filter is used
@@ -2885,6 +2932,7 @@
     if (f.age !== "any") out.push([`${f.age === "within" ? "Past" : "Older than"} ${f.ageN} ${f.ageN === 1 ? f.ageUnit.replace(/s$/, "") : f.ageUnit}`, { age: "any" }]);
     if (f.watched !== "any") out.push([f.watched === "yes" ? `Watched ≥${f.watchedPct}%` : `Not watched (<${f.watchedPct}%)`, { watched: "any" }]);
     if (f.subbed !== "any") out.push([f.subbed === "yes" ? "Subbed" : "Not subbed", { subbed: "any" }]);
+    if (orderOn()) out.unshift([orderLabel(), { orderBy: "none" }]);
     return out;
   };
   // the funnel's badge, the chips under the tabs and the counts in the open panel
@@ -2910,7 +2958,7 @@
         const what = el("button", "fpw", chips.length === 1 ? chips[0][0] : `${chips.length} filters`); what.type = "button"; what.title = chips.map(([l]) => l).join(" · ") + " — change";
         what.addEventListener("click", (e) => { e.stopPropagation(); toggleFilter(); });
         const clr = el("button", "fclear", "Clear"); clr.type = "button"; clr.title = "Turn all filters off";
-        clr.addEventListener("click", (e) => { e.stopPropagation(); setFilter({ under: false, over: false, age: "any", watched: "any", subbed: "any" }); if (!ui.fpop.hidden) drawFilterPop(); });
+        clr.addEventListener("click", (e) => { e.stopPropagation(); setFilter({ under: false, over: false, age: "any", watched: "any", subbed: "any", orderBy: "none" }); if (!ui.fpop.hidden) drawFilterPop(); });
         pill.append(what, el("span", "fdotsep", "·"), clr);
         ui.fstrip.replaceChildren(pill);
       }
@@ -2959,9 +3007,14 @@
     const pctLine = el("div", "fline"); pctLine.append(el("span", null, "Counts as watched from"), fNum(f.watchedPct, 1, 100, "watchedPct"), el("span", null, "%"));
     const wat = el("div", "fsec"); wat.append(el("div", "flbl", "Watched"), fSeg([["any", "Any"], ["yes", "Watched"], ["no", "Not watched"]], "watched"), pctLine);
     const sub = el("div", "fsec"); sub.append(el("div", "flbl", "Subscribed"), fSeg([["any", "Any"], ["yes", "Subbed"], ["no", "Not subbed"]], "subbed"), el("div", "fnote fsubnote", ""));
+    // Order: what to sort by, then which way round (its two words follow what you sort by)
+    const dirBox = el("div", "fodir");
+    const drawDir = () => { const d = ORDER_DIRS[flt().orderBy]; dirBox.hidden = !d; dirBox.replaceChildren(...(d ? [fSeg(d, "orderDir")] : [])); };
+    const ord = el("div", "fsec"); ord.append(el("div", "flbl", "Order"), fSeg([["none", "As is"], ["uploaded", "Uploaded"], ["length", "Length"], ["watched", "Watched"]], "orderBy", (v) => { if (ORDER_DIRS[v]) setFilter({ orderDir: ORDER_DIRS[v][0][0] }); drawDir(); }), dirBox);
+    drawDir();
     const reset = el("button", null, "Reset"); reset.type = "button"; reset.addEventListener("click", () => { setFilter({ ...F_DEFAULT }); drawFilterPop(); });
     const foot = el("div", "ffoot"); foot.append(el("span", null, "Every YouTube tab · not Feed or Twitch"), reset);
-    pop.replaceChildren(head, len, age, wat, sub, foot);
+    pop.replaceChildren(head, ord, len, age, wat, sub, foot);
     updateFilterUi();
   };
   const openFilter = () => { if (!ui) return; closeChanMenu(); drawFilterPop(); ui.fpop.hidden = false; ui.filtB.classList.add("open"); wake(); };
@@ -4250,6 +4303,7 @@
 
   /** Index of the next playable video after the current one (never a hidden creator or filtered video). */
   const nextIndex = (allowSeen = false) => {
+    orderQueue(); // (in the order you picked in the funnel)
     const col = currentCol(), fOn = filterFor(col);
     for (let i = state.pos + 1; i < state.queue.length; i++) {
       const v = state.queue[i];
@@ -4690,8 +4744,8 @@
 
   // Hide the playing video's creator on this channel. YouTube names a creator in more than one way (an @handle, a
   // channel id, a display name), so every name this video carries is saved; otherwise their other videos slip through.
-  const hideCreator = async () => {
-    const v = current(); const col = currentCol();
+  const hideCreator = async (v = current()) => {
+    const col = currentCol(), isCur = !!(v && current() && v.id === current().id);
     const ids = v ? [...new Set([SW.normalizeCreator(v.creator || ""), goodName(v.channel) ? SW.normalizeCreator(v.channel) : ""].filter(Boolean))] : [];
     if (!ids.length || !col) return toast("Don’t know this video’s creator yet");
     let list;
@@ -4705,12 +4759,61 @@
     for (const k of ids) if (!list.some((x) => creatorKey(x) === creatorKey(k))) list.push(k);
     const keys = new Set(ids.map(creatorKey));
     const gone = (x) => keys.has(creatorKey(x.creator)) || keys.has(creatorKey(x.channel));
+    const hist = idsOfHistory(), curId = current() && current().id;
     state.queue = state.queue.filter((x, i) => i <= state.pos || x.f || !gone(x));
+    state.pos = Math.max(0, state.queue.findIndex((x) => x.id === curId)); fixHistory(hist);
     if (state.base) state.base = state.base.filter((x) => x.f || !gone(x));
     const seen = browse.get(col.id); if (seen) seen.items = seen.items.filter((x) => !gone(x));
     dropChans();
     await writeCfg();
-    nextVideo();
+    if (isCur) nextVideo(); else { saveSession(); schedulePanel(); toast(`${whoOf(v) || "That creator"} won’t show on ${col.name} any more`); }
+  };
+
+  // ---- right-click on a video in the list: what you can do with it, plus YouTube's own "Not interested" and
+  // "Don't recommend channel" when YouTube offers them for it (on your recommendations, signed in)
+  const openRowMenu = (api, x, y) => {
+    const v = api.v; if (!v || v.tw) return false;
+    const cur = current(), isCur = !!(cur && cur.id === v.id);
+    const item = (ic, label, fn, cls = "") => {
+      const b = btn("", label, () => { closePop(); setTimeout(fn, 0); });
+      b.setAttribute("role", "menuitem"); b.classList.add("mi"); if (cls) b.classList.add(cls);
+      const i = el("span", "mic"); i.append(icon(ic)); b.append(i, el("span", "ml", label));
+      return b;
+    };
+    const items = [];
+    if (!isCur) items.push(item("play", "Play now", () => api.open()));
+    if (!isCur && canPlayNext(v)) items.push(item("fwd", "Play next", () => { playNext(v); toast("Plays next"); }));
+    if (can(api, "add")) items.push(item("plus", `Add to ${nameOf(FEED_ID)}`, () => fire(api, "add")));
+    items.push(item("clock", inWl(v) ? "Take off Watch Later" : "Save to Watch Later", () => toggleWl(v, el("button"))));
+    items.push(item("search", "Explore from this video", () => openExplore(v)));
+    if (goodName(v.channel) || v.creator) items.push(item("eye-off", `Hide ${whoOf(v) || "this creator"} on this channel`, () => hideCreator(v)));
+    if (api.canRm() && !isCur) items.push(item("trash-2", "Remove from the list", () => fire(api, "rm")));
+    const fb = v.fb;
+    if (fb && (fb.ni || fb.dr)) {
+      items.push(el("div", "msep"));
+      const tell = async (tok, what, alsoChannel) => {
+        const ok = await SW.yt.sendFeedback(tok);
+        if (!ok) return toast("YouTube didn’t take that — are you signed in?");
+        toast(what);
+        if (alsoChannel) { // its other videos leave this list too (YouTube stops recommending the channel)
+          const keys = new Set([creatorKey(v.creator), creatorKey(v.channel)].filter(Boolean));
+          const hist = idsOfHistory(), curId = current() && current().id;
+          state.queue = state.queue.filter((x, i) => i <= state.pos || x.f || x.id === v.id || !(keys.has(creatorKey(x.creator)) || keys.has(creatorKey(x.channel))));
+          state.pos = Math.max(0, state.queue.findIndex((x) => x.id === curId)); fixHistory(hist); saveSession(); schedulePanel();
+        }
+        if (isCur) nextVideo(); else if (api.canRm() && api.wrap.isConnected) fire(api, "rm");
+      };
+      if (fb.ni) items.push(item("thumb-down", "Not interested", () => tell(fb.ni, "YouTube: not interested", false), "yt"));
+      if (fb.dr) items.push(item("slash", "Don’t recommend channel", () => tell(fb.dr, `YouTube won’t recommend ${whoOf(v) || "this channel"} any more`, true), "yt"));
+    }
+    ui.pop.replaceChildren(el("div", "ph", (v.title || "").slice(0, 60)), ...items);
+    const host = ui.root.getBoundingClientRect(), z = cfg.tv.uiScale / 100;
+    ui.pop.hidden = false;
+    const pw = ui.pop.offsetWidth || 260, ph = ui.pop.offsetHeight || 300;
+    ui.pop.style.left = `${Math.max(8, Math.min((x - host.left) / z, host.width / z - pw - 8))}px`;
+    ui.pop.style.top = `${Math.max(8, Math.min((y - host.top) / z, host.height / z - ph - 8))}px`;
+    wake();
+    return true;
   };
 
 

@@ -60,8 +60,9 @@ for f, c in js.items():
         # endpoint, for comments). Both must refuse anything that isn't youtube.com.
         calls = re.findall(r"\bfetch\(", c)
         page_ok = re.search(r"const fetchPage = async \(path\) => \{\s*const url = new URL\(path, ORIGIN\);\s*if \(url\.origin !== ORIGIN\) throw", c)
-        # apiPost: only YouTube's "next" (comments) and "browse/edit_playlist" (your Watch Later) endpoints
-        api_ok = re.search(r'const API_ENDPOINTS = \["next", "browse/edit_playlist", "browse", "search"\];[^\n]*\n\s*const apiPost = async \(endpoint, body, headers = \{\}\) => \{\s*if \(!API_ENDPOINTS\.includes\(endpoint\)\) throw[^\n]*\n\s*const url = new URL\(`/youtubei/v1/\$\{endpoint\}\?prettyPrint=false`, ORIGIN\);\s*if \(url\.origin !== ORIGIN\) throw', c)
+        # apiPost: only YouTube's "next" (comments), "browse/edit_playlist" (your Watch Later), "browse"/"search" (more of
+        # a list) and "feedback" (Not interested / Don't recommend channel, which you pick yourself) endpoints
+        api_ok = re.search(r'const API_ENDPOINTS = \["next", "browse/edit_playlist", "browse", "search", "feedback"\];[^\n]*\n\s*const apiPost = async \(endpoint, body, headers = \{\}\) => \{\s*if \(!API_ENDPOINTS\.includes\(endpoint\)\) throw[^\n]*\n\s*const url = new URL\(`/youtubei/v1/\$\{endpoint\}\?prettyPrint=false`, ORIGIN\);\s*if \(url\.origin !== ORIGIN\) throw', c)
         check(f"{f}: the only requests in YTV are fetchPage and apiPost, both locked to youtube.com", len(calls) == 2 and bool(page_ok) and bool(api_ok) and 'const ORIGIN = "https://www.youtube.com"' in c, f"{len(calls)} fetch calls, page={bool(page_ok)}, api={bool(api_ok)}")
         continue
     if f == "src/ytv.js" and hits == ["WebSocket"]:
