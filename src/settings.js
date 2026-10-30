@@ -822,7 +822,10 @@
   const renderPlayback = () => {
     page("Playing", "What plays, and the controls while it does. To filter the list itself (length, upload date, watched, subscribed), use the funnel at the top of the list.",
       card("What plays", null,
-        toggle("Skip music videos", "Leaves out official music videos, lyric videos, “– Topic” and VEVO channels, and anything YouTube labels as Music. Never on Home, Watched or Watch Later: those show what YouTube shows.", "tv.skipMusic")),
+        toggle("Skip music videos", "Leaves out official music videos, lyric videos, “– Topic” and VEVO channels, and anything YouTube labels as Music. Never on Home, Watched or Watch Later: those show what YouTube shows.", "tv.skipMusic"),
+        toggle("Mix up creators", "Never the same creator twice in a row, as long as there’s someone else to play.", "tv.spreadCreators"),
+        toggle("Watched ones last", "Videos you already mostly watched (here or on youtube.com) go to the end of a channel instead of coming up again. Not on Home, Watch Later or Watched.", "tv.sinkWatched"),
+        toggle("Learn from what you finish", "When you watch a video to the end, a couple of the videos YouTube itself suggests after it join the list, if they fit the channel (its creators or topics). Not on Home (that’s YouTube’s already), Feed or Watch Later.", "tv.ytRelated")),
       card("Picture", null,
         pick("Video quality", "tv.videoQuality", [["premium", "1080p Premium"], ["hd1080", "1080p"], ["hd720", "720p"], ["auto", "Auto"]],
           "1080p Premium is YouTube’s higher-bitrate 1080p (with YouTube Premium); where a video doesn’t have it, it plays in 1080p. A video without 1080p plays in the best it has.")),

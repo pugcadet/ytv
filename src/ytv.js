@@ -162,6 +162,30 @@
     !(col.skipSeen && (v.watched || seen.has(v.id) || progressOf(v) >= fullPct())) && !tooOld(col, v) &&
     !(cfg && cfg.tv.skipMusic && !col.watchLater && !col.homeFeed && !col.watchedChip && !col.cont && musicLike(v)) && !removed.has(v.id) && // (Home shows what YouTube shows)
     (col.feed || !inFeed(v.id)))); // what's on your Feed plays there, not again on another channel
+  /** A fair shuffle (Fisher–Yates; sorting by a random number isn't: the first ones tend to stay first). Returns a new list. */
+  const shuffled = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const whoKey = (v) => creatorKey(v && (v.creator || v.channel));
+  /** Never the same creator twice in a row, as long as there's anyone else: otherwise the list keeps its order (YouTube's). */
+  const spread = (arr) => {
+    if (!cfg || !cfg.tv.spreadCreators || arr.length < 3) return arr;
+    const rest = arr.slice(), out = [];
+    while (rest.length) {
+      const last = out.length ? whoKey(out[out.length - 1]) : "";
+      let i = last ? rest.findIndex((v) => !whoKey(v) || whoKey(v) !== last) : 0;
+      if (i < 0 || i > 8) i = 0; // (only from a little further down: the order stays YouTube's)
+      out.push(rest.splice(i, 1)[0]);
+    }
+    return out;
+  };
+  /** What you already mostly watched (here or on youtube.com: YouTube says so in its lists) goes to the end. */
+  const sinkWatched = (arr) => {
+    if (!cfg || !cfg.tv.sinkWatched) return arr;
+    const fresh = [], old = [];
+    for (const v of arr) (progressOf(v) >= 50 ? old : fresh).push(v);
+    return old.length ? [...fresh, ...old] : arr;
+  };
+  /** A channel's own mix of videos (not Home, Feed, Watch Later…): watched ones last, creators mixed up. */
+  const tidy = (col, arr) => (col && !col.homeFeed && !col.feed && !col.watchLater && !col.watchedChip && !col.cont && !col.subs && !col.twitch ? spread(sinkWatched(arr)) : arr);
   const cacheKey = (col) => "tvcache:" + col.id + ":" + col.maxAge + ":" + SW.stableStringify([col.subjects, col.channels, col.home]).length;
 
   /** Build a channel's lineup. Calls onFirst as soon as the first source has videos. */
@@ -184,7 +208,7 @@
       const wl = await SW.yt.watchLater();
       state.wlCtx = wl.ctx;
       let items = wl.videos.filter((v) => usable(col, v));
-      if (cfg.tv.watchLater.order === "shuffle") items = items.sort(() => Math.random() - 0.5);
+      if (cfg.tv.watchLater.order === "shuffle") items = shuffled(items);
       if (items.length) onFirst(items);
       return items;
     }
@@ -207,7 +231,7 @@
     }
     if (col.homeFeed) { // always fresh: in YouTube's own order, or fully random (Settings → Home → Order)
       let items = (await readSource({ path: "/" })).filter((v) => usable(col, v));
-      if (col.shuffle) items = items.sort(() => Math.random() - 0.5);
+      if (col.shuffle) items = shuffled(items);
       if (items.length) onFirst(items);
       return items;
     }
@@ -224,16 +248,13 @@
     let first = true;
     const lists = await Promise.all(srcs.map(async (s) => {
       const items = (await readSource(s)).filter((v) => usable(col, v));
-      if (first && items.length) { first = false; onFirst([...items].sort(() => Math.random() - 0.5)); }
+      if (first && items.length) { first = false; onFirst(tidy(col, col.shuffle ? shuffled(items) : items)); }
       return items;
     }));
     const mixed = [], ids = new Set();
     for (let i = 0; lists.some((l) => i < l.length); i++) for (const l of lists) if (i < l.length && !ids.has(l[i].id)) { ids.add(l[i].id); mixed.push(l[i]); }
-    for (let i = 0; i < mixed.length; i += 5) { // light shuffle in small blocks
-      const block = mixed.slice(i, i + 5).sort(() => Math.random() - 0.5);
-      mixed.splice(i, block.length, ...block);
-    }
-    const items = mixed.slice(0, 120);
+    // (YouTube's own ranking of each source is kept: no shuffling here, unless the channel is set to shuffle)
+    const items = tidy(col, col.shuffle ? shuffled(mixed) : mixed).slice(0, 120);
     try { if (items.length) await chrome.storage.local.set({ [key]: { at: Date.now(), items } }); } catch {}
     return items;
   };
@@ -287,7 +308,7 @@
         return named(s, pg.videos);
       }));
       const mixed = []; for (let i = 0; pages.some((l) => i < l.length); i++) for (const l of pages) if (i < l.length) mixed.push(l[i]);
-      take(col.shuffle ? mixed.sort(() => Math.random() - 0.5) : mixed);
+      take(col.shuffle ? shuffled(mixed) : mixed);
     }
     if (col.twitch) return (await twitchLive()).filter((v) => !seen.has(v.id)); // live streams: just look again
     if (out.length < want && !col.feed && !col.watchLater && !col.watchedChip && !col.cont) { // every source is at its end: related videos keep it going
@@ -297,7 +318,7 @@
         try { take(await similarTo(v.id)); } catch {}
       }
     }
-    return out;
+    return tidy(col, out);
   };
 
   // One request per watch page, shared by "similar", tags, description, subscribers and comments. A watch page is
@@ -825,6 +846,9 @@
     @keyframes enter{from{opacity:0;transform:translateY(8px)}}
     .thumb{position:relative;flex:none;width:min(var(--tw),55%);aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:#111}
     .thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .3s ease}
+    /* while a picture loads: a soft sweep over its placeholder (only with animations on), then it fades in */
+    .motion .sw .thumb:has(> img:not(.ok):not(.bad):not([loading=lazy]:not([src])))::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%) 0 0/250% 100%;animation:tshim 1.3s ease-in-out infinite;pointer-events:none}
+    @keyframes tshim{from{background-position:120% 0}to{background-position:-120% 0}}
     .thumb img.ok{opacity:1}
     .thumb .pg{position:absolute;left:0;bottom:0;height:3px;background:#f03}
     .thumb .pgt{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.35)}
@@ -1211,6 +1235,7 @@
     else if (kind === "play-half") { add("circle", { cx: 12, cy: 12, r: 9 }); add("path", { d: "M10 8.5v7l5.5-3.5z" }); add("path", { d: "M12 3a9 9 0 0 1 0 18", "stroke-dasharray": "2 3" }); }
     else if (kind === "fwd") add("path", { d: "M9 5l7 7-7 7" });
     else if (kind === "play") add("path", { d: "M8 5v14l11-7z" });
+    else if (kind === "link") add("path", { d: "M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" });
     else if (kind === "thumb-down") add("path", { d: "M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" });
     else if (kind === "slash") { add("circle", { cx: 12, cy: 12, r: 9 }); add("path", { d: "M5.6 5.6l12.8 12.8" }); }
     else if (kind === "user-plus") { add("circle", { cx: 9, cy: 8, r: 4 }); add("path", { d: "M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6" }); }
@@ -1643,7 +1668,7 @@
   const thumbOf = (v, o = {}) => {
     const box = el("div", "thumb");
     const img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
-    img.addEventListener("error", () => { img.style.visibility = "hidden"; }); // never show a broken-image icon
+    img.addEventListener("error", () => { img.style.visibility = "hidden"; img.classList.add("bad"); }); // never show a broken-image icon
     img.addEventListener("load", () => img.classList.add("ok"));
     if (v.tw) { // a Twitch stream: its live preview with a LIVE pill and how many watch; someone offline: their picture
       if (v.thumb) img.src = v.thumb;
@@ -2492,10 +2517,10 @@
     else if (state.stay) got = (await Promise.all(SORTS.map((so) => searchTopic(state.stay.query, so)))).flat().filter((x) => matchesTopic(x, state.stay.query, true));
     else got = await buildLineup(col, () => {}, () => {}, true);
     const cur = current();
-    const fresh = []; const ids = new Set([cur && cur.id]);
+    let fresh = []; const ids = new Set([cur && cur.id]);
     for (const x of got) if (x && !ids.has(x.id) && !played.has(x.id) && usable(col, x)) { ids.add(x.id); fresh.push(x); }
     if (!fresh.length) return 0;
-    if (col && col.shuffle) fresh.sort(() => Math.random() - 0.5);
+    if (col && col.shuffle) fresh = shuffled(fresh);
     state.queue = [...state.queue.slice(0, state.pos + 1), ...(col && col.watchLater ? fresh : fresh.slice(0, 120))];
     saveSession(); schedulePanel();
     return fresh.length;
@@ -3044,6 +3069,15 @@
     setTimeout(() => { eatVid = 0; }, 800);
   }, true);
   for (const t of ["mousedown", "mouseup", "pointerup", "click", "dblclick"]) window.addEventListener(t, eatVidEv, true);
+  // right-click on the video that's playing: the same menu as in the list (Shift + right-click: YouTube's own menu).
+  // Not on Twitch (its player is Twitch's own page, and has no such menu here).
+  window.addEventListener("contextmenu", (e) => {
+    if (!ui || e.shiftKey || !onWatchTv()) return;
+    const v = current(); if (!v || v.tw || ui.root.classList.contains("on-twitch")) return;
+    const path = e.composedPath();
+    if (path.includes(ui.host) || !path.some((n) => n.id === "movie_player")) return;
+    if (openRowMenu(null, e.clientX, e.clientY, v)) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
 
   // ---- Twitch: find streamers by name (the magnifier above the Twitch list) and add them with +
   let twsLast = { q: "", r: null }, twsTok = 0, twsT = 0;
@@ -4769,10 +4803,31 @@
     if (isCur) nextVideo(); else { saveSession(); schedulePanel(); toast(`${whoOf(v) || "That creator"} won’t show on ${col.name} any more`); }
   };
 
+  // ---- YouTube's own "up next", where it makes sense: you watched a video to the end on one of your own channels,
+  // so YouTube's suggestions after it are likely good. A couple of them join the list (a bit further down, not
+  // straight next), only if they fit the channel: one of its creators, or a title that shares a word with its topics.
+  const learnt = new Set();
+  const learnFrom = async (v) => {
+    const col = currentCol();
+    if (!cfg || !cfg.tv.ytRelated || !v || v.tw || learnt.has(v.id) || state.stay || !col || col.homeFeed || col.feed || col.watchLater || col.watchedChip || col.cont || col.subs || col.twitch) return;
+    if (!(col.subjects || []).length && !(col.channels || []).length) return;
+    learnt.add(v.id);
+    let rel = []; try { rel = await similarTo(v.id); } catch { return; }
+    const topicW = new Set((col.subjects || []).flatMap(words)), mine = new Set((col.channels || []).map(creatorKey));
+    const fits = (x) => mine.has(creatorKey(x.creator)) || mine.has(creatorKey(x.channel)) || words(x.title).some((w) => topicW.has(w));
+    const have = new Set(state.queue.map((x) => x.id));
+    const pick = rel.filter((x) => x && !have.has(x.id) && !played.has(x.id) && usable(col, x) && fits(x) && progressOf(x) < 50).slice(0, 2);
+    if (!pick.length || currentCol() !== col) return;
+    const hist = idsOfHistory();
+    pick.forEach((x, k) => state.queue.splice(Math.min(state.queue.length, state.pos + 2 + k * 2), 0, { ...x, rel: 1 }));
+    fixHistory(hist); saveSession(); schedulePanel();
+  };
+
   // ---- right-click on a video in the list: what you can do with it, plus YouTube's own "Not interested" and
   // "Don't recommend channel" when YouTube offers them for it (on your recommendations, signed in)
-  const openRowMenu = (api, x, y) => {
-    const v = api.v; if (!v || v.tw) return false;
+  // (api: the row in the list; null for the video that's playing, right-clicked on the video itself)
+  const openRowMenu = (api, x, y, vid = null) => {
+    const v = api ? api.v : vid; if (!v || v.tw) return false;
     const cur = current(), isCur = !!(cur && cur.id === v.id);
     const item = (ic, label, fn, cls = "") => {
       const b = btn("", label, () => { closePop(); setTimeout(fn, 0); });
@@ -4781,13 +4836,18 @@
       return b;
     };
     const items = [];
-    if (!isCur) items.push(item("play", "Play now", () => api.open()));
+    if (!isCur && api) items.push(item("play", "Play now", () => api.open()));
     if (!isCur && canPlayNext(v)) items.push(item("fwd", "Play next", () => { playNext(v); toast("Plays next"); }));
-    if (can(api, "add")) items.push(item("plus", `Add to ${nameOf(FEED_ID)}`, () => fire(api, "add")));
+    if (isCur) items.push(item("fwd", "Next video", () => nextVideo()));
+    if (api ? can(api, "add") : !inFeed(v.id)) items.push(item("plus", `Add to ${nameOf(FEED_ID)}`, () => (api ? fire(api, "add") : (addToFeed(v), toast(`Added to ${nameOf(FEED_ID)}`)))));
     items.push(item("clock", inWl(v) ? "Take off Watch Later" : "Save to Watch Later", () => toggleWl(v, el("button"))));
     items.push(item("search", "Explore from this video", () => openExplore(v)));
     if (goodName(v.channel) || v.creator) items.push(item("eye-off", `Hide ${whoOf(v) || "this creator"} on this channel`, () => hideCreator(v)));
-    if (api.canRm() && !isCur) items.push(item("trash-2", "Remove from the list", () => fire(api, "rm")));
+    if (api && api.canRm() && !isCur) items.push(item("trash-2", "Remove from the list", () => fire(api, "rm")));
+    if (!api) items.push(item("link", "Copy link (at this moment)", async () => {
+      const t = Math.floor(state.t || 0), url = `https://www.youtube.com/watch?v=${v.id}${t > 5 ? `&t=${t}s` : ""}`;
+      try { await navigator.clipboard.writeText(url); toast("Link copied"); } catch { toast("Couldn’t copy the link"); }
+    }));
     const fb = v.fb;
     if (fb && (fb.ni || fb.dr)) {
       items.push(el("div", "msep"));
@@ -4801,7 +4861,7 @@
           state.queue = state.queue.filter((x, i) => i <= state.pos || x.f || x.id === v.id || !(keys.has(creatorKey(x.creator)) || keys.has(creatorKey(x.channel))));
           state.pos = Math.max(0, state.queue.findIndex((x) => x.id === curId)); fixHistory(hist); saveSession(); schedulePanel();
         }
-        if (isCur) nextVideo(); else if (api.canRm() && api.wrap.isConnected) fire(api, "rm");
+        if (isCur) nextVideo(); else if (api && api.canRm() && api.wrap.isConnected) fire(api, "rm");
       };
       if (fb.ni) items.push(item("thumb-down", "Not interested", () => tell(fb.ni, "YouTube: not interested", false), "yt"));
       if (fb.dr) items.push(item("slash", "Don’t recommend channel", () => tell(fb.dr, `YouTube won’t recommend ${whoOf(v) || "this channel"} any more`, true), "yt"));
@@ -5176,9 +5236,9 @@
       } else if (pf) { // the video you were watching goes first, then this channel carries on
         pendingFirst = null;
         const rest = items.filter((x) => x.id !== pf.v.id);
-        state.queue = [pf.v, ...(col.shuffle && !asSeen ? rest.sort(() => Math.random() - 0.5) : rest)]; state.pos = 0;
+        state.queue = [pf.v, ...(col.shuffle && !asSeen ? shuffled(rest) : rest)]; state.pos = 0;
       } else {
-        state.queue = col.shuffle && !asSeen ? [...items].sort(() => Math.random() - 0.5) : items;
+        state.queue = col.shuffle && !asSeen ? shuffled([...items]) : items;
         let p0 = filterFor(col) ? items.findIndex((v) => !played.has(v.id) && passFilter(v)) : -1; // the first one that gets through your filters
         if (p0 < 0) p0 = items.findIndex((v) => !played.has(v.id));
         state.pos = col.feed || col.twitch ? 0 : Math.max(0, p0);
@@ -5402,7 +5462,7 @@
         showNow();
       }
     }
-    if (d.evt === "ended" && v && d.id === v.id) countWatched(v.id);
+    if (d.evt === "ended" && v && d.id === v.id) { countWatched(v.id); learnFrom(v); }
     if ((d.evt === "ended" || d.evt === "error") && (!d.id || !v || d.id === v.id)) {
       if (d.evt === "error") toast("This video can’t play here — skipping");
       nextVideo();

@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.28.0";
+  SW.VERSION = "1.29.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -156,6 +156,9 @@
           orderBy: ["none", "uploaded", "length", "watched"].includes(f.orderBy) ? f.orderBy : "none", orderDir: f.orderDir === "asc" ? "asc" : "desc",
         }; })(),
       skipMusic: typeof tv.skipMusic === "boolean" ? tv.skipMusic : true,
+      spreadCreators: tv.spreadCreators !== false, // never the same creator twice in a row (when there's anything else)
+      sinkWatched: tv.sinkWatched !== false, // what you mostly watched already (also on youtube.com) goes to the end
+      ytRelated: tv.ytRelated !== false, // after a video you watched to the end, YouTube's own "up next" for it joins in (when it fits the channel)
       keysOn: typeof tv.keysOn === "boolean" ? tv.keysOn : true,
       showBar: tv.showBar === true,
       thumbSize: SW.TV_THUMBS.some(([id]) => id === tv.thumbSize) ? tv.thumbSize : "medium",
