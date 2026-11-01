@@ -270,6 +270,15 @@
       return await moreVideos({ endpoint: "browse", token, ctx });
     } catch { return { videos: [], more: null }; }
   };
+  /** The related videos on a watch page (its HTML) and how to ask for more of them (YouTube's "next" endpoint). */
+  const relatedFrom = (html) => {
+    try {
+      const data = embeddedJson(html, "ytInitialData") || {}, ctx = (ytcfgFrom(html) || {}).INNERTUBE_CONTEXT || null;
+      const sec = (((data.contents || {}).twoColumnWatchNextResults || {}).secondaryResults) || {};
+      const token = findToken(sec);
+      return { videos: extractVideos(sec), more: token && ctx ? { endpoint: "next", token, ctx } : null };
+    } catch { return { videos: [], more: null }; }
+  };
   /** The next page of a list (from videosPage or an earlier moreVideos). */
   const moreVideos = async (more) => {
     if (!more || !API_ENDPOINTS.includes(more.endpoint)) return { videos: [], more: null };
@@ -561,7 +570,7 @@
     return "";
   };
 
-  SW.yt = { ORIGIN, ID_RE, fetchPage, channelVideos, embeddedJson, extractVideos, extractChannels, videosAt, pageVideos, searchChannels, relatedChannels, relativeDate, ageDays, text, findKey,
+  SW.yt = { ORIGIN, ID_RE, fetchPage, channelVideos, relatedFrom, embeddedJson, extractVideos, extractChannels, videosAt, pageVideos, searchChannels, relatedChannels, relativeDate, ageDays, text, findKey,
     commentsFor, parseComments, sendFeedback, isMusic, watchLater, homeChip, subscribedChannels, removeFromWatchLater, addToWatchLater, isMembersOnly, isStat, channelNameOf,
     videosPage, moreVideos, findToken };
 })();

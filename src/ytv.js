@@ -4842,6 +4842,57 @@
     goTo(state.pos + 1);
   };
 
+  // ---- YouTube's own grid of videos in full screen: YouTube shows only about 12. YTV keeps it going with more of
+  // YouTube's own suggestions for what's playing (the same "related" list, page after page), as you scroll down.
+  // Each extra tile is a copy of one of YouTube's, so it looks the same; a click plays it in TV like any of them.
+  const fsg = { vid: "", list: null, busy: false, t: 0 };
+  const fsgGrid = () => document.querySelector(".ytp-fullscreen-grid");
+  const fsgBox = () => document.querySelector(".ytp-fullscreen-grid-stills-container");
+  const fsgOpen = () => { const g = fsgGrid(); return !!(g && document.fullscreenElement && getComputedStyle(g).display !== "none"); };
+  const fsgTile = (tpl, v) => {
+    const a = tpl.cloneNode(true); a.dataset.ytvMore = "1";
+    a.href = `https://www.youtube.com/watch?v=${v.id}`; a.setAttribute("aria-label", `${v.title || ""} ${v.len || ""}`.trim());
+    a.setAttribute("data-is-live", "false"); a.setAttribute("data-is-list", "false"); a.setAttribute("data-is-mix", "false");
+    const q = (c) => a.querySelector(".ytp-modern-videowall-still-" + c);
+    const img = q("image"); if (img) img.style.backgroundImage = `url("https://i.ytimg.com/vi/${v.id}/hqdefault.jpg")`;
+    const set = (c, t) => { const n = q(c); if (n) n.textContent = t || ""; };
+    set("info-duration", v.len); set("info-title", v.title); set("info-author", whoOf(v) || v.channel || ""); set("view-count-and-date-info", v.age || "");
+    return a;
+  };
+  const fsgMore = async () => {
+    if (fsg.busy || !ui || !onWatchTv() || !fsgOpen()) return;
+    const v = current(); if (!v || v.tw) return;
+    const box = fsgBox(), tpl = box && box.querySelector(".ytp-modern-videowall-still:not([data-ytv-more])");
+    if (!tpl) return;
+    fsg.busy = true;
+    try {
+      if (fsg.vid !== v.id || !box.querySelector("[data-ytv-more]")) { fsg.vid = v.id; fsg.list = null; } // (a new video, or YouTube redrew its grid: from the start)
+      let pg;
+      if (!fsg.list) { pg = SW.yt.relatedFrom(await watchPage(v.id)); fsg.list = { more: pg.more }; }
+      else if (fsg.list.more) { pg = await SW.yt.moreVideos(fsg.list.more); fsg.list.more = pg.more; }
+      else return;
+      if (current() !== v || fsg.vid !== v.id) return;
+      const have = new Set([...box.querySelectorAll("a.ytp-modern-videowall-still")].map((x) => { try { return new URL(x.href).searchParams.get("v"); } catch { return ""; } }));
+      have.add(v.id);
+      const add = (pg.videos || []).filter((x) => x && ID_RE.test(x.id) && !have.has(x.id) && !removed.has(x.id));
+      for (const x of add) box.append(fsgTile(tpl, x));
+      if (add.length < 6 && fsg.list.more) setTimeout(() => { fsg.busy = false; fsgCheck(); }, 50); // (mostly ones it already showed: the next page)
+    } catch {} finally { setTimeout(() => { fsg.busy = false; }, 60); }
+  };
+  // more when the end of the grid comes near (whichever part of the player scrolls it)
+  const fsgCheck = () => {
+    if (!fsgOpen()) return;
+    const box = fsgBox(); if (!box) return;
+    const r = box.getBoundingClientRect();
+    const extra = box.querySelectorAll("[data-ytv-more]").length;
+    if (!extra || r.bottom < window.innerHeight * 1.8) fsgMore();
+  };
+  const fsgClear = () => { for (const n of document.querySelectorAll(".ytp-fullscreen-grid-stills-container [data-ytv-more]")) n.remove(); fsg.vid = ""; fsg.list = null; };
+  document.addEventListener("scroll", () => { if (document.fullscreenElement) fsgCheck(); }, true);
+  document.addEventListener("wheel", () => { if (document.fullscreenElement) { clearTimeout(fsg.t); fsg.t = setTimeout(fsgCheck, 120); } }, { capture: true, passive: true });
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) fsgClear(); });
+  setInterval(() => { if (ui && document.fullscreenElement) { const v = current(); if (v && fsg.vid && v.id !== fsg.vid) fsgClear(); fsgCheck(); } }, 1000); // (opened with the ∨, or a new video)
+
   // ---------------------------------------------------------------- Watch Later
   const wlRemoveCurrent = async () => {
     const v = current();
