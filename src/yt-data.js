@@ -253,6 +253,23 @@
         more: token && ctx ? { endpoint: path.startsWith("/results") ? "search" : "browse", token, ctx } : null };
     } catch { return { videos: [], title: "", more: null }; }
   };
+  /**
+   * A creator's videos as on their Videos tab: "latest" (YouTube's default) or "popular" (its second chip, the same in
+   * every language). { videos, more } like videosPage.
+   */
+  const channelVideos = async (creator, sort = "latest") => {
+    if (!/^(@[\p{L}\p{N}._-]{2,100}|channel\/UC[\w-]{20,24})$/u.test(creator)) return { videos: [], more: null };
+    const path = `/${creator}/videos`;
+    if (sort !== "popular") return videosPage(path);
+    try {
+      const html = await fetchPage(path), data = embeddedJson(html, "ytInitialData") || {};
+      const ctx = (ytcfgFrom(html) || {}).INNERTUBE_CONTEXT || null;
+      const bar = findKey(data, "chipBarViewModel"), chips = (bar && Array.isArray(bar.chips)) ? bar.chips : [];
+      const cc = chips[1] && findKey(chips[1], "continuationCommand"), token = cc && typeof cc.token === "string" && cc.token.length < 4000 ? cc.token : "";
+      if (!token || !ctx) return { videos: [], more: null };
+      return await moreVideos({ endpoint: "browse", token, ctx });
+    } catch { return { videos: [], more: null }; }
+  };
   /** The next page of a list (from videosPage or an earlier moreVideos). */
   const moreVideos = async (more) => {
     if (!more || !API_ENDPOINTS.includes(more.endpoint)) return { videos: [], more: null };
@@ -544,7 +561,7 @@
     return "";
   };
 
-  SW.yt = { ORIGIN, ID_RE, fetchPage, embeddedJson, extractVideos, extractChannels, videosAt, pageVideos, searchChannels, relatedChannels, relativeDate, ageDays, text, findKey,
+  SW.yt = { ORIGIN, ID_RE, fetchPage, channelVideos, embeddedJson, extractVideos, extractChannels, videosAt, pageVideos, searchChannels, relatedChannels, relativeDate, ageDays, text, findKey,
     commentsFor, parseComments, sendFeedback, isMusic, watchLater, homeChip, subscribedChannels, removeFromWatchLater, addToWatchLater, isMembersOnly, isStat, channelNameOf,
     videosPage, moreVideos, findToken };
 })();

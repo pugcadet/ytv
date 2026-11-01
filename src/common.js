@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.29.0";
+  SW.VERSION = "1.30.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -172,6 +172,8 @@
       swipeAxis: ["strict", "normal", "loose"].includes(tv.swipeAxis) ? tv.swipeAxis : "strict",
       swipeV: 2,
       swipeHoldMs: clampInt(tv.swipeHoldMs, 0, 3000, 280),
+      fsGridCols: clampInt(tv.fsGridCols, 2, 8, 3), // YouTube's own grid of videos in full screen: per row (3 is YouTube's)
+      swipeNextFirst: tv.swipeNextFirst === true, // swapped: a plain swipe (and A) plays next, with Shift it goes to your Feed
       swipeMove: true, // (a video on your Feed is in no other list, so adding always moves it there)
       swipeAddColor: typeof tv.swipeAddColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeAddColor) ? tv.swipeAddColor.toLowerCase() : "#17864a",
       swipeNextColor: typeof tv.swipeNextColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeNextColor) ? tv.swipeNextColor.toLowerCase() : "#3d7be0", // Shift + swipe: plays next

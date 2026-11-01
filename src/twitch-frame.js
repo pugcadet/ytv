@@ -101,7 +101,12 @@
   setInterval(() => { const v = video(); if (v && !warm && v.volume < 1) v.volume = 1; }, 500); // always at full volume
   say({ hello: true, warm }); // (if YTV already wants this one playing, it answers "go")
   // a click on the picture would pause a live stream: not here. Double-click: YTV's full screen.
-  window.addEventListener("click", (e) => { if (live && e.target && e.target.closest && e.target.closest('[data-a-target="player-overlay-click-handler"], video')) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  // A click on the picture itself (not Twitch's buttons) is passed to YTV too: it closes YTV's open list, as on YouTube.
+  window.addEventListener("click", (e) => {
+    const pic = e.target && e.target.closest && e.target.closest('[data-a-target="player-overlay-click-handler"], video');
+    if (pic && e.button === 0) say({ click: true });
+    if (live && pic) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
   window.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopImmediatePropagation(); say({ dbl: true }); }, true);
   let lastMove = 0;
   window.addEventListener("mousemove", () => { const t = performance.now(); if (t - lastMove > 150) { lastMove = t; say({ move: true }); } }, true);

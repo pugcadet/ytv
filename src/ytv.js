@@ -429,7 +429,9 @@
       if (!subs) { const a11y = SW.yt.findKey(own, "accessibilityData"); subs = a11y && typeof a11y.label === "string" && /\d/.test(a11y.label) ? a11y.label : ""; }
       const vc = SW.yt.findKey(data, "videoViewCountRenderer") || {};
       const views = SW.yt.text(vc.shortViewCount) || SW.yt.text(vc.viewCount) || "";
-      return { subs: String(subs).slice(0, 60), views: String(views).slice(0, 60) };
+      const be = SW.yt.findKey(own, "browseEndpoint") || {};
+      const handle = typeof be.canonicalBaseUrl === "string" && /^\/@/.test(be.canonicalBaseUrl) ? be.canonicalBaseUrl.slice(1) : /^UC[\w-]{20,24}$/.test(be.browseId || "") ? "channel/" + be.browseId : "";
+      return { subs: String(subs).slice(0, 60), views: String(views).slice(0, 60), handle };
     } catch { return null; }
   };
   const descriptionOf = async (id) => {
@@ -490,6 +492,11 @@
   // Page styling in TV mode: the player fills the screen, the rest of YouTube is hidden
   // =====================================================================================
   const PAGE_CSS = `
+    /* YouTube's own grid of videos in full screen (scroll down / the ∨): as many per row as you set (Settings → Playing) */
+    html.ytv[data-ytv-fsg] .ytp-fullscreen-grid-stills-container{grid-template-columns:repeat(var(--ytv-fsg,3),minmax(0,1fr))!important;gap:calc(48px / var(--ytv-fsg,3))!important}
+    html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-title{font-size:calc(16.5px * var(--ytv-fsgs,1))!important;line-height:1.2!important}
+    html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-author,html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-view-count-and-date-info{font-size:calc(14.3px * var(--ytv-fsgs,1))!important;line-height:1.3!important}
+    html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-duration{font-size:calc(13.2px * max(var(--ytv-fsgs,1),.8))!important}
     html.ytv, html.ytv body { overflow: hidden !important; background: #000 !important; margin: 0 !important; scrollbar-width: none !important; }
     html.ytv::-webkit-scrollbar, html.ytv body::-webkit-scrollbar { display: none !important; }
     html.ytv #masthead-container, html.ytv tp-yt-app-drawer#guide, html.ytv ytd-mini-guide-renderer,
@@ -881,6 +888,15 @@
     .desc .by{color:#aab3c4;margin-bottom:12px;white-space:normal}
     .desc .subs{margin:-8px 0 12px;color:#aab3c4;font-size:12.5px;white-space:normal}
     .desc .subs[hidden]{display:none}
+    /* the creator's videos under Info */
+    .cvbox{margin:14px 0 8px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--pnl) 60%,#8a96ad)}
+    .cvhead{display:flex;align-items:center;gap:10px;padding:0 6px 10px}
+    .cvhead .cvt{flex:1;min-width:0;font-size:13.5px;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .cvseg{display:flex;gap:2px;padding:2px;border-radius:8px;background:rgba(0,0,0,.3)}
+    .cvseg button{min-height:0;height:24px;padding:0 10px;border:0;border-radius:6px;background:none;color:#aab3c4;font-size:12px;font-weight:600}
+    .cvseg button.on{background:var(--acc);color:#fff}
+    .cvseg button:not(.on):hover{color:#fff;background:rgba(255,255,255,.08)}
+    .cvnote{margin:8px 6px;color:#8d97ab;font-size:12px}.cvnote:empty{display:none}
     .desc .fact{white-space:nowrap}
     .desc .ico{display:inline-block}
     .sect{margin:16px 8px 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#aab3c4}
@@ -1475,6 +1491,9 @@
   };
   const applyTheme = () => {
     if (!ui || !cfg) return;
+    { const n = cfg.tv.fsGridCols, h = document.documentElement; // YouTube's full-screen grid: videos per row
+      if (n && n !== 3) { h.setAttribute("data-ytv-fsg", ""); h.style.setProperty("--ytv-fsg", String(n)); h.style.setProperty("--ytv-fsgs", String(Math.max(0.62, Math.sqrt(3 / n)).toFixed(3))); }
+      else { h.removeAttribute("data-ytv-fsg"); h.style.removeProperty("--ytv-fsg"); h.style.removeProperty("--ytv-fsgs"); } }
     ui.root.style.setProperty("--acc", cfg.tv.theme.accent);
     ui.root.style.setProperty("--pnl", cfg.tv.theme.panel);
     const tw = cfg.tv.thumbPx;
@@ -1993,6 +2012,13 @@
       add: () => addToFeed(v),
       open: () => activateExplore(c.id, v),
       drop: (fromId, after) => xOps(c.id).move(fromId, v.id, after),
+    };
+    if (kind === "creator") return { // the creator's own videos under Info: a click plays it right now (as next), swipes as anywhere
+      canRm: () => true,
+      canAdd: () => !inFeed(v.id),
+      rm: () => { const L = cvState.list; if (L) L.items = L.items.filter((x) => x.id !== v.id); },
+      add: () => addToFeed(v),
+      open: () => { if (current() && current().id === v.id) return; if (playNext(v)) goTo(state.pos + 1); else playFromMain(v); },
     };
     return { // browse
       canRm: () => true,
@@ -2550,7 +2576,9 @@
   let shiftDown = false; // Shift held while swiping: the plus plays the video next instead
   for (const t of ["keydown", "keyup"]) window.addEventListener(t, (e) => { shiftDown = !!e.shiftKey; }, true);
   window.addEventListener("blur", () => { shiftDown = false; });
-  const nextMode = () => shiftDown;
+  // Plays next: with Shift, or (swapped in settings) without it. Swapped while something can't be queued (a stream
+  // is on): the plus simply adds to your Feed.
+  const nextMode = () => (cfg && cfg.tv.swipeNextFirst ? !shiftDown && !!current() && !current().tw : shiftDown);
   const can = (api, act) => (act === "rm" ? api.canRm() : nextMode() ? canPlayNext(api.v) : api.canAdd());
   const isFeedRow = (api) => !!(api.feedRow && api.feedRow());
   const NO_GIVE = 34;
@@ -2823,7 +2851,7 @@
       if (!api || e.shiftKey) return; // (Shift + right-click: the browser's own menu)
       if (openRowMenu(api, e.clientX, e.clientY)) e.preventDefault();
     });
-    ui.pbody.addEventListener("scroll", (e) => { if (e.target === ui.pbody) { markStuck(); autoMore(); } else onRowScroll(e); }, true);
+    ui.pbody.addEventListener("scroll", (e) => { if (e.target === ui.pbody) { markStuck(); autoMore(); cvScroll(); } else onRowScroll(e); }, true);
     ui.pbody.addEventListener("scrollend", onRowScrollEnd, true);
     let lastMove = 0;
     ui.pbody.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") { const w = e.target.closest && e.target.closest(".sw"); if (w) w._user = performance.now() + 60000; } });
@@ -2841,7 +2869,7 @@
   };
   // Delete removes the row under the pointer (found by position, so it's right even after rows moved under it).
   const deleteHovered = () => {
-    if (!isListTab(state.panel)) return false;
+    if (!isListTab(state.panel) && state.panel !== "info") return false; // (Info: the creator's videos under it)
     const api = rowAt(lastPt.x, lastPt.y);
     if (!api || !api.canRm()) return false;
     fire(api, "rm");
@@ -2849,7 +2877,7 @@
   };
   // The keyboard version of a swipe, on the row under the pointer: A = the plus (Shift+A: plays next), D = the bin.
   const swipeHovered = (act, shift) => {
-    if (!isListTab(state.panel)) return false;
+    if (!isListTab(state.panel) && state.panel !== "info") return false; // (Info: the creator's videos under it)
     const api = rowAt(lastPt.x, lastPt.y);
     if (!api || busyRows.has(api.wrap)) return false;
     shiftDown = !!shift;
@@ -3350,19 +3378,77 @@
     if (!v) return ui.pbody.replaceChildren(el("p", "empty", "Nothing playing."));
     if (state.twInfo && state.twInfo.tw) { const w = state.twInfo; return renderTwitchInfo(w); } // an offline streamer you picked
     if (v.tw) return renderTwitchInfo(v);
+    setupBody(); // (scrolling and swiping the creator's videos work as in the list)
+    if (ui.pbody._infoFor === v.id && ui.pbody.querySelector(":scope > .desc")) { drawCreatorVideos(v); return; } // same video: only its list changes (a swipe)
+    ui.pbody._infoFor = v.id;
     const box = el("div", "desc");
     const subsLine = el("div", "subs"); subsLine.hidden = true;
     box.append(el("h3", null, v.title || ""), iconLine("by", [["user", whoOf(v)], ["cal", v.age], ["clock", v.len]]), subsLine);
-    ownerOf(v.id).then((o) => { if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
+    ownerOf(v.id).then((o) => { if (o && o.handle && !v.creator) state.ownerHandle[v.id] = o.handle; if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
     const body = el("div", null, state.desc[v.id] || "Loading description…");
     box.append(body);
-    ui.pbody.replaceChildren(box); atTopOnOpen(v); // always opens at the top (the list's own place is kept for when you go back)
+    ui.pbody.replaceChildren(box, creatorBox()); drawCreatorVideos(v); atTopOnOpen(v); // always opens at the top (the list's own place is kept for when you go back)
     if (state.desc[v.id] === undefined) {
       const d = await descriptionOf(v.id);
       state.desc[v.id] = d || "This video has no description.";
       const ks = Object.keys(state.desc); if (ks.length > 60) for (const k of ks.slice(0, ks.length - 60)) delete state.desc[k]; // keep the last few only
       if (ui && state.panel === "info" && current() && current().id === v.id) body.textContent = state.desc[v.id];
     }
+  };
+  // ---- under Info: the creator's own videos, Latest or Popular (as on their channel), loading more as you scroll down
+  const cvCache = new Map(); // creator|sort → { items, more, busy, done }
+  const cvState = { list: null };
+  if (!state.ownerHandle) state.ownerHandle = {};
+  const cvSort = () => (lsGet("ytv:infosort", "latest") === "popular" ? "popular" : "latest");
+  const cvCreator = (v) => { const c = SW.normalizeCreator ? SW.normalizeCreator(v.creator || "") : v.creator; return /^(@|channel\/UC)/.test(c || "") ? c : state.ownerHandle[v.id] || ""; };
+  const creatorBox = () => {
+    const box = el("div", "cvbox");
+    const seg = el("div", "cvseg"); seg.setAttribute("role", "tablist");
+    for (const [k, label] of [["latest", "Latest"], ["popular", "Popular"]]) {
+      const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab");
+      b.addEventListener("click", () => { lsSet("ytv:infosort", k); const v = current(); if (v) drawCreatorVideos(v); });
+      seg.append(b);
+    }
+    const head = el("div", "cvhead"); head.append(el("b", "cvt", "Videos"), seg);
+    box.append(head, el("div", "list cvlist"), el("p", "cvnote", ""));
+    return box;
+  };
+  const drawCreatorVideos = (v) => {
+    const box = ui && ui.pbody.querySelector(":scope > .cvbox"); if (!box || !v || v.tw) return;
+    const sort = cvSort(), who = cvCreator(v);
+    for (const b of box.querySelectorAll(".cvseg button")) { const on = b.dataset.k === sort; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); }
+    box.querySelector(".cvt").textContent = whoOf(v) ? `More from ${whoOf(v)}` : "Videos";
+    const note = box.querySelector(".cvnote"), list = box.querySelector(".cvlist");
+    if (!who) { note.textContent = "Finding the channel…"; list.replaceChildren(); return; }
+    const key = who + "|" + sort;
+    let L = cvCache.get(key);
+    if (!L) { L = { items: [], more: null, busy: false, done: false, started: false }; cvCache.set(key, L); while (cvCache.size > 12) cvCache.delete(cvCache.keys().next().value); }
+    cvState.list = L;
+    if (list.dataset.key !== key) { list.dataset.key = key; list.replaceChildren(); }
+    if (!L.started) { cvMore(v, L, key); }
+    const shown = L.items.filter((x) => !removed.has(x.id));
+    reconcile(list, shown, "creator", null, true);
+    for (const w of list.children) w.classList.toggle("curw", w.dataset.id === v.id);
+    note.textContent = L.busy ? (shown.length ? "Loading more…" : "Loading…") : !shown.length && L.done ? "Nothing here." : "";
+  };
+  const cvMore = async (v, L, key) => {
+    if (L.busy || L.done) return;
+    L.busy = true; L.started = true;
+    const who = key.split("|")[0], sort = key.split("|")[1];
+    let pg = { videos: [], more: null };
+    try { pg = L.more ? await SW.yt.moreVideos(L.more) : await SW.yt.channelVideos(who, sort); } catch {}
+    const have = new Set(L.items.map((x) => x.id));
+    for (const x of pg.videos || []) if (x && !have.has(x.id)) { have.add(x.id); L.items.push({ ...x, channel: x.channel || v.channel, creator: x.creator || who }); }
+    L.more = pg.more || null; L.done = !L.more; L.busy = false;
+    const cur = current();
+    if (ui && state.panel === "info" && cur && cvCreator(cur) === who && cvSort() === sort) drawCreatorVideos(cur);
+  };
+  // near the bottom of Info: the next page
+  const cvScroll = () => {
+    if (!ui || state.panel !== "info" || !cvState.list) return;
+    const b = ui.pbody; if (b.scrollHeight - b.scrollTop - b.clientHeight > 600) return;
+    const v = current(), L = cvState.list; if (!v || L.busy || L.done) return;
+    const list = b.querySelector(".cvlist"); if (list && list.dataset.key) cvMore(v, L, list.dataset.key);
   };
   const renderComments = () => {
     const v = current();
@@ -4017,6 +4103,7 @@
     if (typeof mine.key === "string" && mine.key.length <= 12 && state.forwardKey) { state.forwardKey(mine); return; } // a key pressed over the stream
     if (mine.move) { state.twIdleAt = Date.now(); if (state.overVideo) state.overVideo(); if (state.syncControls) state.syncControls(); return; } // the mouse over the stream wakes YTV's UI
     if (mine.dbl) { toggleFullscreen(); return; }
+    if (mine.click) { if (state.panel && !state.edgeOpened && ui.root.classList.contains("show-panel")) showPanel(""); return; } // a click on the stream: the list closes (opened with its key, as on YouTube)
     if (mine.qualityLocked) { if (!tw.lockedSaid) { tw.lockedSaid = true; toast("Twitch only plays higher quality when you’re logged in to twitch.tv in this browser"); } return; }
     try { twEvents.push(JSON.stringify(mine).slice(0, 120)); if (twEvents.length > 12) twEvents.shift(); } catch {}
     if (mine.playing) { tw.playing = true; if (mine.muted) { tw.muted = true; toast("The browser held the sound back — press M, or use the stream’s volume"); } }
