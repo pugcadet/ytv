@@ -63,6 +63,13 @@
     for (const r of document.querySelectorAll("#main [data-paths]")) r.classList.toggle("changed", isChanged(pathsOf(r)));
     for (const c of document.querySelectorAll("#main .card")) { const b = c.querySelector(":scope > .card-head .reset"); if (b) b.disabled = !isChanged(allPaths(c)); }
   };
+  // a setting that has a key in YTV shows it on the right of its name (only while keyboard shortcuts are on)
+  const withKey = (rowEl, id) => {
+    const k = cfg.tv.keysOn && cfg.tv.keys[id]; if (!k) return rowEl;
+    const name = rowEl.querySelector(":scope > .label > span:first-child");
+    if (name) name.append(h("kbd", { class: "rkey", text: k.length === 1 ? k.toUpperCase() : k, title: "Its key in YTV (change it under Keyboard)" }));
+    return rowEl;
+  };
   const row = (label, control, hint, asLabel = false, paths = null) =>
     tagRow(h(asLabel ? "label" : "div", { class: "row" }, h("span", { class: "label" }, h("span", { text: label }), hint ? h("span", { class: "hint", text: hint }) : null), control), paths);
   // A block of settings. Its title can be { title, area, noReset }: area is the part of the preview it changes (lit up
@@ -626,7 +633,7 @@
             "The best qualities need you signed in to twitch.tv."),
           toggle("Show who’s offline", "Greyed out at the end. Click one for past broadcasts.", "tv.twitch.offline")),
         card({ title: "Chat", area: "chatv chatp" }, "Read only, and only connected while you can see it.",
-          pick("O shows the chat", "tv.twitch.chat.where", [["video", "Over the video"], ["panel", "In the list"]], "Shift+O moves it to the other place.", true),
+          withKey(pick("Chat shows", "tv.twitch.chat.where", [["video", "Over the video"], ["panel", "In the list"]], "Shift+O moves it to the other place.", true), "comments"),
           toggle("Start with recent messages", "From recent-messages.robotty.de, a public service.", "tv.twitch.chat.recent"),
           toggle("BetterTTV emotes", null, "tv.twitch.chat.bttv"), toggle("FrankerFaceZ emotes", null, "tv.twitch.chat.ffz"), toggle("7TV emotes", null, "tv.twitch.chat.stv")),
         card({ title: "Chat over the video", area: "chatv" }, "Point at it to drag or resize it.",
@@ -699,8 +706,8 @@
     const tv = cfg.tv, lkp = (k) => ({ path: "tv.look." + k });
     page("List", "What’s playing and what’s next, with a tab per channel. U opens and closes it.",
       card({ title: "List", area: "panel" }, null,
-        toggle("Show the list", "Off: U opens the ∨ menu instead. Info, Comments and History still open on the right.", "tv.listOn"),
-        pick("Hide when the mouse rests", "tv.listHide", [["always", "Always"], ["fullscreen", "Only in full screen"], ["never", "Never"]], "It comes back when you move the mouse."),
+        withKey(toggle("Show the list", "Off: its key opens the ∨ menu instead. Info, Comments and History still open on the right.", "tv.listOn"), "list"),
+        withKey(pick("Hide when the mouse rests", "tv.listHide", [["always", "Always"], ["fullscreen", "Only in full screen"], ["never", "Never"]], "It comes back when you move the mouse."), "autohide"),
         toggle("Open from the right edge", "Point at the right edge of the screen.", "tv.edgeOpen", true),
         ...(tv.edgeOpen ? [number("Edge width", null, { min: 1, max: 800, path: "tv.edgeWidth", unit: "px" }),
           number("Close again after", "Once the mouse leaves the list. 0: stays open.", { min: 0, max: 600000, step: 100, path: "tv.edgeHideMs", unit: "ms" })] : [])),
@@ -712,7 +719,7 @@
         number("Height", null, { min: 12, max: 400, ...lkp("tabHeight"), unit: "px" }),
         number("Text size", null, { min: 25, max: 400, step: 5, ...lkp("tabScale"), unit: "%" })),
       card({ title: "Sorting and watched videos", area: "rows" }, null,
-        toggle("Sorting (S)", "On: watched videos grey out and fold under the Watched bar, and a video you pick moves up. Off: the list stays exactly as it is.", () => !cfg.tv.keepOrder, (v) => (cfg.tv.keepOrder = !v)),
+        withKey(toggle("Sorting", "On: watched videos grey out and fold under the Watched bar, and a video you pick moves up. Off: the list stays exactly as it is.", () => !cfg.tv.keepOrder, (v) => (cfg.tv.keepOrder = !v)), "sorting"),
         slider("Watched from", "From here a video counts as watched.", { min: 50, max: 100, step: 5, path: "tv.fullPct", fmt: pct }),
         toggle("Watched bar", "Watched videos fold under it, right above what’s playing. Off: they stay in view, greyed.", "tv.watchedFold"),
         number("Watched videos kept", "Per channel. 0: they leave the list (History, H, keeps them).", { min: 0, max: 1000, path: "tv.trail" }),
@@ -835,7 +842,7 @@
   const renderGrid = () => {
     page("∨ menu", "The open list as a grid over the video: V, a scroll down on the video, or the ∨ at the bottom.",
       card({ title: "∨ menu" }, null,
-        toggle("∨ menu", null, "tv.gridOn"),
+        withKey(toggle("∨ menu", null, "tv.gridOn"), "grid"),
         toggle("Tabs at the top", null, "tv.gridTabs"),
         pick("Scroll to open", "tv.gridScroll", [["easy", "Light"], ["normal", "Normal"], ["firm", "Firm"], ["off", "Off (V and ∨ only)"]]),
         slider("Close at the top", "Rest the mouse at the top of the screen to close it. 0: off.", { min: 0, max: 40, step: 2, path: "tv.gridTopZone", fmt: (n) => (n ? n + "%" : "Off") }),

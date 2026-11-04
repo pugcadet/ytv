@@ -1385,6 +1385,8 @@
     else if (kind === "comment") add("path", { d: "M21 12a8 8 0 0 1-8 8H6l-3 3V12a8 8 0 0 1 8-8h2a8 8 0 0 1 8 8z" });
     else if (kind === "chevron") add("path", { d: "M6 9l6 6 6-6" });
     else if (kind === "back") add("path", { d: "M15 5l-7 7 7 7" });
+    else if (kind === "arrow-left") add("path", { d: "M19 12H5M11 18l-6-6 6-6" });
+    else if (kind === "arrow-right") add("path", { d: "M5 12h14M13 6l6 6-6 6" });
     else if (kind === "more") { add("circle", { cx: 5, cy: 12, r: 1.4 }); add("circle", { cx: 12, cy: 12, r: 1.4 }); add("circle", { cx: 19, cy: 12, r: 1.4 }); }
     else if (kind === "up") add("path", { d: "M12 19V6M6 11l6-6 6 6" });
     else if (kind === "play-half") { add("circle", { cx: 12, cy: 12, r: 9 }); add("path", { d: "M10 8.5v7l5.5-3.5z" }); add("path", { d: "M12 3a9 9 0 0 1 0 18", "stroke-dasharray": "2 3" }); }
@@ -5022,7 +5024,7 @@
       return b;
     };
     const k = (a) => (keyOf(a) && cfg.tv.keysOn ? keyName(a) : "");
-    const items = [item("fwd", "Forward", "Shift+]", () => historyStep(1)), item("search", "Search", k("explore"), () => openSearch())];
+    const items = [item("arrow-left", "Back", cfg.tv.keysOn ? "Shift+[" : "", () => historyStep(-1)), item("arrow-right", "Forward", cfg.tv.keysOn ? "Shift+]" : "", () => historyStep(1)), item("search", "Search", k("explore"), () => openSearch())];
     if (v && !tw) {
       items.push(item("user-plus", ui.addB.classList.contains("on") ? "This creator’s channels" : "Add this creator to a channel", "", (a) => openCreatorMenu(a)));
       items.push(item("eye-off", "Hide this creator on this channel", "", () => hideCreator()));
@@ -5031,7 +5033,7 @@
       if (!ui.wlClear.hidden) items.push(item("sweep", "Remove watched ones from Watch Later", "", () => wlRemoveWatched()));
     }
     if (tw) items.push(item("gear", "Stream quality", "", (a) => openQualityMenu(a)));
-    items.push(item("gear", "Settings", "", () => openSettings("")));
+    items.push(item("gear", "Settings", k("settings"), () => openSettings("")));
     ui.pop.replaceChildren(...items);
     const r = anchor.getBoundingClientRect(), host = ui.root.getBoundingClientRect(), z = cfg.tv.uiScale / 100;
     ui.pop.style.left = `${Math.max(8, Math.min((r.right - host.left) / z - 260, host.width / z - 270))}px`; ui.pop.style.top = `${(r.bottom - host.top) / z + 6}px`;
@@ -6313,7 +6315,7 @@
   const ACTIONS = {
     chUp: () => stepTab(+1), chDown: () => stepTab(-1), next: () => nextVideo(), prev: () => prevVideo(),
     list: () => toggleList(), info: () => togglePanel("info"), comments: () => commentsOrChat(), explore: () => exploreKey(),
-    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(),
+    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(), settings: () => (ui.setFrame.hidden ? openSettings("") : closeSettings()),
   };
   // E: on the Twitch tab (or with a stream on and no panel open) it finds streamers; anywhere else it explores YouTube
   const exploreKey = () => {

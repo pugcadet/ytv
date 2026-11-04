@@ -291,6 +291,9 @@ details.tv-col[open] .col-body { animation: colin .22s ease; }
 .card[data-area]:hover, .card[data-area]:focus-within { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent); }
 .row.changed > .label > span:first-child::before { content: ""; display: inline-block; width: 7px; height: 7px; margin: 0 7px 1px -14px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
 .row.changed > .label > span:first-child { margin-left: 14px; }
+/* a setting's key in YTV, on the right of its name */
+.row > .label > span:first-child { display: flex; align-items: center; gap: 8px; }
+.rkey { margin-left: auto; min-width: 22px; padding: 1px 7px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--muted); font: 700 11.5px ui-monospace, Menlo, Consolas, monospace; text-align: center; }
 /* the ↺ next to a changed setting's name: puts that one setting back to its default */
 .rreset { display: none; margin-left: 8px; width: 22px; height: 22px; min-height: 0; padding: 0; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); font-size: 13px; font-weight: 800; line-height: 20px; text-align: center; vertical-align: middle; cursor: pointer; }
 .rreset:hover { background: var(--accent); color: #fff; border-color: var(--accent); }

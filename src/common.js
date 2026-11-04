@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.38.1";
+  SW.VERSION = "1.38.2";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -36,7 +36,7 @@
   /** YTV keyboard actions and their default keys. Escape (close / turn off) is always Escape. */
   SW.TV_ACTIONS = [
     ["chUp", "Next tab (with Shift: go there and play its first video)", "."], ["chDown", "Previous tab (with Shift: go there and play its first video)", ","], ["next", "Next video", "]"], ["prev", "Previous video", "["],
-    ["list", "Open / close the list", "u"], ["info", "Info (description, stream details)", "i"], ["comments", "Comments (on a stream: its chat)", "o"], ["toggle", "Turn YTV on / off", "`"], ["explore", "Search (YouTube, a topic or a creator; on the Twitch tab: find streamers; Shift: what’s live in a game)", "e"], ["back", "Leave a topic, back to the channel", "b"], ["overview", "Channel overview", "g"], ["history", "History (everything you watched)", "h"], ["grid", "The open list as a grid of videos (also: scroll down on the video)", "v"], ["sorting", "Sorting on / off (off: the list stays exactly as it is)", "s"], ["autohide", "Switch when the list hides (always / full screen / never)", ""], ["fullscreen", "Full screen", "f"],
+    ["list", "Open / close the list", "u"], ["info", "Info (description, stream details)", "i"], ["comments", "Comments (on a stream: its chat)", "o"], ["toggle", "Turn YTV on / off", "`"], ["explore", "Search (YouTube, a topic or a creator; on the Twitch tab: find streamers; Shift: what’s live in a game)", "e"], ["back", "Leave a topic, back to the channel", "b"], ["overview", "Channel overview", "g"], ["history", "History (everything you watched)", "h"], ["grid", "The open list as a grid of videos (also: scroll down on the video)", "v"], ["sorting", "Sorting on / off (off: the list stays exactly as it is)", "s"], ["autohide", "Switch when the list hides (always / full screen / never)", ""], ["fullscreen", "Full screen", "f"], ["settings", "Settings", ""],
   ];
   /** Keys YouTube's player uses (left alone so they keep working); F is allowed because full screen is the same action. */
   // (, and . step frames in YouTube only while paused; YTV uses them for channels)
