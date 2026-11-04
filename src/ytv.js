@@ -259,7 +259,7 @@
     return items;
   };
 
-  // ---- Twitch Live: asks YTV's background (the only part allowed to reach Twitch, and only once you switched it on)
+  // ---- Twitch: asks YTV's background (the only part allowed to reach Twitch, and only once you switched it on)
   // which of your streamers are live. Kept for a minute.
   let twitchCache = { at: 0, items: [], offline: [], err: "" };
   const twitchLive = async (force = false) => {
@@ -268,10 +268,11 @@
       const L = cfg.tv.twitch.logins;
       return cfg.tv.twitch.sort === "yours" ? items.slice().sort((a, b) => L.indexOf(a.login) - L.indexOf(b.login)) : items.slice().sort((a, b) => (b.viewers || 0) - (a.viewers || 0));
     };
-    // who's offline goes below, greyed, in your order (Settings: Twitch Live → show who's offline)
+    // who's offline goes below, greyed, in your order (Settings: Twitch → show who's offline)
     const withOffline = (live) => (cfg.tv.twitch.offline ? [...live, ...order(twitchCache.offline || []).filter((v) => cfg.tv.twitch.logins.includes(v.login))] : live);
     if (!force && Date.now() - twitchCache.at < 60 * 1000) return withOffline(order(twitchCache.items.filter((v) => cfg.tv.twitch.logins.includes(v.login))));
     let r = null;
+    if (staleCheck()) return withOffline(order(twitchCache.items.filter((v) => cfg.tv.twitch.logins.includes(v.login))));
     try { r = await chrome.runtime.sendMessage({ ytv: "twitchLive", logins: cfg.tv.twitch.logins }); } catch {}
     const ok = (s) => typeof s === "string" ? s : "";
     const pic = (u) => (/^https:\/\/static-cdn\.jtvnw\.net\//.test(u || "") ? u : "");
@@ -1490,6 +1491,13 @@
     const mp = document.getElementById("movie_player"); // YouTube's own controls come back in step
     if (mp) { const r = mp.getBoundingClientRect(); mp.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); }
     wake(); setTimeout(wake, 3050);
+  };
+  const extAlive = () => { try { return !!(chrome.runtime && chrome.runtime.id); } catch { return false; } };
+  let staleSaid = 0;
+  const staleCheck = () => {
+    if (extAlive()) return false;
+    if (Date.now() - staleSaid > 8000) { staleSaid = Date.now(); toast("YTV was updated. Reload this page to use it", { label: "Reload", fn: () => location.reload() }); }
+    return true;
   };
   const toast = (msg, action = null) => {
     if (!ui) return;
@@ -3307,12 +3315,12 @@
     const meta = [u.live ? `● live · ${Number(u.viewers || 0).toLocaleString()} watching` : "offline", u.followers ? `${Intl.NumberFormat(undefined, { notation: "compact" }).format(u.followers)} followers` : ""].filter(Boolean).join(" · ");
     const tx = el("span", "twtx"); tx.append(el("b", null, u.name || u.login), el("span", null, meta));
     const add = el("button", "twadd" + (have() ? " on" : "")); add.type = "button"; twAddIcon(add, have());
-    add.title = have() ? `Take ${u.name || u.login} off your list` : `Add ${u.name || u.login} to Twitch Live`;
+    add.title = have() ? `Take ${u.name || u.login} off your list` : `Add ${u.name || u.login} to Twitch`;
     add.addEventListener("click", async () => {
       const L = cfg.tv.twitch.logins;
       cfg.tv.twitch.logins = have() ? L.filter((x) => x !== u.login) : [...L, u.login];
       add.classList.toggle("on", have()); twAddIcon(add, have());
-      toast(have() ? `${u.name || u.login} added to Twitch Live` : `${u.name || u.login} taken off Twitch Live`);
+      toast(have() ? `${u.name || u.login} added to Twitch` : `${u.name || u.login} taken off Twitch`);
       const fc = ui && ui.twpop.querySelector(".fcount"); if (fc) fc.textContent = `${cfg.tv.twitch.logins.length} on your list`;
       await writeCfg();
       twitchCache.at = 0; twitchTick(); if (state.panel === "src:" + TWITCH_ID) { browse.delete(TWITCH_ID); schedulePanel(); }
@@ -3387,7 +3395,7 @@
         const row = el("div", "twhit tson twstream"); row.title = `Watch ${x.name || x.login}`;
         const av = el("span", "twav"); const pa = twPic(v.avatar); if (pa) av.append(pa);
         const tx = el("span", "twtx"); tx.append(el("b", null, x.name || x.login), el("span", null, `${compact(x.viewers)} watching · ${String(x.title || "").slice(0, 90)}`));
-        const add = el("button", "twadd" + (have() ? " on" : "")); add.type = "button"; twAddIcon(add, have()); add.title = have() ? "On your list" : `Add ${x.name || x.login} to Twitch Live`;
+        const add = el("button", "twadd" + (have() ? " on" : "")); add.type = "button"; twAddIcon(add, have()); add.title = have() ? "On your list" : `Add ${x.name || x.login} to Twitch`;
         add.addEventListener("click", async (e) => { e.stopPropagation(); if (have()) return; cfg.tv.twitch.logins = [...cfg.tv.twitch.logins, x.login]; add.classList.add("on"); twAddIcon(add, true); await writeCfg(); twitchCache.at = 0; twitchTick(); });
         row.addEventListener("click", () => watchStream(v));
         row.append(av, tx, add);
@@ -3441,7 +3449,7 @@
 
   // ---- Settings, opened right over TV (no new tab, so full screen stays as it is). Esc or ✕ closes it.
   const openSettings = (hash = "") => { // (no page given: where you left off)
-    if (!ui) return;
+    if (!ui || staleCheck()) return;
     const w = ui.setFrame;
     if (!w.firstChild) {
       const box = el("div", "setbox"), bar = el("div", "setbar");
@@ -3498,7 +3506,7 @@
     const mb = el("button", "twmine"); mb.type = "button";
     // (a small icon at the top right: rarely needed; what it does is in its tooltip)
     // (not on your list: a clear Add button; once added it turns into a small bin at the top right)
-    const drawMine = () => { const on = onList(), t = on ? `Remove ${v.channel} from Twitch Live` : `Add ${v.channel} to Twitch Live`; mb.replaceChildren(icon(on ? "trash-2" : "plus")); if (!on) mb.append(el("span", null, "Add to Twitch Live")); mb.title = t; mb.setAttribute("aria-label", t); mb.classList.toggle("on", on); mb.classList.toggle("big", !on); };
+    const drawMine = () => { const on = onList(), t = on ? `Remove ${v.channel} from Twitch` : `Add ${v.channel} to Twitch`; mb.replaceChildren(icon(on ? "trash-2" : "plus")); if (!on) mb.append(el("span", null, "Add to Twitch")); mb.title = t; mb.setAttribute("aria-label", t); mb.classList.toggle("on", on); mb.classList.toggle("big", !on); };
     mb.addEventListener("click", async () => {
       const had = onList();
       cfg.tv.twitch.logins = had ? cfg.tv.twitch.logins.filter((x) => x !== v.login) : [...cfg.tv.twitch.logins, v.login];
@@ -5023,6 +5031,7 @@
       if (!ui.wlClear.hidden) items.push(item("sweep", "Remove watched ones from Watch Later", "", () => wlRemoveWatched()));
     }
     if (tw) items.push(item("gear", "Stream quality", "", (a) => openQualityMenu(a)));
+    items.push(item("gear", "Settings", "", () => openSettings("")));
     ui.pop.replaceChildren(...items);
     const r = anchor.getBoundingClientRect(), host = ui.root.getBoundingClientRect(), z = cfg.tv.uiScale / 100;
     ui.pop.style.left = `${Math.max(8, Math.min((r.right - host.left) / z - 260, host.width / z - 270))}px`; ui.pop.style.top = `${(r.bottom - host.top) / z + 6}px`;
@@ -6740,7 +6749,7 @@
     await run("Channel names", async () => { if (!vid) return { ok: false, detail: "no video to try" }; const n = await SW.yt.channelNameOf(vid.id); return { ok: !!n, detail: n ? "found" : "not found" }; });
     await run("Watch Later (read only)", async () => { const w = await SW.yt.watchLater(); return { ok: !!w.ctx, detail: `${w.videos.length} videos${w.ctx ? "" : ", but no page settings (can’t edit it)"}` }; });
     await run("Your subscriptions (for the Subscribed filter)", async () => { const k = await SW.yt.subscribedChannels(); return { ok: k.length > 0, detail: `${k.length} names for your channels` }; });
-    if (cfg && cfg.tv.twitch.enabled) await run("Twitch Live", async () => { const v = await twitchLive(true); return { ok: !twitchCache.err, detail: twitchCache.err ? "Error: " + twitchCache.err : `${v.filter((x) => !x.off).length} of ${cfg.tv.twitch.logins.length} streamers live` }; });
+    if (cfg && cfg.tv.twitch.enabled) await run("Twitch", async () => { const v = await twitchLive(true); return { ok: !twitchCache.err, detail: twitchCache.err ? "Error: " + twitchCache.err : `${v.filter((x) => !x.off).length} of ${cfg.tv.twitch.logins.length} streamers live` }; });
     if (cfg && cfg.tv.twitch.enabled) await run("Twitch chat (through YTV’s background)", () => new Promise((done) => {
       const who = (twitchCache.items[0] || {}).login || cfg.tv.twitch.logins[0] || "twitch";
       let port, seen = [], n = 0, emotes = -1;

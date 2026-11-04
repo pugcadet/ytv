@@ -1,5 +1,5 @@
 /*
- * YTV — inside Twitch's player, only when YTV shows it on YouTube (Twitch Live).
+ * YTV — inside Twitch's player, only when YTV shows it on YouTube (Twitch).
  * Starts the stream right away (pressing Twitch's own Play or "start watching" button when it asks), with sound and in
  * source quality; keeps a live stream from pausing by itself; leaves Twitch's own play/pause, volume and quality controls (and any
  * hover overlays) working; and passes your keys, mouse movement and double-clicks on to YTV. It reads and sends

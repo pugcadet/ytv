@@ -596,10 +596,10 @@
       if (v) {
         let granted = false;
         try { granted = await chrome.permissions.request({ origins: ["https://gql.twitch.tv/*"] }); } catch {}
-        if (!granted) { sw.querySelector("input").checked = false; note.textContent = "Twitch Live needs the browser’s OK to ask Twitch who’s live. Nothing was changed."; return; }
+        if (!granted) { sw.querySelector("input").checked = false; note.textContent = "Twitch needs the browser’s OK to ask Twitch who’s live. Nothing was changed."; return; }
       }
       tw.enabled = v; await save(); render();
-    }, "Twitch Live");
+    }, "Twitch");
     const streamers = chipEditor({ label: "Streamers", items: () => tw.logins, placeholder: "Twitch name (or a twitch.tv link)", empty: "No streamers yet.",
       normalize: (x) => { const m = String(x).trim().toLowerCase().replace(/^https?:\/\/(www\.)?twitch\.tv\//, "").replace(/^@/, "").replace(/[/?#].*$/, ""); return /^[a-z0-9_]{2,25}$/.test(m) ? m : ""; },
       onAdd: async (x) => { tw.logins.push(x); await save(); }, onRemove: async (x) => { tw.logins = tw.logins.filter((y) => y !== x); await save(); } });
@@ -607,15 +607,15 @@
       note.textContent = "Asking Twitch…";
       let r = null; try { r = await chrome.runtime.sendMessage({ ytv: "twitchLive", logins: tw.logins }); } catch {}
       if (!r) { note.textContent = "No answer. Reload the extension once, then try again."; return; }
-      if (r.error && !(r.live || []).length) { note.textContent = r.error === "no-access" ? "YTV doesn’t have the browser’s OK for Twitch yet: switch Twitch Live off and on again." : `Twitch didn’t answer as expected (${r.error}). Run the health check and send the report.`; return; }
+      if (r.error && !(r.live || []).length) { note.textContent = r.error === "no-access" ? "YTV doesn’t have the browser’s OK for Twitch yet: switch Twitch off and on again." : `Twitch didn’t answer as expected (${r.error}). Run the health check and send the report.`; return; }
       note.textContent = r.live.length ? `Live now: ${r.live.map((x) => `${x.name || x.login} (${x.viewers} watching)`).join(", ")}` : "None of them are live right now.";
     } });
     const placed = Object.keys(c.boxes).length;
     const forget = tagRow(row("Per-streamer chat", h("button", { type: "button", text: "Reset", disabled: !placed && !c.box, onclick: async () => { c.boxes = {}; c.box = null; await save(); render(); } }),
       placed ? `${placed} streamer${placed > 1 ? "s have" : " has"} their own chat place or size.` : "Moving or resizing a chat remembers it for that streamer."), ["tv.twitch.chat.boxes", "tv.twitch.chat.box"]);
     page("Twitch", "Your Twitch streamers as a channel, in Twitch’s own player, with their chat.",
-      card({ title: "Twitch Live", noReset: true }, "YTV only asks Twitch who’s live, never anything about you.",
-        row("Twitch Live", sw, null, true),
+      card({ title: null, noReset: true }, "YTV only asks Twitch who’s live, never anything about you.",
+        row("Show Twitch", sw, "Your streamers as a channel next to your others.", true),
         tw.enabled ? h("div", { class: "inline" }, test) : null, note),
       ...(tw.enabled ? [
         card({ title: "Streamers", noReset: true }, "Drag a stream in the list to change the order.",
@@ -665,7 +665,7 @@
           pick("Order", "tv.watchLater.order", [["playlist", "Playlist order"], ["shuffle", "Shuffled"]]),
           toggle("Skip videos I’ve watched", null, "tv.watchLater.skipSeen"),
         ] : [])),
-      card({ title: "Twitch Live", noReset: true }, null,
+      card({ title: "Twitch", noReset: true }, null,
         h("div", { class: "inline" }, h("button", { type: "button", class: "primary", text: "Twitch settings →", onclick: () => { current = "twitch"; history.replaceState(null, "", "#twitch"); render(); } }))));
   };
 
@@ -960,7 +960,7 @@
         h("h2", { text: `YTV ${SW.VERSION}` }),
         h("p", { text: "Watch YouTube like TV: channels that keep playing." }),
         h("ul", {},
-          h("li", { text: "Talks only to youtube.com, plus Twitch and its chat and emote services if you switch Twitch Live on." }),
+          h("li", { text: "Talks only to youtube.com, plus Twitch and its chat and emote services if you switch Twitch on." }),
           h("li", { text: "No accounts, analytics, ads or tracking." }),
           h("li", { text: "Everything stays in this browser." }))));
 

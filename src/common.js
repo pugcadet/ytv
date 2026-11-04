@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.38.0";
+  SW.VERSION = "1.38.1";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -52,9 +52,9 @@
   SW.MAX_CHANNELS = 99; // your own channels (each is one number in the guide)
   SW.TOP_FIELDS_DEFAULT = [["title", 1], ["channel", 0], ["creator", 2], ["len", 2], ["age", 2]];
   SW.TV_THUMBS = [["small", "Small", 96], ["medium", "Medium", 140], ["large", "Large", 200], ["xlarge", "Extra large", 260]];
-  /** Built-in TV channels: your own Feed (always channel 0), Home, Watched, Subscriptions, Watch Later and Twitch Live. */
+  /** Built-in TV channels: your own Feed (always channel 0), Home, Watched, Subscriptions, Watch Later and Twitch. */
   SW.TV_BUILTIN_IDS = ["__feed", "__cont", "__home", "__subs", "__wl", "__twitch"];
-  SW.TV_BUILTIN_NAMES = { __feed: "Feed", __cont: "Continue watching", __home: "Home", __subs: "Subscriptions", __wl: "Watch Later", __twitch: "Twitch Live" };
+  SW.TV_BUILTIN_NAMES = { __feed: "Feed", __cont: "Continue watching", __home: "Home", __subs: "Subscriptions", __wl: "Watch Later", __twitch: "Twitch" };
   /**
    * The ids of the switched-on channels (Feed not included) in the order you put them in.
    * Channels you haven't placed yet keep their old channel-number order and go after the ones you have.
@@ -92,7 +92,7 @@
     Ember: { d: "Warm orange on brown, a soft fade and a rounded, half see-through list.", accent: "#ff8a3d", panel: "#231a15", topStyle: "fade",
       look: { topRadius: 12, topPadY: 12, topPadX: 18, topAlpha: 55, topBlur: 16, panelAlpha: 50, panelBlur: 12, panelRadius: 14, panelGap: 10, rowRadius: 10, rowGap: 3, rowAlpha: 85 } },
   };
-  /** Streamers added to Twitch Live the first time (none: add your own in settings → Twitch). */
+  /** Streamers added to Twitch the first time (none: add your own in settings → Twitch). */
   SW.TWITCH_FOLLOWS = [];
   /** One line of Twitch chat (IRC with tags) → { cmd, tags, user, text } for the commands YTV uses, else null. */
   SW.parseIrcLine = (line) => {

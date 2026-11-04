@@ -33,7 +33,7 @@ const badge = async () => {
 chrome.runtime.onStartup.addListener(badge);
 chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.cfg) badge(); });
 
-// ---- Twitch Live (only once you switch it on in settings, which asks the browser for access to gql.twitch.tv).
+// ---- Twitch (only once you switch it on in settings, which asks the browser for access to gql.twitch.tv).
 // One request: which of your streamers are live, asked the same way Twitch's own website asks. Nothing about you is sent.
 const TWITCH_GQL = "https://gql.twitch.tv/gql";
 const TWITCH_CLIENT = "kimne78kx3ncx6brgo4mv6wki5h1ko"; // the public id Twitch's own website uses
