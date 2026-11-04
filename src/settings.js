@@ -209,7 +209,7 @@
     const [pWho, pAge, pLen] = PV_ROWS[0][1].split(" · ");
     const rows = PV_ROWS.map(([t, c], i) => h("div", { class: "pv-row" + (i === 0 ? " cur" : "") + (i === 2 ? " hover" : "") },
       h("div", { class: "pv-th mth", style: `--h:${(i * 47 + 190) % 360}` }, h("span", { class: "mlen", text: c.split(" · ")[2] }),
-        ...(i === 2 ? [tv.hbExplore ? h("span", { class: "pv-hb l", "data-area": "buttons" }, pvIcon("M11 4a7 7 0 1 1 0 14a7 7 0 1 1 0-14 M20 20l-4-4")) : null, tv.hbWl ? h("span", { class: "pv-hb r", "data-area": "buttons" }, pvIcon("M12 7v5l3 2M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18")) : null] : [])),
+        ...(i === 2 ? [tv.hbWl ? h("span", { class: "pv-hb r", "data-area": "buttons" }, pvIcon("M12 7v5l3 2M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18")) : null] : [])),
       (() => { const [who, age, len] = c.split(" · "), bits = { title: t, creator: who, age, len }, line = (n) => tv.rowFields.filter(([, l]) => l === n).map(([f]) => bits[f]).filter(Boolean).join(" · ");
         const l1 = line(1), l2 = line(2); return h("div", { class: "pv-tx" }, l1 ? h("div", { class: "pv-it", text: l1 }) : null, l2 ? h("div", { class: "pv-ic", text: l2 }) : null); })()));
     const panel = h("div", { class: "pv-panel", "data-area": "panel" }, pvTabs(["Nature", "Science"]), h("div", { class: "pv-list", "data-area": "rows" }, ...rows));
@@ -359,9 +359,9 @@
     ageSel.value = getAge();
     ageSel.addEventListener("change", async () => { setAge(ageSel.value); await save(); });
     return [
-      row("Skip videos I’ve already seen", switchEl(getSeen(), async (v) => { setSeen(v); await save(); }, "Skip seen videos"),
-        "Leaves out videos YouTube shows as watched and anything YTV has played before.", true),
-      row("Only videos from", ageSel, "For topics, YouTube’s own upload-date filter is used, so you still get a full lineup."),
+      row("Skip videos I’ve seen", switchEl(getSeen(), async (v) => { setSeen(v); await save(); }, "Skip videos I’ve seen"),
+        "Here or on YouTube.", true),
+      row("Uploaded", ageSel, null),
     ];
   };
 
@@ -429,7 +429,7 @@
       b.firstChild.style.background = `linear-gradient(135deg, ${a} 50%, ${p2} 50%)`;
       return b;
     }));
-    return h("div", {}, presets, row("Accent colour", acc, "Buttons, highlights, the tab underline and what’s playing.", false, ["tv.theme.accent"]), row("Panel colour", pnl, "The background of the list, the top bar and the overview.", false, ["tv.theme.panel"]));
+    return h("div", {}, presets, row("Accent colour", acc, "Highlights and what’s playing.", false, ["tv.theme.accent"]), row("Background colour", pnl, "The list, the top bar and the overview.", false, ["tv.theme.panel"]));
   };
 
   const keyLabel = (k) => (!k ? "—" : k.length === 1 ? k.toUpperCase() : k.replace("Page", "Page "));
@@ -456,7 +456,7 @@
       });
       return h("div", { class: "row" }, h("span", { class: "label" }, h("span", { text: label }), msg), b);
     });
-    return card("Keys", "Click a key to change it. YouTube’s own player keys (arrows, M, J/K/L, C, 0–9…) always keep working, and Esc always closes what’s open (it never turns YTV off: that’s YTV’s own key).",
+    return card("Keys", "Click a key to change it. YouTube’s own player keys keep working.",
       toggle("Use keyboard shortcuts", null, "tv.keysOn", true),
       tagRow(h("div", { class: "keyrows" }, ...rows), ["tv.keys"]));
   };
@@ -495,18 +495,18 @@
         onRemove: async (v) => { c.channels = c.channels.filter((x) => x !== v); await save(); } });
       const finder = creatorFinder(c, () => creators.redraw());
       const blocked = c.blocked.length ? h("div", { class: "list-editor" }, h("label", { text: "Hidden creators" }),
-        h("p", { text: "Creators you hid while watching. Remove one to let them back on this channel." }),
+        h("p", { text: "Remove one to let them back." }),
         chipEditor({ label: "Hidden creators", items: () => c.blocked, placeholder: "Hide another creator", empty: "None.", normalize: SW.normalizeCreator,
           onAdd: async (v) => { c.blocked.push(v); await save(); }, onRemove: async (v) => { c.blocked = c.blocked.filter((x) => x !== v); await save(); } })) : null;
       const body = h("div", { class: "col-body" },
-        h("div", { class: "list-editor" }, h("label", { text: "Topics & searches" }),
-          h("p", { text: "Anything you’d type into YouTube’s search. Press Enter to add — it’s saved right away." }), topics, presetBox),
+        h("div", { class: "list-editor" }, h("label", { text: "Topics" }),
+          h("p", { text: "Anything you’d search YouTube for. Press Enter to add." }), topics, presetBox),
         h("div", { class: "list-editor" }, h("label", { text: "Creators" }),
-          h("p", { text: "Their latest videos play on this channel. Search YouTube by name, or paste a channel link or @handle." }), creators, finder),
+          h("p", { text: "Search by name, or paste an @handle or channel link." }), creators, finder),
         blocked,
-        toggle("Mix in my home feed", "Your YouTube recommendations.", () => c.home, (v) => (c.home = v)),
+        toggle("Mix in my Home feed", "Your YouTube recommendations.", () => c.home, (v) => (c.home = v)),
         ...filterRows(() => c.skipSeen, (v) => (c.skipSeen = v), () => c.maxAge, (v) => (c.maxAge = v)));
-      const summary = h("span", { class: "col-sum", text: [c.subjects.length && `${c.subjects.length} topic${c.subjects.length > 1 ? "s" : ""}`, c.channels.length && `${c.channels.length} creator${c.channels.length > 1 ? "s" : ""}`, c.home && "home feed"].filter(Boolean).join(" · ") || "Empty — add topics or creators" });
+      const summary = h("span", { class: "col-sum", text: [c.subjects.length && `${c.subjects.length} topic${c.subjects.length > 1 ? "s" : ""}`, c.channels.length && `${c.channels.length} creator${c.channels.length > 1 ? "s" : ""}`, c.home && "Home feed"].filter(Boolean).join(" · ") || "Empty: add topics or creators" });
       const open = openCols.has(c.id);
       const det = h("details", { class: "card tv-col", open },
         h("summary", { class: "col-head" },
@@ -522,9 +522,9 @@
       det.addEventListener("toggle", () => { if (det.open) openCols.add(c.id); else openCols.delete(c.id); });
       return det;
     };
-    page("Your channels", "Each channel mixes topics, creators and (if you like) your home feed. Pick one and videos keep playing.",
-      card("Hidden creators", "The eye button in YTV’s top bar hides the creator of what’s playing. Each channel keeps its own list, shown when you open the channel below.",
-        toggle("Hide them on every channel", "On: someone you hid on one channel is gone from all of them (not from your Feed or Watch Later). Off: only from the channel you hid them on.", "tv.hideEverywhere")),
+    page("Your channels", "Each channel mixes topics, creators and, if you like, your home feed.",
+      card("Hidden creators", "Hide a creator with the eye in the top bar or the right-click menu.",
+        toggle("Hide on every channel", "Off: only on the channel you hid them on. Never on your Feed or Watch Later.", "tv.hideEverywhere")),
       ...SW.tvOrder(tv).map((id) => tv.collections.findIndex((c) => c.id === id)).filter((i) => i >= 0).map((i) => colCard(tv.collections[i], i)),
       h("div", { class: "inline" }, h("button", { type: "button", class: "primary", text: "+ New channel", disabled: tv.collections.length >= SW.MAX_CHANNELS, onclick: async () => {
         let n = tv.collections.length + 1, id;
@@ -555,7 +555,7 @@
       } });
       return b;
     });
-    return h("div", { class: "list-editor" }, h("p", { text: "Click a streamer to get a notification when they go live (🔔 on, 🔕 off). YTV looks every 2 minutes, also while YouTube is closed. Click the notification to watch." }),
+    return h("div", { class: "list-editor" }, h("p", { text: "Click a streamer for a notification when they go live, also while YouTube is closed." }),
       h("div", { class: "bells" }, ...bells), note);
   };
   let twLast = { q: "", r: null };
@@ -611,35 +611,35 @@
       note.textContent = r.live.length ? `Live now: ${r.live.map((x) => `${x.name || x.login} (${x.viewers} watching)`).join(", ")}` : "None of them are live right now.";
     } });
     const placed = Object.keys(c.boxes).length;
-    const forget = tagRow(row("Each streamer’s own chat", h("button", { type: "button", text: "Forget them", disabled: !placed && !c.box, onclick: async () => { c.boxes = {}; c.box = null; await save(); render(); } }),
-      placed ? `${placed} streamer${placed > 1 ? "s have" : " has"} their own place, size, text or bars (set with the chat’s handle). Forget them and every chat starts from the values above.` : "When you drag a chat or use A−, A+ or ◐ on it, that streamer keeps it. Nobody has their own yet."), ["tv.twitch.chat.boxes", "tv.twitch.chat.box"]);
-    page("Twitch", "Your Twitch streamers as a channel in YTV, in Twitch’s own player, with their chat on top.",
-      card({ title: "Twitch Live", noReset: true }, "Switching it on asks your browser to let YTV ask Twitch who’s live. YTV never asks Twitch anything about you.",
-        row("Twitch Live", sw, tw.enabled ? "On: the Twitch channel sits with your other channels." : "Off by default.", true),
+    const forget = tagRow(row("Per-streamer chat", h("button", { type: "button", text: "Reset", disabled: !placed && !c.box, onclick: async () => { c.boxes = {}; c.box = null; await save(); render(); } }),
+      placed ? `${placed} streamer${placed > 1 ? "s have" : " has"} their own chat place or size.` : "Moving or resizing a chat remembers it for that streamer."), ["tv.twitch.chat.boxes", "tv.twitch.chat.box"]);
+    page("Twitch", "Your Twitch streamers as a channel, in Twitch’s own player, with their chat.",
+      card({ title: "Twitch Live", noReset: true }, "YTV only asks Twitch who’s live, never anything about you.",
+        row("Twitch Live", sw, null, true),
         tw.enabled ? h("div", { class: "inline" }, test) : null, note),
       ...(tw.enabled ? [
-        card({ title: "Streamers", noReset: true }, "Who’s in your Twitch channel. In YTV, drag a stream in the list to change the order.",
-          twitchFinder(), h("div", { class: "list-editor" }, h("label", { text: "Your streamers" }), h("p", { text: "Their Twitch name (the end of twitch.tv/…), or paste the link." }), streamers)),
-        card({ title: "Watching streams", area: "stream" }, "Space pauses and plays a stream; a click on the picture never pauses it. M mutes. Twitch’s own play/pause and volume sit bottom left in the player.",
-          pick("Order in the list", "tv.twitch.sort", [["yours", "My order"], ["viewers", "Most viewers first"]]),
-          pick("Quality", "tv.twitch.quality", [["chunked", "Source (best)"], ["1080p60", "1080p60"], ["720p60", "720p60"], ["720p30", "720p"], ["480p30", "480p"], ["360p30", "360p"], ["auto", "Auto"], ["keep", "Whatever I picked last in the player"]],
-            "Each stream starts in this; the gear in YTV’s top bar changes it while you watch. Twitch only gives the top qualities to people logged in to twitch.tv."),
-          toggle("Show who’s offline", "Greyed out under the live ones. Click one for their past broadcasts.", "tv.twitch.offline")),
-        card({ title: "Chat", area: "chatv chatp" }, "Read only. It only connects while you can see it, so a hidden chat costs nothing.",
-          pick("O shows the chat", "tv.twitch.chat.where", [["video", "Over the video"], ["panel", "In the list panel"]], "Shift+O moves it to the other place.", true),
-          toggle("Start with the last messages", "What was said just before you tuned in, so it isn’t empty (from recent-messages.robotty.de, a public service the Chatterino app uses too).", "tv.twitch.chat.recent"),
+        card({ title: "Streamers", noReset: true }, "Drag a stream in the list to change the order.",
+          twitchFinder(), h("div", { class: "list-editor" }, h("label", { text: "Your streamers" }), h("p", { text: "Their Twitch name, or a twitch.tv link." }), streamers)),
+        card({ title: "Streams", area: "stream" }, null,
+          pick("Order", "tv.twitch.sort", [["yours", "My order"], ["viewers", "Most viewers first"]]),
+          pick("Quality", "tv.twitch.quality", [["chunked", "Source (best)"], ["1080p60", "1080p60"], ["720p60", "720p60"], ["720p30", "720p"], ["480p30", "480p"], ["360p30", "360p"], ["auto", "Auto"], ["keep", "Last one I picked"]],
+            "The best qualities need you signed in to twitch.tv."),
+          toggle("Show who’s offline", "Greyed out at the end. Click one for past broadcasts.", "tv.twitch.offline")),
+        card({ title: "Chat", area: "chatv chatp" }, "Read only, and only connected while you can see it.",
+          pick("O shows the chat", "tv.twitch.chat.where", [["video", "Over the video"], ["panel", "In the list"]], "Shift+O moves it to the other place.", true),
+          toggle("Start with recent messages", "From recent-messages.robotty.de, a public service.", "tv.twitch.chat.recent"),
           toggle("BetterTTV emotes", null, "tv.twitch.chat.bttv"), toggle("FrankerFaceZ emotes", null, "tv.twitch.chat.ffz"), toggle("7TV emotes", null, "tv.twitch.chat.stv")),
-        card({ title: "Chat over the video", area: "chatv" }, "Point at it for its handle: drag it anywhere, pull its corner to resize. These are the starting values; A−, A+ and ◐ on the handle change them for that streamer only.",
-          toggle("Show it", c.where === "video" ? "O shows and hides it too." : "Shift+O shows it (and makes O show and hide it).", "tv.twitch.chat.show"),
-          pick("Corner", "tv.twitch.chat.side", [["left", "Bottom left"], ["right", "Bottom right"]], "Where it sits until you drag it somewhere."),
+        card({ title: "Chat over the video", area: "chatv" }, "Point at it to drag or resize it.",
+          toggle("Show it", null, "tv.twitch.chat.show"),
+          pick("Corner", "tv.twitch.chat.side", [["left", "Bottom left"], ["right", "Bottom right"]]),
           number("Text size", null, { min: 6, max: 120, path: "tv.twitch.chat.size", unit: "px" }),
-          slider("Dark bars behind the text", "How dark the strip behind each message is. 0 is just the text, with a soft shadow.", { min: 0, max: 100, step: 5, path: "tv.twitch.chat.bg", fmt: pct }),
-          number("Messages in the corner", "Moved somewhere of its own, it keeps as many as fit.", { min: 1, max: 1000, path: "tv.twitch.chat.max" }),
-          number("Messages fade after", "In the corner. 0 keeps them until newer ones push them out.", { min: 0, max: 86400, path: "tv.twitch.chat.life", unit: "s" }),
+          slider("Background", "0: text only.", { min: 0, max: 100, step: 5, path: "tv.twitch.chat.bg", fmt: pct }),
+          number("Messages", null, { min: 1, max: 1000, path: "tv.twitch.chat.max" }),
+          number("Messages fade after", "0: they stay.", { min: 0, max: 86400, path: "tv.twitch.chat.life", unit: "s" }),
           forget),
-        card({ title: "Chat in the list panel", area: "chatp" }, "The list goes see-through so the stream shows; each message keeps its own dark strip. A−, A+ and ◐ in its corner change these too.",
+        card({ title: "Chat in the list", area: "chatp" }, null,
           number("Text size", null, { min: 6, max: 120, path: "tv.twitch.chat.panelSize", unit: "px" }),
-          slider("Dark bars behind the text", "0 is just the text.", { min: 0, max: 100, step: 5, path: "tv.twitch.chat.panelBg", fmt: pct })),
+          slider("Background", "0: text only.", { min: 0, max: 100, step: 5, path: "tv.twitch.chat.panelBg", fmt: pct })),
         card({ title: "Go-live notifications", noReset: true }, null, alertPicker()),
       ] : []));
   };
@@ -648,24 +648,24 @@
     const hidden = (label, list, set) => list().length ? h("div", { class: "list-editor" }, h("label", { text: label }),
       chipEditor({ label, items: list, placeholder: "Hide another creator", empty: "None.", normalize: SW.normalizeCreator,
         onAdd: async (v) => { list().push(v); await save(); }, onRemove: async (v) => { set(list().filter((x) => x !== v)); await save(); } })) : null;
-    page("Ready-made channels", "Channels YTV makes from your own YouTube account. Your Feed is always channel 0: everything you add lands there, and is then left out of every other list.",
-      card("Home", "Your YouTube home recommendations, the same videos YouTube shows you there.",
+    page("Ready-made channels", "Made from your YouTube account. Your Feed is always channel 0.",
+      card("Home", "Your YouTube recommendations.",
         toggle("Show Home", null, "tv.homeShuffle", true),
         ...(tv.homeShuffle ? [pick("Order", "tv.homeOrder", [["youtube", "As on YouTube"], ["shuffle", "Shuffled"]])] : []),
         ...(tv.homeShuffle ? filterRows(() => tv.homeSkipSeen, (v) => (tv.homeSkipSeen = v), () => tv.homeMaxAge, (v) => (tv.homeMaxAge = v)) : []),
         tv.homeShuffle ? hidden("Hidden on Home", () => tv.homeBlocked, (v) => (tv.homeBlocked = v)) : null),
-      card("Continue watching", "YouTube videos you started and didn’t finish (also ones you half watched on YouTube itself), newest first, each from where you were. Not Twitch.",
+      card("Continue watching", "Videos you started and didn’t finish, newest first, each from where you left off.",
         toggle("Show Continue watching", null, "tv.contTab", true)),
-      card("Subscriptions", "The newest videos from the channels you subscribe to, newest first.",
+      card("Subscriptions", "The newest videos from channels you subscribe to.",
         toggle("Show Subscriptions", null, "tv.subs.enabled", true),
-        ...(tv.subs.enabled ? [toggle("Skip videos I’ve already seen", "Leaves out videos YouTube shows as watched.", "tv.subs.skipSeen")] : [])),
-      card("Watch Later", "Your whole YouTube Watch Later list and nothing else: it ends where your list ends. While it plays you can take the playing video, or all watched ones, off the list.",
+        ...(tv.subs.enabled ? [toggle("Skip videos I’ve seen", null, "tv.subs.skipSeen")] : [])),
+      card("Watch Later", "Your YouTube Watch Later list.",
         toggle("Show Watch Later", null, "tv.watchLater.enabled", true),
         ...(tv.watchLater.enabled ? [
           pick("Order", "tv.watchLater.order", [["playlist", "Playlist order"], ["shuffle", "Shuffled"]]),
-          toggle("Skip videos I’ve already watched", "Off by default, so you can still see and clear them out.", "tv.watchLater.skipSeen"),
+          toggle("Skip videos I’ve watched", null, "tv.watchLater.skipSeen"),
         ] : [])),
-      card({ title: "Twitch Live", noReset: true }, "Your Twitch streamers, their chat and go-live notifications have a page of their own.",
+      card({ title: "Twitch Live", noReset: true }, null,
         h("div", { class: "inline" }, h("button", { type: "button", class: "primary", text: "Twitch settings →", onclick: () => { current = "twitch"; history.replaceState(null, "", "#twitch"); render(); } }))));
   };
 
@@ -673,68 +673,64 @@
   const renderSwiping = () => {
     const tv = cfg.tv;
     const side = row("Direction", choose(tv.swipeFlip ? "left" : "right", [["right", "Swipe right to add, left to remove"], ["left", "Swipe left to add, right to remove"]], (v) => { tv.swipeFlip = v === "left"; }, "Direction", render), null, false, ["tv.swipeFlip"]);
-    page("Swiping", "Swipe a video in the list sideways with two fingers: one way adds it to your Feed, the other removes it. Hold Shift to make it play next instead of adding it to your Feed.",
+    const nf = tv.swipeNextFirst;
+    page("Swiping", "Swipe a video in the list sideways with two fingers.",
       swipeDemo(),
       card({ title: "Swiping", area: "rows" }, null,
         side,
-        toggle("Swipe plays next, Shift adds to Feed", "Swaps the two: a plain swipe (and A) makes the video play next, holding Shift (and Shift+A) adds it to your Feed. While a stream plays, a plain swipe adds to your Feed.", "tv.swipeNextFirst"),
-        number("How far to swipe", "The width of the plus and bin. Let go past half of it and the swipe goes through.", { min: 20, max: 400, path: "tv.swipeThreshold", unit: "px" }),
-        slider("Pause in the middle", "Coming back past the middle stops the row for a moment, so you don’t go from remove straight through to add.", { min: 0, max: 3000, step: 20, path: "tv.swipeHoldMs", fmt: ms }),
-        pick("What counts as sideways", "tv.swipeAxis", [["strict", "Strict: only clearly sideways"], ["normal", "Normal"], ["loose", "Loose: any sideways movement"]],
-          "If scrolling up or down sometimes slides a video, make it stricter. If swipes don’t start, make it looser.")),
+        toggle("Swipe plays next", "Off: a swipe adds to your Feed and Shift+swipe plays next. On: the other way round.", "tv.swipeNextFirst", true),
+        number("Swipe distance", "Let go past half of it and the swipe goes through.", { min: 20, max: 400, path: "tv.swipeThreshold", unit: "px" }),
+        slider("Pause in the middle", "Stops a swipe from going straight from remove to add.", { min: 0, max: 3000, step: 20, path: "tv.swipeHoldMs", fmt: ms }),
+        pick("Sideways detection", "tv.swipeAxis", [["strict", "Strict"], ["normal", "Normal"], ["loose", "Loose"]],
+          "Stricter if scrolling slides videos; looser if swipes don’t start.")),
       card({ title: "Look", area: "rows" }, null,
         row("Add colour", (() => { const i = h("input", { type: "color", value: tv.swipeAddColor, "aria-label": "Add colour" }); i.addEventListener("change", async () => { tv.swipeAddColor = i.value; await save(); }); return i; })(), null, false, ["tv.swipeAddColor"]),
         row("Remove colour", (() => { const i = h("input", { type: "color", value: tv.swipeRmColor, "aria-label": "Remove colour" }); i.addEventListener("change", async () => { tv.swipeRmColor = i.value; await save(); }); return i; })(), null, false, ["tv.swipeRmColor"]),
-        row("Play next colour", (() => { const i = h("input", { type: "color", value: tv.swipeNextColor, "aria-label": "Play next colour" }); i.addEventListener("change", async () => { tv.swipeNextColor = i.value; await save(); }); return i; })(), "Holding Shift while you swipe to the plus: the video plays next.", false, ["tv.swipeNextColor"]),
-        number("Plus and bin size", null, { min: 8, max: 120, path: "tv.swipeIconPx", unit: "px" }),
-        slider("Remove animation", "How long a removed video takes to fade out and the rows below to move up.", { min: 0, max: 5000, step: 20, path: "tv.swipeFadeMs", fmt: ms })),
-      card({ title: "With the keyboard", noReset: true }, "Point at a video in the list, then press:",
+        row("Play next colour", (() => { const i = h("input", { type: "color", value: tv.swipeNextColor, "aria-label": "Play next colour" }); i.addEventListener("change", async () => { tv.swipeNextColor = i.value; await save(); }); return i; })(), null, false, ["tv.swipeNextColor"]),
+        number("Icon size", null, { min: 8, max: 120, path: "tv.swipeIconPx", unit: "px" }),
+        slider("Remove animation", null, { min: 0, max: 5000, step: 20, path: "tv.swipeFadeMs", fmt: ms })),
+      card({ title: "Keyboard", noReset: true }, "Point at a video in the list and press:",
         h("ul", { class: "keylist" },
-          h("li", {}, h("kbd", { text: "A" }), h("span", { text: " adds it to your Feed (like swiping to the plus)" })),
-          h("li", {}, h("kbd", { text: "Shift+A" }), h("span", { text: " makes it play next (if it’s further down the list it moves up, never twice)" })),
+          h("li", {}, h("kbd", { text: "A" }), h("span", { text: nf ? " plays it next" : " adds it to your Feed" })),
+          h("li", {}, h("kbd", { text: "Shift+A" }), h("span", { text: nf ? " adds it to your Feed" : " plays it next" })),
           h("li", {}, h("kbd", { text: "D" }), h("span", { text: " or " }), h("kbd", { text: "Delete" }), h("span", { text: " removes it" })))));
   };
   const renderLists = () => {
     const tv = cfg.tv, lkp = (k) => ({ path: "tv.look." + k });
-    page("List", "The list of what’s playing and what’s next, with a tab per channel (U opens and closes it).",
-      card({ title: "List menu", noReset: true }, null,
-        toggle("The list menu on the right", "Off: no list on the right (nor the screen edge that brings it out). Its tabs live at the top of the ∨ menu, and U opens that instead. Info, Comments and History still open on the right.", "tv.listOn")),
-      card({ title: "Showing and hiding", area: "panel" }, null,
-        pick("Hide the list when the mouse rests", "tv.listHide", [["always", "Always"], ["fullscreen", "Only in full screen"], ["never", "Never"]],
-          "It fades out with YouTube’s player controls and comes back when you move the mouse (never while you point at it). You can give this a key under Keyboard."),
-        toggle("Open it from the right edge", "Point at the screen’s right edge and the list slides out.", "tv.edgeOpen", true),
-        ...(tv.edgeOpen ? [number("Edge width", "How wide the strip along the right edge is.", { min: 1, max: 800, path: "tv.edgeWidth", unit: "px" }),
-          number("Close it again after", "Once the mouse has left the list. 0 keeps it open.", { min: 0, max: 600000, step: 100, path: "tv.edgeHideMs", unit: "ms" })] : [])),
+    page("List", "What’s playing and what’s next, with a tab per channel. U opens and closes it.",
+      card({ title: "List", area: "panel" }, null,
+        toggle("Show the list", "Off: U opens the ∨ menu instead. Info, Comments and History still open on the right.", "tv.listOn"),
+        pick("Hide when the mouse rests", "tv.listHide", [["always", "Always"], ["fullscreen", "Only in full screen"], ["never", "Never"]], "It comes back when you move the mouse."),
+        toggle("Open from the right edge", "Point at the right edge of the screen.", "tv.edgeOpen", true),
+        ...(tv.edgeOpen ? [number("Edge width", null, { min: 1, max: 800, path: "tv.edgeWidth", unit: "px" }),
+          number("Close again after", "Once the mouse leaves the list. 0: stays open.", { min: 0, max: 600000, step: 100, path: "tv.edgeHideMs", unit: "ms" })] : [])),
       card({ title: "Tabs", area: "tabs" }, null,
         toggle("Middle-click closes a tab", null, "tv.tabMiddleClose"),
-        toggle("Show an ✕ on tabs", tv.tabMiddleClose ? "Off: tabs stay compact; close them with a middle click." : "With middle-click off, this is the only way to close a tab.", "tv.tabCloseX"),
-        toggle("Show the ▾ tab", "A tab for looking at any channel without playing it. Without it, + adds channels as tabs.", "tv.chanMenu"),
-        toggle("Icons for ready-made channels", "Feed, Continue watching, Home, Subscriptions, Watch Later and Twitch Live show as an icon, to save room.", "tv.tabIcons"),
+        toggle("✕ on tabs", null, "tv.tabCloseX"),
+        toggle("▾ tab", "Look at any channel without playing it.", "tv.chanMenu"),
+        toggle("Icons for ready-made channels", "Feed, Home, Watch Later and the rest show as an icon.", "tv.tabIcons"),
         number("Height", null, { min: 12, max: 400, ...lkp("tabHeight"), unit: "px" }),
-        number("Padding", "Space at the sides of each tab.", { min: 0, max: 400, ...lkp("tabPad"), unit: "px" }),
-        number("Widest", "How wide a tab with a long name may get.", { min: 30, max: 2000, ...lkp("tabWidth"), unit: "px" }),
-        number("Text and icon size", null, { min: 25, max: 400, step: 5, ...lkp("tabScale"), unit: "%" })),
+        number("Text size", null, { min: 25, max: 400, step: 5, ...lkp("tabScale"), unit: "%" })),
+      card({ title: "Sorting and watched videos", area: "rows" }, null,
+        toggle("Sorting (S)", "On: watched videos grey out and fold under the Watched bar, and a video you pick moves up. Off: the list stays exactly as it is.", () => !cfg.tv.keepOrder, (v) => (cfg.tv.keepOrder = !v)),
+        slider("Watched from", "From here a video counts as watched.", { min: 50, max: 100, step: 5, path: "tv.fullPct", fmt: pct }),
+        toggle("Watched bar", "Watched videos fold under it, right above what’s playing. Off: they stay in view, greyed.", "tv.watchedFold"),
+        number("Watched videos kept", "Per channel. 0: they leave the list (History, H, keeps them).", { min: 0, max: 1000, path: "tv.trail" }),
+        slider("Watched videos opacity", null, { min: 0, max: 100, step: 5, path: "tv.watchedOpacity", fmt: pct }),
+        number("History keeps", null, { min: 10, max: 2000, step: 10, path: "tv.histMax", unit: "videos" })),
+      card({ title: "Loading and filter", area: "rows" }, null,
+        pick("Load more", "tv.listPull", [["off", "When I near the end"], ["easy", "Pull past the end (light)"], ["normal", "Pull past the end"], ["firm", "Pull past the end (firm)"]]),
+        pick("Filter button", "tv.filterClick", [["toggle", "Click: on / off · Shift-click: change"], ["menu", "Click: change · Shift-click: on / off"]])),
       card({ title: "Rows", area: "rows" }, null,
-        slider("More videos: how far to pull", "How far past the end of a list you pull before letting go loads more.", { min: 60, max: 600, step: 10, path: "tv.listPullPx", fmt: (n) => n + " px" }),
-        pick("More videos at the end of a list", "tv.listPull", [["easy", "Pull past the end (easily)"], ["normal", "Pull past the end"], ["firm", "Pull past the end (a real pull)"], ["off", "Load as I near the end"]], "Scroll to the end of the list (or the ∨ grid) and pull a little further: a thin ring fills, and when you let go the next videos load. A scroll that runs into the end only stops there."),
-        pick("The filter button (funnel)", "tv.filterClick", [["toggle", "Click: filter off / on · Shift-click: change it"], ["menu", "Click: change it · Shift-click: filter off / on"]], "Switched off, your filter stays as you set it; the funnel greys its number."),
-        toggle("Sorting (S)", "On: what you watched greys out, folds away under “Watched” and leaves up next, and a video you pick moves up. Off: the list stays exactly as it is, however much you switch, and where you scrolled it; what’s above the Watched bar stays greyed, and you drag videos (or the bar itself) above or below it. Turning it back on changes nothing that already happened: what’s playing moves to the top (under the Watched bar, which keeps what it had), the rest stays as it is, and from then on each video you leave goes into the Watched bar.", () => !cfg.tv.keepOrder, (v) => (cfg.tv.keepOrder = !v)),
-        slider("Fully watched from", "A video counts as fully watched from here: it drops off Continue watching, and “skip videos I’ve seen” skips it.", { min: 50, max: 100, step: 5, path: "tv.fullPct", fmt: pct }),
-        number("Watched videos kept per channel", "Right above what’s playing. 0 keeps none: they leave the list (History, H, has everything anyway).", { min: 0, max: 1000, path: "tv.trail" }),
-        slider("Watched videos: opacity", "100 shows them like any other video.", { min: 0, max: 100, step: 5, path: "tv.watchedOpacity", fmt: pct }),
-        slider("Watched videos: darker", "A dark layer over them. 0 leaves them as they are.", { min: 0, max: 100, step: 5, path: "tv.watchedDark", fmt: pct }),
-        toggle("Fold them under a “Watched” bar", "On: click the bar to show them; drag the bar (sorting on, it moves together with what’s playing). Off: they stay in view above what’s playing, greyed out.", "tv.watchedFold"),
-        number("History keeps", "The last this many videos you watched (History, H). Older ones drop off.", { min: 10, max: 2000, step: 10, path: "tv.histMax", unit: "videos" }),
         number("Picture width", null, { min: 24, max: 800, path: "tv.thumbPx", unit: "px" }),
-        number("Row height", "Never less than the picture needs.", { min: 20, max: 600, path: "tv.rowPx", unit: "px" }),
+        number("Row height", null, { min: 20, max: 600, path: "tv.rowPx", unit: "px" }),
         number("Corner rounding", null, { min: 0, max: 200, ...lkp("rowRadius"), unit: "px" }),
         number("Space between rows", null, { min: 0, max: 200, ...lkp("rowGap"), unit: "px" }),
-        slider("Row background opacity", null, { min: 0, max: 100, step: 5, ...lkp("rowAlpha"), fmt: pct }),
-        toggle("Soft fades at the list’s edges", "A little depth where there’s more to scroll.", "tv.look.edgeFade")),
+        slider("Row background", null, { min: 0, max: 100, step: 5, ...lkp("rowAlpha"), fmt: pct }),
+        toggle("Fade at the edges", "Where there’s more to scroll.", "tv.look.edgeFade")),
       rowTextCard(),
-      card({ title: "Buttons on a picture", area: "buttons" }, "They show when you point at a video’s picture.",
-        toggle("Search (magnifier)", "Search from this video: its creator, its topics, or your own words.", "tv.hbExplore"),
-        toggle("Watch Later (clock)", "Saves it to Watch Later, or takes it off if it’s there.", "tv.hbWl"),
+      card({ title: "Buttons on a picture", area: "buttons" }, null,
+        toggle("Watch Later (clock)", "Saves a video to Watch Later, or takes it off.", "tv.hbWl"),
         number("Size", null, { min: 8, max: 120, path: "tv.hbSize", unit: "px" })));
   };
   // whole looks in one click; everything stays adjustable below
@@ -751,7 +747,7 @@
         await save(); render();
       } }, mini, h("b", { text: name }), h("span", { class: "muted small", text: t.d }));
     });
-    return card({ title: "Themes", area: "top panel rows tabs", noReset: true }, "A whole look in one click: colours, the top bar and the list. Text sizes and icons stay as they are; fine-tune anything below.", h("div", { class: "lk-tiles" }, ...tiles));
+    return card({ title: "Themes", area: "top panel rows tabs", noReset: true }, "A whole look in one click. Fine-tune it below.", h("div", { class: "lk-tiles" }, ...tiles));
   };
   const lk = (k) => ({ path: "tv.look." + k });
   const renderTopBar = () => {
@@ -760,45 +756,42 @@
     inp.addEventListener("change", async () => { L.topBg = inp.value; await save(); });
     page("Top bar", "The title and buttons over the top of the video.",
       card({ title: "Style", area: "top" }, null,
-        pick("Style", "tv.topStyle", [["fade", "Soft fade into the video"], ["card", "Rounded blocks"], ["bar", "One solid bar"]]),
-        number("Corner rounding", "For rounded blocks, and the solid bar’s lower corners.", { min: 0, max: 400, ...lk("topRadius"), unit: "px" }),
-        number("Padding above and below", null, { min: 0, max: 400, ...lk("topPadY"), unit: "px" }),
-        number("Padding at the sides", null, { min: 0, max: 400, ...lk("topPadX"), unit: "px" }),
-        row("Background colour", h("span", { class: "inline" }, inp, h("button", { type: "button", text: "Same as the panel", onclick: async () => { L.topBg = ""; inp.value = tv.theme.panel; await save(); } })), null, false, ["tv.look.topBg"]),
-        slider("Background opacity", "How solid the background is (with the soft fade: how dark it is at the very top).", { min: 0, max: 100, step: 5, ...lk("topAlpha"), fmt: pct }),
-        slider("Background blur", "Blurs the video behind it.", { min: 0, max: 200, step: 2, ...lk("topBlur"), fmt: (n) => (n ? n + " px" : "Off") })),
-      card({ title: "Soft fade", area: "top" }, "For the “soft fade into the video” style: the dark gradient and the blur behind the title, easing out into the picture.",
-        number("How far down it reaches", "Below the title and buttons. 0 stops right under them.", { min: 0, max: 600, ...lk("topFade"), unit: "px" }),
-        slider("How far down the blur goes", "Part of the fade that’s blurred. Lower keeps the blur close to the title and lets the rest be just a gradient.", { min: 0, max: 100, step: 5, ...lk("topBlurReach"), fmt: pct })),
-      card({ title: "Text", area: "top" }, "What the top bar says, on which line and in what order. Bits on the same line are joined with ·; the channel shows as a small label.",
+        pick("Style", "tv.topStyle", [["fade", "Soft fade"], ["card", "Rounded blocks"], ["bar", "Solid bar"]]),
+        number("Corner rounding", null, { min: 0, max: 400, ...lk("topRadius"), unit: "px" }),
+        number("Padding top and bottom", null, { min: 0, max: 400, ...lk("topPadY"), unit: "px" }),
+        number("Padding left and right", null, { min: 0, max: 400, ...lk("topPadX"), unit: "px" }),
+        row("Background colour", h("span", { class: "inline" }, inp, h("button", { type: "button", text: "Same as the list", onclick: async () => { L.topBg = ""; inp.value = tv.theme.panel; await save(); } })), null, false, ["tv.look.topBg"]),
+        slider("Background", null, { min: 0, max: 100, step: 5, ...lk("topAlpha"), fmt: pct }),
+        slider("Blur", null, { min: 0, max: 200, step: 2, ...lk("topBlur"), fmt: (n) => (n ? n + " px" : "Off") }),
+        ...(tv.topStyle === "fade" ? [number("Fade length", "How far the soft fade reaches below the text.", { min: 0, max: 600, ...lk("topFade"), unit: "px" })] : [])),
+      card({ title: "Text", area: "top" }, "What the top bar shows, on which line and in what order.",
         fieldEditor("topFields", SW.TOP_FIELDS),
         number("Title size", null, { min: 6, max: 120, ...lk("topTitlePx"), unit: "px" }),
-        number("Size of the rest", "Date, creator, length and channel.", { min: 6, max: 120, ...lk("topMetaPx"), unit: "px" }),
-        toggle("Small icons", "A person before the creator, a calendar before the date, a clock before the length.", "tv.topIcons")));
+        number("Other text size", null, { min: 6, max: 120, ...lk("topMetaPx"), unit: "px" }),
+        toggle("Icons", "Before the creator, date and length.", "tv.topIcons")));
   };
   const renderLook = () => {
-    page("Colours & style", "Themes, colours, the list panel, overall size and animations.",
+    page("Colours & style", null,
       themesCard(),
       card({ title: "Colours", area: "top panel rows tabs" }, null, themeRow()),
-      card({ title: "List panel", area: "panel" }, null,
-        slider("Background opacity", "Lower lets the video show through.", { min: 0, max: 100, step: 5, ...lk("panelAlpha"), fmt: pct }),
-        slider("Background blur", null, { min: 0, max: 200, step: 2, ...lk("panelBlur"), fmt: (n) => (n ? n + " px" : "Off") }),
+      card({ title: "List background", area: "panel" }, null,
+        slider("Background", "Lower lets the video show through.", { min: 0, max: 100, step: 5, ...lk("panelAlpha"), fmt: pct }),
+        slider("Blur", null, { min: 0, max: 200, step: 2, ...lk("panelBlur"), fmt: (n) => (n ? n + " px" : "Off") }),
         number("Corner rounding", null, { min: 0, max: 400, ...lk("panelRadius"), unit: "px" }),
-        number("Space around it", "Floats the panel off the screen’s edges.", { min: 0, max: 800, ...lk("panelGap"), unit: "px" })),
-      card({ title: "Size", area: "top panel rows tabs" }, null,
-        number("Everything’s size", "Scales all YTV draws: the top bar, the list, the overview.", { min: 25, max: 400, step: 5, path: "tv.uiScale", unit: "%" })),
-      card("Effects", null,
-        toggle("Animations", "Rows glide, panels slide, swipes fade.", "tv.motion"),
-        toggle("Follow my computer’s Reduce motion", "When your computer asks for less motion, YTV turns its animations off too.", "tv.motionSystem")));
+        number("Space around it", null, { min: 0, max: 800, ...lk("panelGap"), unit: "px" })),
+      card({ title: "Size and motion", area: "top panel rows tabs" }, null,
+        number("Size", "Scales everything YTV shows.", { min: 25, max: 400, step: 5, path: "tv.uiScale", unit: "%" }),
+        toggle("Animations", null, "tv.motion"),
+        toggle("Follow Reduce motion", "No animations when your computer asks for less motion.", "tv.motionSystem")));
   };
   // The channel overview (G): which layout
-  const GUIDE_LAYOUTS = [["posters", "Poster wall", "Small cards: a picture of what’s on and a strip of what’s next."], ["cards", "Classic cards", "Bigger cards with a picture of what’s on now and its title, like the first Hush TV."],
-    ["guide", "TV guide", "One line per channel: what’s on now, then the next three side by side."], ["wall", "Big pictures", "Large pictures with the title on top. Fewer channels at a time, more to look at."]];
+  const GUIDE_LAYOUTS = [["posters", "Poster wall", "Small cards with what’s next."], ["cards", "Cards", "Bigger cards with what’s on."],
+    ["guide", "TV guide", "One line per channel."], ["wall", "Big pictures", "Large pictures, fewer at a time."]];
   const renderOverview = () => {
     const tv = cfg.tv;
     const tiles = GUIDE_LAYOUTS.map(([id, name, d]) => h("button", { type: "button", class: "lk-tile gl-tile" + (tv.guideLayout === id ? " on" : ""), "aria-pressed": String(tv.guideLayout === id), onclick: async () => { tv.guideLayout = id; await save(); render(); } },
       h("span", { class: "gl-mini gl-" + id }, ...[0, 1, 2, 3, 4, 5].map(() => h("span", { class: "gm" }, h("i"), h("b"), h("s")))), h("b", { text: name }), h("span", { class: "muted small", text: d })));
-    page("Channel overview", "All your channels at a glance: press G in YTV. Click one to watch it, drag to reorder, double-click a name to rename it.",
+    page("Channel overview", "All your channels at a glance (G). Drag to reorder, double-click a name to rename.",
       card({ title: "Layout", area: "guide" }, null, tagRow(h("div", { class: "lk-tiles gl-tiles" }, ...tiles), ["tv.guideLayout"])));
   };
   // Row text: which bits a row shows, on which line, in what order, and how big.
@@ -818,66 +811,61 @@
     draw();
     return tagRow(list, ["tv." + key]);
   };
-  const rowTextCard = () => card({ title: "Row text", area: "rows" }, "What each video in the list says, on which line and in what order. Bits on the same line are joined with ·.",
+  const rowTextCard = () => card({ title: "Row text", area: "rows" }, "What each video shows, on which line and in what order.",
     fieldEditor("rowFields", SW.ROW_FIELDS),
     number("Title size", null, { min: 6, max: 96, path: "tv.textPx", unit: "px" }),
-    number("Size of the rest", "Creator, date and length.", { min: 6, max: 96, path: "tv.metaPx", unit: "px" }),
-    number("Lines for the first line", "How far it may wrap before it’s cut off with …", { min: 1, max: 12, path: "tv.titleLines" }),
-    toggle("Short dates", "“3w” instead of “3 weeks ago”, “2d” instead of “2 days ago”.", "tv.shortAge"),
-    toggle("Small icons", "A person before the creator, a calendar before the date, a clock before the length.", "tv.rowIcons"));
+    number("Other text size", null, { min: 6, max: 96, path: "tv.metaPx", unit: "px" }),
+    number("Title lines", "Longer titles are cut off with …", { min: 1, max: 12, path: "tv.titleLines" }),
+    toggle("Short dates", "“3w” instead of “3 weeks ago”.", "tv.shortAge"),
+    toggle("Icons", "Before the creator, date and length.", "tv.rowIcons"));
   const renderPlayback = () => {
-    page("Playing", "What plays, and the controls while it does. To filter the list itself (length, upload date, watched, subscribed), use the funnel at the top of the list.",
+    page("Playing", "What plays. The filter button above the list filters the list itself.",
       card("What plays", null,
-        toggle("Skip music videos", "Leaves out official music videos, lyric videos, “– Topic” and VEVO channels, and anything YouTube labels as Music. Never on Home, Watched or Watch Later: those show what YouTube shows.", "tv.skipMusic"),
-        toggle("Mix up creators", "Never the same creator twice in a row, as long as there’s someone else to play.", "tv.spreadCreators"),
-        toggle("Watched ones last", "Videos you already mostly watched (here or on youtube.com) go to the end of a channel instead of coming up again. Not on Home, Watch Later or Watched.", "tv.sinkWatched"),
-        toggle("Learn from what you finish", "When you watch a video to the end, a couple of the videos YouTube itself suggests after it join the list, if they fit the channel (its creators or topics). Not on Home (that’s YouTube’s already), Feed or Watch Later.", "tv.ytRelated")),
+        toggle("Skip music videos", "Not on Home, Watch Later or Watched.", "tv.skipMusic"),
+        toggle("Mix up creators", "Never the same creator twice in a row.", "tv.spreadCreators"),
+        toggle("Watched videos last", "Videos you mostly watched go to the end of a channel.", "tv.sinkWatched"),
+        toggle("Learn from what you finish", "After a video you watch to the end, a few of YouTube’s suggestions for it join the list, if they fit the channel.", "tv.ytRelated")),
       card("Picture", null,
         pick("Video quality", "tv.videoQuality", [["premium", "1080p Premium"], ["hd1080", "1080p"], ["hd720", "720p"], ["auto", "Auto"]],
-          "1080p Premium is YouTube’s higher-bitrate 1080p (with YouTube Premium); where a video doesn’t have it, it plays in 1080p. A video without 1080p plays in the best it has."),
-        toggle("Skip automatically", "Clicks YouTube’s own Skip button on ads, and Premium’s Jump ahead, the moment they show.", "tv.autoSkip")),
+          "1080p Premium needs YouTube Premium; otherwise it plays 1080p."),
+        toggle("Skip ads and sponsors", "Presses YouTube’s Skip and Premium’s Jump ahead for you.", "tv.autoSkip")),
       card("Controls", null,
-        toggle("Buttons above the player bar", "Prev, Next, list, info and comments. They always show when keyboard shortcuts are off.", "tv.showBar")));
+        toggle("Buttons above the player bar", "Previous, Next, list, Info and Comments.", "tv.showBar")));
   };
   const renderGrid = () => {
-    page("∨ menu", "The open list as a big grid of videos over the video, in and out of full screen: V, a scroll down on the video, or the ∨ at the bottom.",
-      card({ title: "∨ menu", noReset: true }, null,
-        toggle("The ∨ menu", "Off: V, the ∨ at the bottom and a scroll on the video do nothing.", "tv.gridOn"),
-        toggle("Tabs at the top", "The list’s tabs, as chips: pick one to see that list. They follow the list menu (and it follows them).", "tv.gridTabs")),
-      card({ title: "Opening and closing" }, null,
-        pick("Scroll opens it", "tv.gridScroll", [["easy", "Easily"], ["normal", "Normal"], ["firm", "Firm (a real pull)"], ["off", "Never (V and the ∨ only)"]], "Scroll down on the video and it follows you; far enough (or with a quick swipe) it snaps open. Scroll up at its top to pull it away the same way. A scroll that runs into its top only stops there; the next swipe pulls."),
-        slider("How far to pull", "How far it has to come up before it snaps open (and down before it closes). A quick swipe does it sooner.", { min: 10, max: 90, step: 5, path: "tv.gridPullPct", fmt: (n) => n + "% of the screen" }),
-        slider("Snap time", "How quickly it snaps open or closed.", { min: 0, max: 800, step: 20, path: "tv.gridSnapMs", fmt: (n) => n + " ms" }),
-        slider("Close at the top", "Rest the pointer this close to the top of the screen (it glows red), or leave the screen over the top, and it closes. Never opens it. 0: off.", { min: 0, max: 40, step: 2, path: "tv.gridTopZone", fmt: (n) => (n ? n + "% of the screen" : "off") })),
-      card({ title: "Look" }, null,
-        slider("Videos per row", "More per row makes them smaller, so you see more at once.", { min: 2, max: 8, step: 1, path: "tv.fsGridCols", fmt: (n) => String(n) })));
+    page("∨ menu", "The open list as a grid over the video: V, a scroll down on the video, or the ∨ at the bottom.",
+      card({ title: "∨ menu" }, null,
+        toggle("∨ menu", null, "tv.gridOn"),
+        toggle("Tabs at the top", null, "tv.gridTabs"),
+        pick("Scroll to open", "tv.gridScroll", [["easy", "Light"], ["normal", "Normal"], ["firm", "Firm"], ["off", "Off (V and ∨ only)"]]),
+        slider("Close at the top", "Rest the mouse at the top of the screen to close it. 0: off.", { min: 0, max: 40, step: 2, path: "tv.gridTopZone", fmt: (n) => (n ? n + "%" : "Off") }),
+        slider("Videos per row", null, { min: 2, max: 8, step: 1, path: "tv.fsGridCols", fmt: (n) => String(n) })));
   };
   const fixedKey = (k, what) => h("li", {}, h("kbd", { text: k }), h("span", { text: " " + what }));
-  const renderKeys = () => page("Keyboard", "Keys while YTV is on.", keysCard(),
-    card({ title: "Always the same", noReset: true }, "These can’t be changed.",
+  const renderKeys = () => page("Keyboard", null, keysCard(),
+    card({ title: "Fixed keys", noReset: true }, null,
       h("ul", { class: "keylist" },
-        fixedKey("A", "adds the video under the pointer to your Feed"), fixedKey("Shift+A", "makes the video under the pointer play next"),
-        fixedKey("D / Delete", "removes the video under the pointer"), fixedKey("Shift+N / Shift+P", "next / previous video"),
+        fixedKey("A", cfg.tv.swipeNextFirst ? "plays the video under the mouse next" : "adds the video under the mouse to your Feed"), fixedKey("Shift+A", cfg.tv.swipeNextFirst ? "adds the video under the mouse to your Feed" : "plays the video under the mouse next"),
+        fixedKey("D / Delete", "removes the video under the mouse"), fixedKey("Shift+N / Shift+P", "next / previous video"),
         fixedKey("Shift + the tab keys", "go to that tab and play its first video"), fixedKey("Shift+E", "searches YouTube"),
         fixedKey("Shift+[ / Shift+]", "back and forth through everything you watched"), fixedKey("Shift+O", "moves a stream’s chat between the video and the list"),
-        fixedKey("Cmd/Ctrl+Z", "undoes the last change in the list"), fixedKey("Esc", "closes what’s open (it never turns YTV off)"))));
+        fixedKey("Cmd/Ctrl+Z", "undoes the last change in the list"), fixedKey("Esc", "closes what’s open"))));
 
   // ------------------------------------------------------------ App
   const renderYouTube = () => {
     const tv = cfg.tv;
     page("On YouTube", "Where you can start YTV.",
       card(null, null,
-        toggle("Button in YouTube’s top bar", "Next to your channel icon — opens a menu with your channels.", () => tv.headerButton, (v) => (tv.headerButton = v)),
-        toggle("Button in YouTube’s sidebar", "You can also start YTV from its toolbar menu.", () => tv.sidebarButton, (v) => (tv.sidebarButton = v))),
-      card("YTV as an app", "Give YTV its own window and an icon in your Dock: install YouTube as an app, and YTV starts by itself whenever you open it.",
-        toggle("Start YTV when YouTube opens as an app", null, () => tv.appStart, (v) => (tv.appStart = v)),
+        toggle("Button in YouTube’s top bar", null, () => tv.headerButton, (v) => (tv.headerButton = v)),
+        toggle("Button in YouTube’s sidebar", null, () => tv.sidebarButton, (v) => (tv.sidebarButton = v))),
+      card("YTV as an app", "Its own window and a Dock icon: install YouTube as an app and YTV starts by itself.",
+        toggle("Start YTV in the YouTube app", null, () => tv.appStart, (v) => (tv.appStart = v)),
         h("div", { class: "inline" },
-          h("button", { type: "button", text: "Set up the app", title: "Opens YouTube with YTV's app link and shows how to install it", onclick: () => chrome.tabs.create({ url: "https://www.youtube.com/?ytvapp=setup" }) })),
+          h("button", { type: "button", text: "Set up the app", onclick: () => chrome.tabs.create({ url: "https://www.youtube.com/?ytvapp=setup" }) })),
         h("ol", { class: "steps" },
-          h("li", { text: "Click “Set up the app”: YouTube opens with YTV’s app link (it ends in ?ytvapp) and a note on what to click." }),
-          h("li", { text: "Chrome: menu ⋮ → Cast, save and share → Install page as app… Brave: menu ☰ → Save and share → Install page as app…, or More tools → Create shortcut… with “Open as window” ticked." }),
-          h("li", { text: "It now sits in your Applications folder and Launchpad; drag it to the Dock. YTV starts by itself every time, with all your settings. (Already made one that doesn’t start YTV, e.g. in Brave? Remove it and make it again this way.)" }),
-          h("li", { text: "The link https://www.youtube.com/?ytvapp also works as a bookmark: it always opens straight into YTV." }))));
+          h("li", { text: "Click “Set up the app”." }),
+          h("li", { text: "Chrome: ⋮ → Cast, save and share → Install page as app. Brave: ☰ → Save and share → Install page as app." }),
+          h("li", { text: "Drag the new app to your Dock." }))));
   };
   // ------------------------------------------------------------ Health check
   // Tries every way YTV reads YouTube, from an open YouTube tab, and writes a report you can send for a fix.
@@ -895,7 +883,7 @@
   };
   const renderHealth = () => {
     const out = h("div", { class: "health" });
-    const status = h("p", { class: "muted", text: "Takes a few seconds. Uses an open YouTube tab, the way YTV itself reads YouTube. Nothing on your account changes." });
+    const status = h("p", { class: "muted", text: "Needs an open YouTube tab. Nothing on your account changes." });
     const actions = h("div", { class: "inline hidden" });
     const show = (r) => {
       lastReport = r;
@@ -925,9 +913,9 @@
       a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     } });
     actions.append(copy, saveB);
-    page("Health check", "When something in YTV stops working, YouTube has usually changed its pages. This finds out what, and makes a report to send so it can be patched.",
+    page("Health check", "When something stops working, YouTube has usually changed. This finds out what.",
       card(null, null, h("div", { class: "inline" }, go), status, out, actions,
-        h("p", { class: "muted small", text: "The report has YTV’s version, your browser, each check’s result and recent problems YTV ran into, plus your settings — but not your channels’ topics or creators." })));
+        h("p", { class: "muted small", text: "The report has YTV’s version, your browser, the results and your settings, but not your channels’ topics or creators." })));
     if (lastReport) show(lastReport);
   };
   const renderBackup = () => {
@@ -949,7 +937,7 @@
       }
       file.value = "";
     });
-    page("Backup", "YTV keeps everything in this browser. Carry your channels and settings to another computer in a small file.",
+    page("Backup", "Everything is kept in this browser. Move it to another computer with a file.",
       card("Export and import", null,
         h("div", { class: "inline" },
           h("button", { type: "button", class: "primary", text: "Export settings", onclick: () => {
@@ -960,7 +948,7 @@
           } }),
           h("button", { type: "button", text: "Import settings…", onclick: () => file.click() }), file),
         status),
-      card("Reset", "Turns every setting back to its default and removes your channels.",
+      card("Reset", "Every setting back to default, and your channels removed.",
         h("div", { class: "inline" }, h("button", { type: "button", class: "danger", text: "Reset everything", onclick: async () => {
           if (!confirm("Reset all YTV settings and channels?")) return;
           cfg = SW.sanitizeConfig({}); await save(); render();
@@ -970,12 +958,11 @@
     page("About & privacy", null,
       h("div", { class: "card prose" },
         h("h2", { text: `YTV ${SW.VERSION}` }),
-        h("p", { text: "Watch YouTube like TV: channels that keep playing, no scrolling and no choosing." }),
+        h("p", { text: "Watch YouTube like TV: channels that keep playing." }),
         h("ul", {},
-          h("li", { text: "It only talks to youtube.com, to read the same pages and lists you’d see there yourself." }),
+          h("li", { text: "Talks only to youtube.com, plus Twitch and its chat and emote services if you switch Twitch Live on." }),
           h("li", { text: "No accounts, analytics, ads or tracking." }),
-          h("li", { text: "Channels and settings are stored only in this browser." })),
-        h("p", { class: "muted", text: "Made to go with Hush for YouTube, which tidies YouTube itself. Each works on its own." })));
+          h("li", { text: "Everything stays in this browser." }))));
 
   // ------------------------------------------------------------ navigation
   const SECTIONS = [

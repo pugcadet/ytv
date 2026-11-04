@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.37.0";
+  SW.VERSION = "1.38.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -178,10 +178,10 @@
       gridOn: tv.gridOn !== false, // the ∨ menu (the open list as a grid over the video): V, the ∨, a scroll on the video
       gridTabs: tv.gridTabs !== false, // the list's tabs at the top of the ∨ menu
       listOn: tv.listOn !== false, // the list menu on the right (off: its tabs live in the ∨ menu, and U opens that)
-      gridSnapMs: tv.prefsV >= 9 ? clampInt(tv.gridSnapMs, 0, 800, 220) : 220, // how quickly the ∨ grid snaps open / closed (a touch slower since 1.32.2)
-      gridPullPct: tv.prefsV >= 9 ? clampInt(tv.gridPullPct, 10, 90, 10) : 10, // how far (of the screen) a pull has to bring the ∨ grid before it snaps
+      gridSnapMs: 220, // how quickly the ∨ grid snaps open / closed (a touch slower since 1.32.2)
+      gridPullPct: 10, // how far (of the screen) a pull has to bring the ∨ grid before it snaps
       gridTopZone: tv.prefsV >= 9 ? clampInt(tv.gridTopZone, 0, 40, 4) : 4, // the ∨ grid closes when the pointer rests at the top this much of the screen (0: off)
-      listPullPx: clampInt(tv.listPullPx, 60, 600, 240), // how far to pull past the end of a list for more
+      listPullPx: 240, // how far to pull past the end of a list for more
       listPull: ["off", "easy", "normal", "firm"].includes(tv.listPull) ? tv.listPull : "normal", // pull past the end of a list for more videos (off: they load as you near the end) // a scroll on the video opens the ∨ grid (and at its top closes it): how deliberate it has to be
       fsGridCols: clampInt(tv.fsGridCols, 2, 8, 3), // YouTube's own grid of videos in full screen: per row (3 is YouTube's)
       swipeNextFirst: tv.swipeNextFirst === true, // swapped: a plain swipe (and A) plays next, with Shift it goes to your Feed
@@ -191,7 +191,7 @@
       fullPct: clampInt(tv.fullPct, 50, 100, 90), // a video counts as fully watched from here (%)
       keepOrder: tv.keepOrder === true,
       watchedOpacity: clampInt(tv.watchedOpacity, 0, 100, 50), // how watched videos look in the list: 100 and 0 darkness = as any other
-      watchedDark: clampInt(tv.watchedDark, 0, 100, 0),
+      watchedDark: 0, // (no longer a setting: the opacity is enough)
       watchedFold: tv.watchedFold !== false, // watched videos fold away under a "Watched" bar (off: they stay in view, greyed out)
       histMax: clampInt(tv.histMax, 10, 2000, 200), // how many videos History keeps // sorting off (S): the list stays exactly as it is (no greying, no Watched bar, nothing moves)
       swipeRmColor: typeof tv.swipeRmColor === "string" && /^#[0-9a-f]{6}$/i.test(tv.swipeRmColor) ? tv.swipeRmColor.toLowerCase() : "#d93a3f",
@@ -213,7 +213,6 @@
       autoSkip: tv.autoSkip !== false, // click YouTube's own Skip (ads) and Jump ahead (Premium) buttons as soon as they show
       videoQuality: ["premium", "hd1080", "hd720", "auto"].includes(tv.videoQuality) ? tv.videoQuality : "premium", // premium: 1080p Premium (higher bitrate) where it plays, else 1080p
       hbSize: clampInt(tv.hbSize, 8, 120, 20), // the explore / Watch Later buttons on a picture
-      hbExplore: typeof tv.hbExplore === "boolean" ? tv.hbExplore : true,
       hbWl: typeof tv.hbWl === "boolean" ? tv.hbWl : true,
       // when the list hides along with YouTube's controls as the mouse rests: always, only in full screen, or never
       listHide: ["always", "fullscreen", "never"].includes(tv.listHide) ? tv.listHide : "never",
@@ -279,13 +278,13 @@
           // padding, up and down / at the sides (one number before 1.14)
           topPadY: clampInt(l.topPadY ?? l.topPad, 0, 400, 12), topPadX: clampInt(l.topPadX ?? (Number.isFinite(Number(l.topPad)) ? Math.round(Number(l.topPad) * 1.5) : undefined), 0, 400, 20),
           // the soft fade: how far below the bar it reaches, how far down the blur goes (part of the fade), how dark it starts
-          topFade: clampInt(l.topFade, 0, 600, 40), topBlurReach: clampInt(l.topBlurReach, 0, 100, 100), topBg: hex(l.topBg, ""), topAlpha: clampInt(l.topAlpha, 0, 100, 60), topBlur: clampInt(l.topBlur, 0, 200, 20),
+          topFade: clampInt(l.topFade, 0, 600, 40), topBlurReach: 100, topBg: hex(l.topBg, ""), topAlpha: clampInt(l.topAlpha, 0, 100, 60), topBlur: clampInt(l.topBlur, 0, 200, 20),
           topTitlePx: clampInt(l.topTitlePx, 6, 120, 20), topMetaPx: clampInt(l.topMetaPx, 6, 120, 13),
           panelAlpha: clampInt(l.panelAlpha, 0, 100, glassOff ? 100 : 70), panelBlur: clampInt(l.panelBlur, 0, 200, glassOff ? 0 : 12),
           panelRadius: clampInt(l.panelRadius, 0, 400, 0), panelGap: clampInt(l.panelGap, 0, 800, 0),
           rowRadius: clampInt(l.rowRadius, 0, 200, 7), rowGap: clampInt(l.rowGap, 0, 200, 1), rowAlpha: clampInt(l.rowAlpha, 0, 100, 90),
           edgeFade: typeof l.edgeFade === "boolean" ? l.edgeFade : true,
-          tabHeight: clampInt(l.tabHeight, 12, 400, 50), tabPad: clampInt(l.tabPad, 0, 400, 12), tabWidth: clampInt(l.tabWidth, 30, 2000, 150), tabScale: clampInt(l.tabScale, 25, 400, 120),
+          tabHeight: clampInt(l.tabHeight, 12, 400, 50), tabPad: 12, tabWidth: 150, tabScale: clampInt(l.tabScale, 25, 400, 120),
         };
       })(),
       prefsV: 9,

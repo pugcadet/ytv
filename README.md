@@ -68,7 +68,7 @@ YTV used to be Hush TV, inside Hush for YouTube. It's now its own extension; Hus
 - **Opens where you left it:** turn YTV off (or close the tab) and on again and it carries on with the same video, from the same moment, with the same list after it and the same panel open, straight away.
 - **Carries on where you left off:** go back to a video and it continues from where you were, also after watching a stream in between, after a reload, or when you pick it in another channel's tab.
 - **Channel overview (G):** four layouts to pick in settings: a small poster wall (what's on now as a picture, what's next as a strip), classic cards (a picture of what's on now and its title), a TV guide (one line per channel with the next three side by side) or big pictures. Each card has a **+** to pin a channel as a tab.
-- Drag any video to reorder it; Delete (or D) removes the one under the pointer (on what's playing: it's removed and the next one plays), A adds it to your Feed, Shift+A plays it next; hover a picture to explore it or save it to Watch Later.
+- Drag any video to reorder it; Delete (or D) removes the one under the pointer (on what's playing: it's removed and the next one plays), A adds it to your Feed, Shift+A plays it next; point at a picture to save it to Watch Later (right-click for more, like Explore).
 
 ## Settings
 

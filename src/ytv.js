@@ -964,7 +964,7 @@
     .thumb{position:relative;flex:none;width:min(var(--tw),55%);aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:#111}
     .thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .3s ease}
     /* while a picture loads: a soft sweep over its placeholder (only with animations on), then it fades in */
-    .motion .sw .thumb:has(> img:not(.ok):not(.bad):not([loading=lazy]:not([src])))::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%) 0 0/250% 100%;animation:tshim 1.3s ease-in-out infinite;pointer-events:none}
+    .motion .sw .thumb:has(> img:not(.ok):not(.bad):not([loading=lazy]:not([src])))::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%) 0 0/250% 100%;animation:tshim 1.3s ease-in-out 4;pointer-events:none}
     @keyframes tshim{from{background-position:120% 0}to{background-position:-120% 0}}
     .thumb img.ok{opacity:1}
     .thumb .pg{position:absolute;left:0;bottom:0;height:3px;background:#f03}
@@ -1839,7 +1839,6 @@
     else img.src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
     if (img.complete && img.naturalWidth) img.classList.add("ok");
     box.append(img);
-    if (o.explore && cfg.tv.hbExplore) box.append(iconBtn("search", "Search from this video (a creator or topic)", o.explore, "hb exb yts")); // (always there on a YouTube video)
     if (o.info) box.append(iconBtn("info", "About this stream, and past broadcasts", o.info, "hb exb")); // Twitch
     if (o.wl && cfg.tv.hbWl) {
       const on = inWl(v);
@@ -3627,7 +3626,7 @@
       const go = btn("", "Play this video", () => { const x = state.infoV, open = state.infoOpen; state.infoV = null; state.infoOpen = null; if (open) open(); else playHere(x); }, "ipl");
       const ic = el("span", "mic"); ic.append(icon("play")); go.append(ic, el("span", null, "Play now")); box.append(go);
     }
-    ownerOf(v.id).then((o) => { if (o && o.handle && !v.creator) state.ownerHandle[v.id] = o.handle; if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
+    ownerOf(v.id).then((o) => { if (o && o.handle && !v.creator) { state.ownerHandle[v.id] = o.handle; const ks = Object.keys(state.ownerHandle); if (ks.length > 200) delete state.ownerHandle[ks[0]]; } if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
     // a long description starts folded to a few lines, so the creator's videos below are in view
     const body = el("div", "dtx clamp", state.desc[v.id] || "Loading description…");
     // (it opens and folds smoothly: its height glides)
@@ -4260,11 +4259,8 @@
     gtop.append(btn("＋ Add links to Watch Later", "Paste video links (one per line) to add them to your Watch Later list", () => openBulkAdd()),
       btn("⚙ Settings", "Open YTV settings", () => openSettings("")),
       btn("✕ Close", "Close the overview", () => (!state.colId ? closeTv() : showGuide(false))));
-    const help = cfg.tv.keysOn
-      ? SW.TV_ACTIONS.filter(([id]) => keyOf(id)).map(([id, label]) => `${keyName(id)} ${label.toLowerCase()}`).join(" · ") + " · Shift with the tab keys: go there and play · Shift+E search YouTube · Shift+[ and Shift+] back and forth through everything you watched · Cmd+Z undo · Esc close"
-      : "Keyboard shortcuts are off (turn them on in settings). Esc closes / turns TV off.";
     ui.guide.className = "guide gl-" + (cfg.tv.guideLayout || "posters"); // the layout you picked in settings
-    ui.guide.replaceChildren(gtop, el("h2", null, "Channels"), el("p", null, "Click a channel to watch it. Drag channels to reorder them — the numbers follow. Double-click a name to rename it."), list, el("div", "keys", help));
+    ui.guide.replaceChildren(gtop, el("h2", null, "Channels"), el("p", null, "Click to watch · drag to reorder · double-click a name to rename"), list);
     (async () => {
       const missing = [];
       for (const { card, c } of cards) { const items = await previewOf(c, false); if (my !== guideToken) return; fillCard(card, c, items); if (items === undefined) missing.push({ card, c }); }
@@ -5759,7 +5755,7 @@
     const col = currentCol();
     if (!cfg || !cfg.tv.ytRelated || !v || v.tw || learnt.has(v.id) || state.stay || !col || col.homeFeed || col.feed || col.watchLater || col.watchedChip || col.cont || col.subs || col.twitch) return;
     if (!(col.subjects || []).length && !(col.channels || []).length) return;
-    learnt.add(v.id);
+    learnt.add(v.id); if (learnt.size > 500) learnt.delete(learnt.values().next().value);
     let rel = []; try { rel = await similarTo(v.id); } catch { return; }
     const topicW = new Set((col.subjects || []).flatMap(words)), mine = new Set((col.channels || []).map(creatorKey));
     const fits = (x) => mine.has(creatorKey(x.creator)) || mine.has(creatorKey(x.channel)) || words(x.title).some((w) => topicW.has(w));
