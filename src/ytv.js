@@ -1634,7 +1634,7 @@
     scrim.addEventListener("click", (e) => { e.stopPropagation(); closeExplore(); closePop(); });
     const vgB = el("button", "vgbtn"); vgB.type = "button"; vgB.title = "More videos (V)"; vgB.setAttribute("aria-label", "More videos"); vgB.append(icon("chevron"));
     vgB.addEventListener("click", (e) => { e.stopPropagation(); openGrid(); });
-    root.append(vgB);
+    root.append(vgB); root._vgB = vgB;
     root.append(curtain, top, bar, panel, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
     shadow.append(style, root);
     document.documentElement.appendChild(host);
@@ -1707,10 +1707,21 @@
   document.addEventListener("mousemove", realMove, { capture: true, passive: true });
   for (const t of ["keydown", "pointerdown", "wheel", "touchstart"]) document.addEventListener(t, realAct, { capture: true, passive: true });
   const watchControls = () => {
+    // the ∨ sits halfway between the bottom of the screen and YouTube's progress bar (whatever size YouTube draws
+    // its controls at: normal, theater or full screen)
+    let vgLast = -1;
+    const placeVg = (mp) => {
+      const b = ui.root._vgB; if (!b) return;
+      let y = 3;
+      const pb = mp && !ui.root.classList.contains("on-twitch") && mp.querySelector(".ytp-progress-bar-container");
+      if (pb) { const r = pb.getBoundingClientRect(); if (r.height > 0) { const z = (cfg ? cfg.tv.uiScale : 100) / 100, gap = (window.innerHeight - r.bottom) / z; if (gap > 24 && gap < 200) y = Math.round(gap / 2 - b.offsetHeight / 2); } }
+      if (y !== vgLast) { vgLast = y; b.style.bottom = y + "px"; }
+    };
     const sync = () => {
       if (!ui) return;
       const mp = document.getElementById("movie_player");
       const onTw = ui.root.classList.contains("on-twitch");
+      placeVg(mp);
       let ytHidden = onTw ? Date.now() - (state.twIdleAt || 0) > 3000 : mp ? mp.classList.contains("ytp-autohide") : false;
       // full screen and YouTube shows its controls though nothing happened: treat them as hidden (and keep them hidden)
       let still = false;
@@ -2475,7 +2486,7 @@
     const c = x || (tab === "explore" ? currentCol() : tab === HIST_TAB ? null : chanById(tab.slice(4)));
     let items = [];
     if (kind === "live") orderQueue();
-    if (kind === "live") items = sortOff() ? state.queue.slice() : state.queue.filter((v, i) => i <= state.pos || v.f || !played.has(v.id)); // up next never shows what you've already watched (sorting off: it's all there)
+    if (kind === "live") items = sortOff() ? state.queue.slice() : state.queue.filter((v, i) => i <= state.pos || v.f || v.bk || !played.has(v.id)); // up next never shows what you've already watched (sorting off: it's all there)
     else if (kind === "base") items = state.base || [];
     else if (kind === "idle") items = feedStore;
     else if (kind === "xbrowse") items = x.items;
@@ -2498,7 +2509,7 @@
     const ucol = kind === "live" || kind === "base" ? currentCol() : kind === "browse" ? c : null;
     if (ucol && !ucol.twitch && !(sortOff() && kind === "live")) {
       const cur = current(), curAt0 = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
-      items = items.filter((v, i) => i <= curAt0 || v.f || v.nx || usable(ucol, v));
+      items = items.filter((v, i) => i <= curAt0 || v.f || v.nx || v.bk || usable(ucol, v));
     }
     // the filter (funnel above the list): what's playing and what you watched above it always stay
     const fOn = filterLive() && kind !== "idle" && kind !== "hist" && !feedTab && !(c && c.twitch);
@@ -4600,6 +4611,7 @@
     if (was && state.t > 0 && state.lastEvt) { resumeT = 0; saveResume(was.id, state.t, state.dur || 0); } // remember exactly where you left it
     if (pushHistory && i !== state.pos) state.history.push(state.pos);
     state.pos = i;
+    if (state.queue[i]) delete state.queue[i].bk;
     state.lastEvt = "";
     dropDropIns(); // (can shift the list: from here on it's state.pos, not i)
     playCurrent(resumeOf(state.queue[state.pos].id)); // carries on where you left it
@@ -4727,6 +4739,7 @@
       const v = state.queue[i];
       if (sortOff()) { if (v.nx || ((!fOn || passFilter(v)) && (v.f || !col || !isBlocked(col, v)))) return i; continue; } // sorting off: simply the next one in the list
       if (v.nx && !played.has(v.id)) return i; // you put it there yourself
+      if (v.bk) return i; // you stepped back over it with [: ] goes through it again
       if ((!col || usable(col, v)) && (!fOn || passFilter(v)) && (allowSeen || v.f || !played.has(v.id))) return i;
     }
     return -1;
@@ -4759,9 +4772,17 @@
     goTo(i);
   };
   // [ : what you watched before on this channel; else the one above in the list; else what you watched before that, anywhere
+  // Back ([): the videos you step back over come back as up next, in the order you watched them, so they stay in the
+  // list and ] goes through them again (watched ones would otherwise hide, being below what's playing now)
+  const stepBackTo = (j) => {
+    const old = state.pos;
+    for (let k = j + 1; k <= old && k < state.queue.length; k++) { const x = state.queue[k]; if (x) { played.delete(x.id); x.bk = 1; } }
+    try { sessionStorage.setItem("hush:tv:played", JSON.stringify([...played].slice(-300))); } catch {}
+    goTo(j, { pushHistory: false });
+  };
   const prevVideo = () => {
-    if (state.history.length) return goTo(state.history.pop(), { pushHistory: false });
-    if (state.pos > 0) return goTo(state.pos - 1, { pushHistory: false });
+    if (state.history.length) { const j = state.history.pop(); return j < state.pos ? stepBackTo(j) : goTo(j, { pushHistory: false }); }
+    if (state.pos > 0) return stepBackTo(state.pos - 1);
     if (ghist.pos > 0) return historyStep(-1);
     toast("Nothing before this one yet");
   };
