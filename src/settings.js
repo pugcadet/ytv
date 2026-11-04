@@ -317,7 +317,7 @@
         if (top && sugg.dataset.q === input.value.trim()) top.click(); else add();
       }
       if (e.key === "ArrowDown") { const b = sugg.querySelector("button"); if (b) { e.preventDefault(); b.focus(); } }
-      if (e.key === "Escape") { sugg.replaceChildren(); }
+      if (e.key === "Escape" && sugg.childNodes.length) { e.preventDefault(); sugg.replaceChildren(); }
     });
     // Search-as-you-type (creators): YouTube's matching channels, click to add.
     const sugg = h("div", { class: "suggest", role: "listbox", "aria-label": "Matching creators on YouTube" });
@@ -620,7 +620,7 @@
       ...(tw.enabled ? [
         card({ title: "Streamers", noReset: true }, "Who’s in your Twitch channel. In YTV, drag a stream in the list to change the order.",
           twitchFinder(), h("div", { class: "list-editor" }, h("label", { text: "Your streamers" }), h("p", { text: "Their Twitch name (the end of twitch.tv/…), or paste the link." }), streamers)),
-        card({ title: "Watching streams", area: "stream" }, "Space pauses and plays a stream; a click on the picture never pauses it. M mutes. Streams always play at full volume.",
+        card({ title: "Watching streams", area: "stream" }, "Space pauses and plays a stream; a click on the picture never pauses it. M mutes. Twitch’s own play/pause and volume sit bottom left in the player.",
           pick("Order in the list", "tv.twitch.sort", [["yours", "My order"], ["viewers", "Most viewers first"]]),
           pick("Quality", "tv.twitch.quality", [["chunked", "Source (best)"], ["1080p60", "1080p60"], ["720p60", "720p60"], ["720p30", "720p"], ["480p30", "480p"], ["360p30", "360p"], ["auto", "Auto"], ["keep", "Whatever I picked last in the player"]],
             "Each stream starts in this; the gear in YTV’s top bar changes it while you watch. Twitch only gives the top qualities to people logged in to twitch.tv."),
@@ -697,6 +697,8 @@
   const renderLists = () => {
     const tv = cfg.tv, lkp = (k) => ({ path: "tv.look." + k });
     page("List", "The list of what’s playing and what’s next, with a tab per channel (U opens and closes it).",
+      card({ title: "List menu", noReset: true }, null,
+        toggle("The list menu on the right", "Off: no list on the right (nor the screen edge that brings it out). Its tabs live at the top of the ∨ menu, and U opens that instead. Info, Comments and History still open on the right.", "tv.listOn")),
       card({ title: "Showing and hiding", area: "panel" }, null,
         pick("Hide the list when the mouse rests", "tv.listHide", [["always", "Always"], ["fullscreen", "Only in full screen"], ["never", "Never"]],
           "It fades out with YouTube’s player controls and comes back when you move the mouse (never while you point at it). You can give this a key under Keyboard."),
@@ -713,6 +715,9 @@
         number("Widest", "How wide a tab with a long name may get.", { min: 30, max: 2000, ...lkp("tabWidth"), unit: "px" }),
         number("Text and icon size", null, { min: 25, max: 400, step: 5, ...lkp("tabScale"), unit: "%" })),
       card({ title: "Rows", area: "rows" }, null,
+        slider("More videos: how far to pull", "How far past the end of a list you pull before letting go loads more.", { min: 60, max: 600, step: 10, path: "tv.listPullPx", fmt: (n) => n + " px" }),
+        pick("More videos at the end of a list", "tv.listPull", [["easy", "Pull past the end (easily)"], ["normal", "Pull past the end"], ["firm", "Pull past the end (a real pull)"], ["off", "Load as I near the end"]], "Scroll to the end of the list (or the ∨ grid) and pull a little further: a thin ring fills, and when you let go the next videos load. A scroll that runs into the end only stops there."),
+        pick("The filter button (funnel)", "tv.filterClick", [["toggle", "Click: filter off / on · Shift-click: change it"], ["menu", "Click: change it · Shift-click: filter off / on"]], "Switched off, your filter stays as you set it; the funnel greys its number."),
         toggle("Sorting (S)", "On: what you watched greys out, folds away under “Watched” and leaves up next, and a video you pick moves up. Off: the list stays exactly as it is, however much you switch, and where you scrolled it; what’s above the Watched bar stays greyed, and you drag videos (or the bar itself) above or below it. Turning it back on changes nothing that already happened: what’s playing moves to the top (under the Watched bar, which keeps what it had), the rest stays as it is, and from then on each video you leave goes into the Watched bar.", () => !cfg.tv.keepOrder, (v) => (cfg.tv.keepOrder = !v)),
         slider("Fully watched from", "A video counts as fully watched from here: it drops off Continue watching, and “skip videos I’ve seen” skips it.", { min: 50, max: 100, step: 5, path: "tv.fullPct", fmt: pct }),
         number("Watched videos kept per channel", "Right above what’s playing. 0 keeps none: they leave the list (History, H, has everything anyway).", { min: 0, max: 1000, path: "tv.trail" }),
@@ -728,7 +733,7 @@
         toggle("Soft fades at the list’s edges", "A little depth where there’s more to scroll.", "tv.look.edgeFade")),
       rowTextCard(),
       card({ title: "Buttons on a picture", area: "buttons" }, "They show when you point at a video’s picture.",
-        toggle("Explore (magnifier)", "Find more videos on the same topic.", "tv.hbExplore"),
+        toggle("Search (magnifier)", "Search from this video: its creator, its topics, or your own words.", "tv.hbExplore"),
         toggle("Watch Later (clock)", "Saves it to Watch Later, or takes it off if it’s there.", "tv.hbWl"),
         number("Size", null, { min: 8, max: 120, path: "tv.hbSize", unit: "px" })));
   };
@@ -827,13 +832,25 @@
         toggle("Mix up creators", "Never the same creator twice in a row, as long as there’s someone else to play.", "tv.spreadCreators"),
         toggle("Watched ones last", "Videos you already mostly watched (here or on youtube.com) go to the end of a channel instead of coming up again. Not on Home, Watch Later or Watched.", "tv.sinkWatched"),
         toggle("Learn from what you finish", "When you watch a video to the end, a couple of the videos YouTube itself suggests after it join the list, if they fit the channel (its creators or topics). Not on Home (that’s YouTube’s already), Feed or Watch Later.", "tv.ytRelated")),
-      card("Full screen", null,
-        slider("Videos per row in YouTube’s grid", "In full screen, scroll down (or click the ∨ at the bottom) for YouTube’s own grid of videos. More per row makes them smaller, so you see more at once. 3 is how YouTube shows it.", { min: 2, max: 8, step: 1, path: "tv.fsGridCols", fmt: (n) => String(n) })),
       card("Picture", null,
         pick("Video quality", "tv.videoQuality", [["premium", "1080p Premium"], ["hd1080", "1080p"], ["hd720", "720p"], ["auto", "Auto"]],
-          "1080p Premium is YouTube’s higher-bitrate 1080p (with YouTube Premium); where a video doesn’t have it, it plays in 1080p. A video without 1080p plays in the best it has.")),
+          "1080p Premium is YouTube’s higher-bitrate 1080p (with YouTube Premium); where a video doesn’t have it, it plays in 1080p. A video without 1080p plays in the best it has."),
+        toggle("Skip automatically", "Clicks YouTube’s own Skip button on ads, and Premium’s Jump ahead, the moment they show.", "tv.autoSkip")),
       card("Controls", null,
         toggle("Buttons above the player bar", "Prev, Next, list, info and comments. They always show when keyboard shortcuts are off.", "tv.showBar")));
+  };
+  const renderGrid = () => {
+    page("∨ menu", "The open list as a big grid of videos over the video, in and out of full screen: V, a scroll down on the video, or the ∨ at the bottom.",
+      card({ title: "∨ menu", noReset: true }, null,
+        toggle("The ∨ menu", "Off: V, the ∨ at the bottom and a scroll on the video do nothing.", "tv.gridOn"),
+        toggle("Tabs at the top", "The list’s tabs, as chips: pick one to see that list. They follow the list menu (and it follows them).", "tv.gridTabs")),
+      card({ title: "Opening and closing" }, null,
+        pick("Scroll opens it", "tv.gridScroll", [["easy", "Easily"], ["normal", "Normal"], ["firm", "Firm (a real pull)"], ["off", "Never (V and the ∨ only)"]], "Scroll down on the video and it follows you; far enough (or with a quick swipe) it snaps open. Scroll up at its top to pull it away the same way. A scroll that runs into its top only stops there; the next swipe pulls."),
+        slider("How far to pull", "How far it has to come up before it snaps open (and down before it closes). A quick swipe does it sooner.", { min: 10, max: 90, step: 5, path: "tv.gridPullPct", fmt: (n) => n + "% of the screen" }),
+        slider("Snap time", "How quickly it snaps open or closed.", { min: 0, max: 800, step: 20, path: "tv.gridSnapMs", fmt: (n) => n + " ms" }),
+        slider("Close at the top", "Rest the pointer this close to the top of the screen (it glows red), or leave the screen over the top, and it closes. Never opens it. 0: off.", { min: 0, max: 40, step: 2, path: "tv.gridTopZone", fmt: (n) => (n ? n + "% of the screen" : "off") })),
+      card({ title: "Look" }, null,
+        slider("Videos per row", "More per row makes them smaller, so you see more at once.", { min: 2, max: 8, step: 1, path: "tv.fsGridCols", fmt: (n) => String(n) })));
   };
   const fixedKey = (k, what) => h("li", {}, h("kbd", { text: k }), h("span", { text: " " + what }));
   const renderKeys = () => page("Keyboard", "Keys while YTV is on.", keysCard(),
@@ -968,6 +985,7 @@
     { id: "twitch", label: "Twitch", fn: renderTwitch },
     { group: "Watching" },
     { id: "lists", label: "List", fn: renderLists },
+    { id: "vmenu", label: "∨ menu", fn: renderGrid },
     { id: "swiping", label: "Swiping", fn: renderSwiping },
     { id: "topbar", label: "Top bar", fn: renderTopBar },
     { id: "look", label: "Colours & style", fn: renderLook },
@@ -1048,9 +1066,12 @@
   };
   $("search").addEventListener("input", () => { clearTimeout(searchT); searchT = setTimeout(renderSearch, 120); });
   $("search").addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { $("search").value = ""; render(); }
+    if (e.key === "Escape" && $("search").value) { e.preventDefault(); $("search").value = ""; render(); }
     if (e.key === "Enter") { const b = $("main").querySelector(".result"); if (b) b.click(); }
   });
+  const PARENT = "https://www.youtube.com";
+  // Esc: closes the settings when they're open over YTV (unless it just closed something inside them)
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !e.defaultPrevented && window.parent !== window) { e.preventDefault(); try { window.parent.postMessage({ ytvSettings: "close" }, PARENT); } catch {} } });
   document.addEventListener("keydown", (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f" && !e.shiftKey) { e.preventDefault(); $("search").focus(); $("search").select(); } });
   const render = () => {
     renderNav();
@@ -1062,12 +1083,27 @@
     if (!SECTIONS.some((s) => s.id === id)) return;
     current = id; render();
   });
+  // where you left off: the page and how far down it (opened without a page of its own, it comes back there)
+  const POS_KEY = "ytv:setpos";
+  const readPos = () => { try { const x = JSON.parse(localStorage.getItem(POS_KEY) || "null"); return x && typeof x.page === "string" ? x : null; } catch { return null; } };
+  let posT = 0;
+  const savePos = () => { clearTimeout(posT); posT = setTimeout(() => { if (!SECTIONS.some((s) => s.id === current) || $("search").value.trim()) return; try { localStorage.setItem(POS_KEY, JSON.stringify({ page: current, y: Math.round(window.scrollY) })); } catch {} }, 150); };
+  window.addEventListener("scroll", savePos, { passive: true });
+  window.addEventListener("hashchange", savePos);
+  document.addEventListener("click", savePos, true);
+  let booted = false;
   const boot = async () => {
     ({ cfg } = await SW.load());
     lastSaved = SW.stableStringify(cfg);
     const fromHash = location.hash.slice(1);
+    const pos = !booted && !fromHash ? readPos() : null;
     if (SECTIONS.some((s) => s.id === fromHash)) current = fromHash;
+    else if (pos && SECTIONS.some((s) => s.id === pos.page)) { current = pos.page; history.replaceState(null, "", "#" + current); }
+    const y = booted ? window.scrollY : 0;
     render();
+    if (booted) window.scrollTo(0, y); // (a change made elsewhere redraws the page: you stay where you are)
+    else if (pos && pos.page === current && pos.y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, pos.y)));
+    booted = true;
   };
   // Re-render if settings change elsewhere (toolbar menu, YTV itself), but not for our own writes.
   chrome.storage.onChanged.addListener((changes, area) => {

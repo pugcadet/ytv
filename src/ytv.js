@@ -281,7 +281,7 @@
       id: "tw:" + x.login, tw: true, login: x.login, title: ok(x.title).slice(0, 200) || `${ok(x.name) || x.login} is live`, channel: ok(x.name).slice(0, 60) || x.login, creator: "",
       len: x.viewers ? `${Intl.NumberFormat(undefined, { notation: "compact" }).format(x.viewers)} watching` : "live", age: ok(x.game).slice(0, 60),
       viewers: Number(x.viewers) || 0, since: Date.parse(ok(x.since)) || 0, game: ok(x.game).slice(0, 60), avatar: pic(x.avatar),
-      thumb: /^https:\/\/static-cdn\.jtvnw\.net\//.test(x.thumb || "") ? x.thumb : "", progress: 0, watched: false }));
+      thumb: /^https:\/\/static-cdn\.jtvnw\.net\//.test(x.thumb || "") ? x.thumb + (x.thumb.includes("?") ? "&" : "?") + "ytv=" + Math.floor(Date.now() / 300000) : "", progress: 0, watched: false })); // (a new preview picture every 5 minutes: the same address would stay cached)
     twitchCache = { at: Date.now(), items, offline, err: (r && r.error) || "" };
     return withOffline(order(items));
   };
@@ -293,13 +293,14 @@
   const WATCHED_CHIP = /^(watched|bekeken|angesehen|déjà regardées?|vues|vistos|visto|assistidos|guardati|obejrzane|просмотренные|visionnées|gesehen)$/i;
   const pagedSources = (col) => col.twitch || col.cont ? [] : col.watchedChip ? [{ label: "Watched", chip: WATCHED_CHIP }] : col.homeFeed ? [{ label: "Home", path: "/" }] : col.subs ? [{ label: "Subscriptions", path: "/feed/subscriptions" }] : col.feed || col.watchLater ? [] : sourcesOf(col);
   // (`have`: what's in the list already — the first page of a source is usually exactly that, so it never counts as "more")
+  const PULL_MORE = 40; // how many a pull past the end of a list (or the ∨ menu) asks for
   const moreLineup = async (col, want = 12, have = new Set()) => {
     let p = pagers.get(col.id);
     if (!p || Date.now() - p.at > 2 * 3600 * 1000) { p = { srcs: pagedSources(col).map((src) => ({ src, more: null, title: "", started: false })), at: Date.now() }; pagers.set(col.id, p); }
     const named = (s, list) => s.src.creator ? list.map((v) => ({ ...v, channel: (v.channel && !SW.yt.isStat(v.channel) ? v.channel : "") || s.title || (s.src.creator.startsWith("@") ? s.src.creator : ""), creator: v.creator || s.src.creator })) : list;
     const out = [], seen = new Set();
     const take = (list) => { for (const v of list) if (!seen.has(v.id) && !have.has(v.id) && usable(col, v) && !played.has(v.id)) { seen.add(v.id); out.push(v); } };
-    for (let round = 0; round < 4 && out.length < want; round++) {
+    for (let round = 0; round < (want > 20 ? 7 : 4) && out.length < want; round++) { // (a pull for more asks for a good batch: more pages)
       const live = p.srcs.filter((s) => !s.started || s.more);
       if (!live.length) break;
       const pages = await Promise.all(live.map(async (s) => {
@@ -485,6 +486,16 @@
     document.documentElement.classList.add("ytv");
     document.documentElement.classList.remove("hush-wide");
     document.documentElement.setAttribute("data-ytv", "1");
+    // a reload: where the video carries on from is known right now, so YTV's player bridge sets it the moment YouTube's
+    // video element knows its length, before anything plays (no second of the start, no jump in sound and playhead)
+    try {
+      const vp = new URLSearchParams(location.search), id = vp.get("v") || "";
+      const q = resumed.queue, at0 = q.find((x) => x && x.id === id) ? id : "";
+      if (at0 && !vp.get("t")) {
+        const at = Math.max(Number((JSON.parse(localStorage.getItem("ytv:resume") || "{}") || {})[id]) || 0, Number(resumed.t) || 0);
+        if (at > 5) document.documentElement.setAttribute("data-ytv-seek", id + ":" + Math.floor(at));
+      }
+    } catch {}
   }
   const cmd = (c) => document.dispatchEvent(new CustomEvent("ytv-cmd", { detail: JSON.stringify(c) }));
 
@@ -497,6 +508,8 @@
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-title{font-size:calc(16.5px * var(--ytv-fsgs,1))!important;line-height:1.2!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-author,html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-view-count-and-date-info{font-size:calc(14.3px * var(--ytv-fsgs,1))!important;line-height:1.3!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-duration{font-size:calc(13.2px * max(var(--ytv-fsgs,1),.8))!important}
+    /* YTV has its own grid (V, or a scroll down on the video): YouTube's full-screen one and its ∨ stay out of the way */
+    html.ytv .ytp-fullscreen-grid, html.ytv [class*="fullscreen-grid-expand"] { display: none !important; }
     html.ytv, html.ytv body { overflow: hidden !important; background: #000 !important; margin: 0 !important; scrollbar-width: none !important; }
     html.ytv::-webkit-scrollbar, html.ytv body::-webkit-scrollbar { display: none !important; }
     html.ytv #masthead-container, html.ytv tp-yt-app-drawer#guide, html.ytv ytd-mini-guide-renderer,
@@ -511,7 +524,8 @@
     html.ytv #movie_player .ytp-player-content.ytp-overlay-top, html.ytv #movie_player .ytp-overlay-top,
     html.ytv #movie_player [class*="OverlayVideoDetails"], html.ytv #movie_player [class*="overlay-video-details"],
     html.ytv #movie_player .ytp-fullscreen-quick-actions, html.ytv #movie_player .ytp-paid-content-overlay,
-    html.ytv #movie_player .ytp-chrome-top-buttons { display: none !important; } /* YouTube's own title (also its full-screen one) sits under YTV's */
+    html.ytv #movie_player .ytp-chrome-top-buttons,
+    html.ytv #movie_player .ytp-autonav-toggle, html.ytv #movie_player .ytp-autonav-toggle-button-container, html.ytv #movie_player button[data-tooltip-target-id="ytp-autonav-toggle-button"] { display: none !important; } /* (and YouTube's autoplay switch: YTV plays the list) */ /* YouTube's own title (also its full-screen one) sits under YTV's */
     html.ytv ytd-app { --ytd-masthead-height: 0px !important; }
     /* full screen, nobody touched anything, yet YouTube put its controls up by itself: they stay away */
     html.ytv.ytv-still .ytp-chrome-bottom, html.ytv.ytv-still .ytp-gradient-bottom { opacity: 0 !important; pointer-events: none !important; }
@@ -609,6 +623,100 @@
     /* hiding fades the content and eases the blur out with it (fading a whole blurred block makes the blur pop) */
     .top > *,.top::before,.top::after{transition:opacity .3s ease,backdrop-filter .3s ease}
     .fade{--bk:0}
+    /* the ∨ grid: the open list's videos as a big grid over the video (V, scroll down on the video, or the ∨) */
+    .vgrid{position:absolute;inset:0;z-index:6;pointer-events:auto;overflow-y:auto;will-change:transform;overscroll-behavior:contain;padding:0 max(28px,4vw) 48px;background:none;scrollbar-width:thin}
+    /* its bar: always at the very top (also on a short list, so switching tabs never moves it), with a soft blurred fade */
+    .vgbar{position:sticky;top:0;z-index:3;margin:0 calc(-1 * max(28px,4vw)) 4px;padding:28px max(28px,4vw) 44px;background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.55) 45%,rgba(0,0,0,0))} /* (the same soft fade as at the bottom, no blur) */
+    .vgact{position:absolute;right:max(28px,4vw);top:24px;display:flex;gap:8px}
+    .vgref.spin svg{animation:lspin2 .8s linear infinite}
+    @keyframes lspin2{to{transform:rotate(360deg)}}
+    .vgref[hidden]{display:none}
+    /* its background stays full screen and only fades (the grid slides over it) */
+    .vgbg{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;will-change:opacity;background:linear-gradient(180deg,rgba(0,0,0,.72),rgba(0,0,0,.9) 30%,rgba(0,0,0,.94));backdrop-filter:blur(calc(14px * var(--bk,1)))}
+    .vgbg[hidden]{display:none}
+    .vgrid.gmoving{pointer-events:none} .vgrid.gmoving .vgt .vgp{transition:none}
+    .vgfoot{position:absolute;left:0;right:0;bottom:0;height:min(110px,14vh);z-index:6;pointer-events:none;opacity:0;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.55) 55%,rgba(0,0,0,.85))}
+    .tv:not(.vgon) .vgfoot,.tv:not(.vgon) .vgup{display:none}
+    .totop.vgup{position:absolute;right:max(28px,4vw);bottom:28px;z-index:7;width:44px;height:44px;background:rgba(30,32,40,.85);backdrop-filter:blur(8px)}
+    .totop.vgup svg{width:20px;height:20px}
+    .vgbg.gmove{backdrop-filter:none;background:linear-gradient(180deg,rgba(0,0,0,.8),rgba(0,0,0,.94) 30%,rgba(0,0,0,.97))}
+    /* its tabs: the list's own tabs, as chips */
+    .vgtabs{display:flex;justify-content:safe center;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 110px} /* (room for refresh and ∧ on the right) */
+    .vgtabs .tab.add{min-width:34px;width:34px;padding:0;justify-content:center;margin-left:2px}
+    .vgtabs::-webkit-scrollbar{display:none}
+    .vgtabs[hidden]{display:none}
+    .vgtabs .tab{min-height:34px;max-width:240px;padding:0 14px;border-radius:999px;background:rgba(255,255,255,.1);color:#e8ebf2;font-size:13.5px;font-weight:600}
+    .vgtabs .tab:not([aria-selected="true"]),.vgrid .vgx{backdrop-filter:blur(12px) saturate(1.2);-webkit-backdrop-filter:blur(12px) saturate(1.2)} /* (frosted: the videos scrolling under them blur) */
+    .vgrid.gmoving .vgtabs .tab,.vgrid.gmoving .vgx{backdrop-filter:none;-webkit-backdrop-filter:none} /* (none while it slides: smoother) */
+    .vgtabs .tab:hover{background:rgba(255,255,255,.2);color:#fff}
+    .vgtabs .tab[aria-selected="true"]{background:#f1f1f1;color:#0f0f0f}
+    .vgtabs .tab[aria-selected="true"] .live{background:var(--acc)}
+    .vgtabs .tab .car{display:none}
+    .vgtabs .tab .tl.sr{position:static;width:auto;height:auto;overflow:hidden;clip-path:none} /* (icon tabs: here with their name too) */
+    .vgtabs .tab .tx{margin-right:-6px}
+    .vgrid[hidden]{display:none}
+    .vgrid.peek{pointer-events:none;overflow:hidden}
+    /* (moving: the background's blur is off, nothing to redraw every frame) */
+    /* "more": pulling past the end of a list lifts it only a little; a thin ring fills as you get there */
+    .lpull{position:absolute;left:0;right:0;bottom:0;height:0;display:flex;align-items:center;justify-content:center;gap:9px;color:#9aa3b5;font-weight:600;font-size:12px;letter-spacing:.02em;overflow:hidden;z-index:4;pointer-events:none;opacity:0;transition:color .2s ease}
+    .lpull.vgpull{z-index:7;font-size:13px}
+    .pulling > .totop{opacity:0!important;pointer-events:none!important}
+    /* the open grid's top hot zone: glows like the screen edge that brings the list out */
+    .vgtop{position:absolute;top:0;left:0;right:0;z-index:7;pointer-events:none;opacity:0;transition:opacity .25s ease;background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 30%,transparent),transparent)}
+    .vgtop.on{opacity:1}
+    .lpull .ring{width:18px;height:18px;flex:none;transform:rotate(-90deg)}
+    .lpull .ring circle{fill:none;stroke-width:2.2}
+    .lpull .ring .bg{stroke:rgba(255,255,255,.16)}
+    .lpull .ring .fg{stroke:#c9d2e6;stroke-linecap:round;stroke-dasharray:44;stroke-dashoffset:44;transition:stroke .2s ease}
+    .lpull.ready{color:#fff}
+    .lpull.ready .ring .fg{stroke:var(--acc)}
+    .lpull.busy .ring{animation:lspin .8s linear infinite}
+    .lpull.busy .ring .fg{stroke-dashoffset:30;stroke:#fff}
+    @keyframes lspin{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
+    .vgrid .vgx{margin-left:auto;width:40px;height:40px;min-height:0;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);color:#fff}
+    .vgrid .vgx:hover{background:rgba(255,255,255,.2)}
+    .vgrid .vgx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+    .vgrid .vgl{display:grid;grid-template-columns:repeat(var(--vgc,3),minmax(0,1fr));gap:calc(72px / var(--vgc,3)) calc(60px / var(--vgc,3));max-width:1700px;margin:0 auto}
+    .vgt{display:block;min-width:0;cursor:pointer;border-radius:12px;outline:none;color:inherit;text-decoration:none}
+    .vgt .vgeye{display:inline-flex;align-items:center;gap:5px}
+    .vgt .vgeye svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .vgt.voff .vgp img{filter:grayscale(1) brightness(.55)}
+    .vgt.voff .vgtt,.vgt.voff .vgm{opacity:.6}
+    .vgoffs{grid-column:1/-1;margin-top:8px}
+    .vgoh{margin:4px 0 12px;color:#8d97ab;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+    .vgog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px 14px}
+    .vgog .vgt .vgp{border-radius:9px}
+    .vgog .vgt .vgd{display:none}
+    .vgog .vgt .vgtt{margin-top:6px;font-size:12.5px;-webkit-line-clamp:1}
+    .vgog .vgt .vgm{font-size:11.5px}
+    .vgt.venter{animation:venter .34s cubic-bezier(.4,0,.2,1) both}
+    @keyframes venter{from{opacity:0;transform:translateY(12px) scale(.985)}}
+    .vgt .vgp{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#151821;transition:transform .18s ease,box-shadow .18s ease}
+    /* swiping a tile sideways: the very same sideways track as a row in the list (bin and plus behind the picture) */
+    .vgt .vgp > .sw{position:absolute;inset:0;margin:0;border-radius:0}
+    .vgt .vgp .track{height:100%}
+    .vgt .vgs{position:relative;height:100%;scroll-snap-align:start;background:#151821;overflow:hidden}
+    .vgt .vgp > .sw.gone{overflow:hidden}
+    .vgrid{--aico:32px}
+    .vgt .vgs.flash{animation:flash .55s ease}
+    .vgt .vgok{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:6px 14px;border-radius:999px;background:rgba(0,0,0,.8);color:#fff;font-size:13px;font-weight:800;white-space:nowrap;pointer-events:none;animation:vgok 1.1s ease forwards}
+    @keyframes vgok{0%{opacity:0;transform:translate(-50%,-40%)}15%,70%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0}}
+    .vgt img{width:100%;height:100%;object-fit:cover;display:block}
+    .vgt:hover .vgp,.vgt:focus-visible .vgp{transform:scale(1.03);box-shadow:0 0 0 3px #fff,0 14px 34px rgba(0,0,0,.6)}
+    .vgt.vnow .vgp{box-shadow:0 0 0 3px var(--acc)}
+    .vgt .vgd{position:absolute;right:8px;bottom:8px;padding:1px 6px;border-radius:5px;background:rgba(0,0,0,.82);color:#fff;font-size:12px;font-weight:700}
+    .vgt .vgn{position:absolute;left:8px;top:8px;padding:2px 8px;border-radius:999px;background:var(--acc);color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em}
+    .vgt .vgpg{position:absolute;left:0;bottom:0;height:4px;background:#f03}
+    .vgt.vdone .vgp{opacity:var(--wop,.5)}
+    .vgt .vgtt{margin-top:10px;font-weight:700;font-size:calc(17px - var(--vgc,3) * .6px);line-height:1.3;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .vgt .vgm{margin-top:3px;color:#aab3c4;font-size:calc(14px - var(--vgc,3) * .4px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .vgrid .vgend{grid-column:1/-1;text-align:center;color:#8d97ab;font-size:13px;padding:22px 0}
+    /* the ∨ at the bottom of the video: opens the grid (it fades with the rest of YTV's UI) */
+    .vgbtn{position:absolute;left:50%;bottom:3px;z-index:4;width:34px;height:18px;min-height:0;margin-left:-17px;padding:0;border:0;border-radius:999px;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff;pointer-events:auto;opacity:.85;transition:opacity .3s ease,background .15s}
+    .vgbtn:hover{background:var(--acc);opacity:1}
+    .vgbtn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+    .fade .vgbtn,.show-guide .vgbtn,.show-start .vgbtn,.vgon .vgbtn{opacity:0;pointer-events:none}
+    .nogrid .vgbtn{display:none}
     .fade .top > *,.fade .top::before,.fade .top::after,.fade .bar,.fade .panel{opacity:0}
     .fade .top,.fade .bar,.fade .panel{pointer-events:none}
     .panel{transition:opacity .3s ease,backdrop-filter .3s ease}
@@ -659,6 +767,7 @@
     .phead .filtb.on{color:#fff}
     .phead .filtb.open{color:#fff;background:color-mix(in srgb,var(--pnl) 70%,#5a6680)}
     .fdot{position:absolute;top:0;right:-2px;min-width:14px;height:14px;padding:0 3px;border-radius:7px;background:var(--acc);color:#fff;font-size:9.5px;font-weight:800;line-height:14px;text-align:center;pointer-events:none}
+    .phead .filtb.paused .fdot{background:#5a6274;color:#c9cfdb}
     .fdot[hidden],.fstrip[hidden],.fpop[hidden]{display:none}
     .fpill{display:inline-flex;align-items:center;gap:2px;height:22px;padding:0 4px 0 2px;border-radius:999px;background:rgba(255,255,255,.1)}
     .fpill .fpw{min-height:0;height:22px;padding:0 4px 0 8px;border:0;background:none;color:#dfe3ec;font-size:11.5px;font-weight:600}
@@ -767,6 +876,7 @@
     .ffoot button{min-height:0;height:28px;padding:0 12px;border:0;border-radius:7px;background:rgba(255,255,255,.1);color:#fff;font-size:12px;font-weight:600}
     @keyframes spin{to{transform:rotate(360deg)}}
     /* the ▾ channel list */
+    .chmenu.ingrid{z-index:9;max-height:50vh}
     .chmenu{position:absolute;z-index:8;width:min(250px,80%);max-height:60%;overflow:auto;padding:6px;border-radius:12px;background:var(--pnl);border:1px solid color-mix(in srgb,var(--pnl) 55%,#8a96ad);box-shadow:0 14px 36px rgba(0,0,0,.5);opacity:0;transform:translateY(-6px) scale(.97);transform-origin:top left;transition:opacity .16s ease,transform .18s cubic-bezier(.4,0,.2,1)}
     .chmenu.on{opacity:1;transform:none}
     .chmenu .cm{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:0 10px;border:0;background:none;text-align:left;font-size:13.5px}
@@ -864,7 +974,8 @@
     .thumb .hb.exb{left:4px} .thumb .hb.wlb{right:4px}
     .thumb .hb svg{width:calc(var(--hb,22px) * .6);height:calc(var(--hb,22px) * .6);fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
     .thumb:hover .hb,.thumb .hb:focus-visible,.thumb .hb.on{opacity:1;transform:none}
-    .item:not(:hover) .thumb .hb.exb{opacity:0}
+    .item:not(:hover) .thumb .hb.exb:not(.yts){opacity:0}
+    .thumb .hb.yts{opacity:.8;background:rgba(0,0,0,.55)} .thumb:hover .hb.yts{opacity:1}
     .thumb .hb:hover{background:var(--acc)}
     .thumb .hb.on{background:#17864a}
     .thumb .hb.bad{animation:shake .35s}
@@ -885,6 +996,21 @@
     .explore .sub{margin:14px 0 6px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#aab3c4}
     .desc{white-space:pre-wrap;word-break:break-word;font-size:14px;line-height:1.55;color:#e0ebf6;padding:6px 8px 4px;user-select:text}
     .desc h3{margin:0 0 4px;font-size:17px;color:#fff;white-space:normal}
+    .xchans{display:flex;flex-wrap:wrap;gap:6px;margin:2px 4px 10px}
+    .xch{display:inline-flex;align-items:center;gap:8px;max-width:100%;min-height:0;padding:5px 12px 5px 5px;border:0;border-radius:999px;background:rgba(255,255,255,.07);color:#e8ebf2;text-align:left;cursor:pointer}
+    .xch:hover{background:rgba(255,255,255,.14)}
+    .xav{width:28px;height:28px;flex:none;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:#2a3040;color:#fff;font-weight:800;font-size:12px}
+    .xav img{width:100%;height:100%;object-fit:cover;display:block}
+    .xav.big{width:54px;height:54px;font-size:20px}
+    .xtx{display:flex;flex-direction:column;min-width:0;line-height:1.2} .xtx b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .xtx span{font-size:11px;color:#9aa3b5}
+    .chtop{display:flex;align-items:center;gap:12px;white-space:normal} .chtop h3{margin:0 0 2px}
+    .desc .dtx.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 60%,transparent);mask-image:linear-gradient(180deg,#000 60%,transparent)}
+    .desc .dmore{display:block;margin:4px 0 0;padding:4px 0;border:0;background:none;color:var(--acc);font-weight:700;font-size:13px;cursor:pointer;min-height:0}
+    .desc .dmore:hover{text-decoration:underline}
+    .desc .dmore[hidden]{display:none}
+    .desc .ipl{display:inline-flex;align-items:center;gap:7px;margin:8px 0 6px;padding:7px 14px 7px 10px;border:0;border-radius:999px;background:var(--acc);color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
+    .desc .ipl:hover{filter:brightness(1.12)}
+    .desc .ipl .mic svg{width:16px;height:16px;display:block}
     .desc .by{color:#aab3c4;margin-bottom:12px;white-space:normal}
     .desc .subs{margin:-8px 0 12px;color:#aab3c4;font-size:12.5px;white-space:normal}
     .desc .subs[hidden]{display:none}
@@ -909,6 +1035,8 @@
     .com .ct{margin-top:4px;font-size:14px;line-height:1.5;color:#e0ebf6;white-space:pre-wrap;word-break:break-word}
     .com .cr{margin-top:4px;font-size:12px;color:color-mix(in srgb,var(--acc) 60%,#fff)}
     .coms > button{margin-top:12px;width:100%}
+    .com.cin,.cvlist > .sw.cin,.twvods > .twvod.cin{animation:cin .24s cubic-bezier(.2,.7,.2,1) both}
+    @keyframes cin{from{opacity:0;transform:translateY(-6px)}}
     .start{position:absolute;inset:0;z-index:6;display:none;place-items:center;background:rgba(0,0,0,.55)}
     .start button{font:700 20px system-ui,sans-serif;background:var(--acc);border:0;border-radius:14px;padding:16px 28px;min-height:0}
     .show-start .start{display:grid}
@@ -977,6 +1105,12 @@
     .explore h3{margin:0 0 4px;font-size:19px;color:#fff}
     .explore p{margin:0 0 12px;color:#aab3c4;font-size:13px}
     .explore .row{display:flex;gap:8px}
+    .explore.searchbox{width:min(600px,92vw);padding:14px}
+    .explore .sfield{position:relative} .explore .sfield input{width:100%;padding-left:42px;border-radius:12px;min-height:48px;font-size:17px}
+    .explore .sfield input::-webkit-search-cancel-button{-webkit-appearance:none;display:none}
+    .explore .smag{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#8d97ab;display:grid;pointer-events:none}
+    .explore .smag svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round}
+    .explore.searchbox .sub{margin:14px 2px 0} .explore.searchbox .bulknote{margin:10px 2px 0} .explore .row input{flex:1;min-width:0} .explore .row button{white-space:nowrap}
     .explore input{font-size:16px;min-height:42px}
     .explore textarea{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid color-mix(in srgb,var(--pnl) 55%,#8a96ad);background:#0e121b;color:#fff;font:inherit;font-size:14px;resize:vertical;min-height:120px}
     .explore .bulknote{margin:8px 0 10px;min-height:18px}
@@ -1110,15 +1244,19 @@
     .twvod .vtx b{font-size:13px;color:#fff;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .twvod .vtx span{font-size:11.5px;color:#aab3c4}
     .twback{margin-top:10px}
-    .twmine{display:inline-flex;align-items:center;gap:8px;min-height:0;height:30px;margin:10px 0 2px;padding:0 12px;border:0;border-radius:8px;background:rgba(255,255,255,.08);color:#dfe3ec;font-size:12.5px;font-weight:600}
-    .twmine svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    .twmine{position:absolute;top:10px;right:10px;display:grid;place-items:center;width:26px;height:26px;min-height:0;margin:0;padding:0;border:0;border-radius:7px;background:rgba(255,255,255,.06);color:#9aa3b5;opacity:.7;transition:opacity .15s,background .15s,color .15s}
+    .twmine:hover{opacity:1}
+    .twmine.big{position:static;display:inline-flex;gap:7px;width:auto;height:32px;margin:10px 0 4px;padding:0 14px 0 11px;border-radius:999px;background:var(--acc);color:#fff;opacity:1;font-size:13px;font-weight:700}
+    .twmine.big:hover{filter:brightness(1.12);background:var(--acc)}
+    .twmine svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
     .twmine:hover{background:rgba(255,255,255,.14);color:#fff}
     .twmine.on:hover{background:color-mix(in srgb,var(--rmc,#d93a3f) 70%,var(--pnl))}
     .twchatov .cstat{align-self:flex-start;padding:3px 9px;border-radius:999px;background:rgba(10,11,14,.6);color:#aab3c4;font-size:12px;font-style:italic}
     /* info and comments read as solidly as the list's rows (the video behind shouldn't wash them out) */
     .desc{margin:4px 2px;padding:12px 12px 10px;border-radius:var(--rrad,7px);background:var(--rowbg)}
     .coms{margin:4px 2px;padding:4px 10px 20px;border-radius:var(--rrad,7px);background:var(--rowbg)}
-    .twinfo{white-space:normal}
+    .twinfo{white-space:normal;position:relative}
+    .twinfo h3{padding-right:34px}
     .dragshield{position:absolute;inset:0;z-index:20;pointer-events:auto;background:transparent}
     .item.twrow .ic > span:first-child{color:#fff;font-weight:600} /* on Twitch, who's streaming matters: in white */
     /* tab size (Settings → Look & feel → Tabs): height, padding, widest, and text / icons scaling together */
@@ -1430,11 +1568,12 @@
     const tabInd = el("span", "tind"); // the underline that slides to the selected tab
     // how the list hides: with YouTube's controls always, only in full screen, or never (also the H key)
     const hideB = pbtn("eye", "", "", () => cycleHide()); hideB.classList.add("hideb");
-    const filtB = pbtn("filter", "", "Filter the list", () => toggleFilter()); filtB.classList.add("filtb");
+    // the funnel: a click switches your filter off and on, Shift-click opens its menu (or the other way round, in settings)
+    const filtB = pbtn("filter", "", "Filter the list", (e) => { const menu = cfg && cfg.tv.filterClick === "menu"; if (!!(e && e.shiftKey) !== menu) return toggleFilter(); if (!filterCount()) return toggleFilter(); setFilter({ off: !flt().off }); toast(flt().off ? "Filter off" : "Filter on"); }); filtB.classList.add("filtb");
     const fdot = el("span", "fdot"); fdot.hidden = true; filtB.append(fdot);
     const histPB = pbtn("history", "", "History: everything you watched (H)", () => togglePanel("history")); histPB.classList.add("histb");
     const sortB = pbtn("sort", "", "Sorting on (S)", () => toggleSorting()); sortB.classList.add("sortb"); // top right on every tab: shows whether the list sorts
-    const twsB = pbtn("search", "", "Live on Twitch: browse games (E) · Shift-click: find streamers (Shift+E)", (e) => (e && e.shiftKey ? toggleTwSearch() : toggleTwBrowse())); twsB.classList.add("twsb"); twsB.hidden = true;
+    const twsB = pbtn("search", "", "Find streamers (E) · Shift-click: browse games (Shift+E)", (e) => (e && e.shiftKey ? toggleTwBrowse() : toggleTwSearch())); twsB.classList.add("twsb"); twsB.hidden = true;
     prow.append(ptabs, clearB, twsB, filtB, histPB, refB, sortB); // sorting last: it shows on every tab, so the corner never moves // (no ✕: the list goes with U, or by itself; how it hides is set in settings, or with H)
     const fstrip = el("div", "fstrip"); fstrip.hidden = true; // the filters that are on, as chips (× turns one off)
     phead.append(prow, fstrip);
@@ -1467,7 +1606,7 @@
     const totop = el("button", "totop"); totop.type = "button"; totop.title = "Back to the top"; totop.setAttribute("aria-label", "Back to the top"); totop.append(icon("chevron"));
     totop.addEventListener("click", () => pbody.scrollTo({ top: 0, behavior: motionOn() ? "smooth" : "auto" }));
     const pickbar = el("div", "pickbar"); // when you've picked several videos
-    pickbar.append(el("span", "pn", ""), btn("Explore together", "Play the picked videos as their own topic", () => bulk("explore")), btn("Add to Feed", "Add the picked videos to your Feed", () => bulk("add")),
+    pickbar.append(el("span", "pn", ""), btn("Play together", "Play the picked videos as their own topic", () => bulk("explore")), btn("Add to Feed", "Add the picked videos to your Feed", () => bulk("add")),
       btn("Remove", "Remove the picked videos", () => bulk("rm")), iconBtn("x", "Let go of them (Esc)", () => clearPicks(), "pclose"));
     const pwrap = el("div", "pwrap"); pwrap.append(pbody, nowbar, totop, pickbar, twpop); // (Twitch search: it fills the list area)
     panel.append(grip, phead, pwrap, chmenu, fpop);
@@ -1477,11 +1616,14 @@
     const msg = el("div", "msg");
     const guide = el("div", "guide");
     const explore = el("div", "explore"); explore.hidden = true;
-    explore.setAttribute("role", "dialog"); explore.setAttribute("aria-label", "Explore a topic");
+    explore.setAttribute("role", "dialog"); explore.setAttribute("aria-label", "Search");
     const pop = el("div", "pop"); pop.hidden = true; pop.setAttribute("role", "menu");
     const toastEl = el("div", "toast"); toastEl.setAttribute("role", "status");
     const scrim = el("div", "scrim"); // catches clicks outside an open dialog / menu so they only close it
     scrim.addEventListener("click", (e) => { e.stopPropagation(); closeExplore(); closePop(); });
+    const vgB = el("button", "vgbtn"); vgB.type = "button"; vgB.title = "More videos (V)"; vgB.setAttribute("aria-label", "More videos"); vgB.append(icon("chevron"));
+    vgB.addEventListener("click", (e) => { e.stopPropagation(); openGrid(); });
+    root.append(vgB);
     root.append(curtain, top, bar, panel, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
     shadow.append(style, root);
     document.documentElement.appendChild(host);
@@ -1518,7 +1660,8 @@
     ui.root.style.setProperty("--ui", String(cfg.tv.uiScale / 100));
     ui.root.style.setProperty("--rowh", rowh + "px");
     ui.root.style.setProperty("--edgew", cfg.tv.edgeWidth + "px");
-    ui.root.classList.toggle("edgeon", cfg.tv.edgeOpen);
+    ui.root.classList.toggle("edgeon", cfg.tv.edgeOpen && cfg.tv.listOn);
+    ui.root.classList.toggle("nogrid", !cfg.tv.gridOn); // (the ∨ menu off in settings: no ∨ at the bottom either)
     ui.root.classList.toggle("nox", !cfg.tv.tabCloseX);
     ui.root.classList.toggle("ricons", cfg.tv.rowIcons); ui.root.classList.toggle("topicons", cfg.tv.topIcons);
     setHideBtn();
@@ -1624,7 +1767,7 @@
     const edgeAt = (e) => {
       if (!inBand(e.clientY)) { clearTimeout(edgeT); edgeT = 0; return; }
       if (edgeT) return;
-      edgeT = setTimeout(() => { edgeT = 0; if (!state.panel && cfg.tv.edgeOpen) { showPanel(playingTab()); state.edgeOpened = true; } }, 90);
+      edgeT = setTimeout(() => { edgeT = 0; if (!state.panel && cfg.tv.edgeOpen && cfg.tv.listOn && !(ui.vgrid && !ui.vgrid.hidden)) { showPanel(playingTab()); state.edgeOpened = true; } }, 90);
     };
     const onResize = () => { edgeTop = -1; placeEdge(); };
     placeEdge(); window.addEventListener("resize", onResize);
@@ -1696,7 +1839,7 @@
     else img.src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
     if (img.complete && img.naturalWidth) img.classList.add("ok");
     box.append(img);
-    if (o.explore && cfg.tv.hbExplore) box.append(iconBtn("search", "Explore this video (a creator or topic)", o.explore, "hb exb"));
+    if (o.explore && cfg.tv.hbExplore) box.append(iconBtn("search", "Search from this video (a creator or topic)", o.explore, "hb exb yts")); // (always there on a YouTube video)
     if (o.info) box.append(iconBtn("info", "About this stream, and past broadcasts", o.info, "hb exb")); // Twitch
     if (o.wl && cfg.tv.hbWl) {
       const on = inWl(v);
@@ -2220,12 +2363,25 @@
     if (v.tw && !v.off) { let wt = 0; row.addEventListener("mouseenter", () => { clearTimeout(wt); wt = setTimeout(() => warmTwitch(api.v), 250); }); row.addEventListener("mouseleave", () => clearTimeout(wt)); } // point at it: it starts loading
     return api;
   };
+  // A Twitch row kept on screen: the newest preview picture (swapped in once it has loaded, so it never blinks) and
+  // how many are watching, every time Twitch is asked again (every 90 seconds)
+  const twFreshen = (row, v) => {
+    const img = row.querySelector(".thumb > img"); if (!img) return;
+    if (v.thumb && img.getAttribute("src") !== v.thumb && img.dataset.next !== v.thumb && /^https:\/\/static-cdn\.jtvnw\.net\//.test(v.thumb)) {
+      img.dataset.next = v.thumb; const pre = new Image();
+      pre.onload = () => { if (img.dataset.next === v.thumb) { img.src = v.thumb; delete img.dataset.next; } };
+      pre.src = v.thumb;
+    }
+    const tv0 = row.querySelector(".thumb > .twv");
+    if (tv0 && v.viewers) { const t = Intl.NumberFormat(undefined, { notation: "compact" }).format(v.viewers); if (tv0.lastChild && tv0.lastChild.textContent !== t) { tv0.lastChild.textContent = t; tv0.title = `${v.viewers.toLocaleString()} watching`; } }
+  };
   const updateRow = (api) => {
     const { row, v, kind } = api;
     const i = kind === "live" ? (qIdx ? (qIdx.has(v.id) ? qIdx.get(v.id) : -1) : state.queue.findIndex((x) => x.id === v.id)) : -1;
     const cur = kind === "live" ? i === state.pos : kind === "hist" && !!current() && current().id === v.id;
     row.classList.toggle("cur", cur);
     api.wrap.classList.toggle("curw", cur);
+    if (v.tw) twFreshen(row, v);
     row.classList.toggle("done", kind === "live" && !cur && !v.tw && (sortOff() ? !!v.w : i < state.pos || played.has(v.id))); // everything above what's playing is behind you (sorting off: what's above the Watched bar)
     setLines(api);
   };
@@ -2301,6 +2457,54 @@
   };
   const canPull = (kind) => !!kind && kind !== "idle" && kind !== "xbrowse" && kind !== "hist" && kind !== "cont" && !(onFeed() && (kind === "base" || (kind === "live" && !state.stay)));
   const skeleton = () => { const box = el("div", "skel"); for (let i = 0; i < 7; i++) { const r = el("div", "srow"); r.append(el("div", "sth"), el("div", "stx")); r.style.animationDelay = `${i * 60}ms`; box.append(r); } return box; };
+  // What a tab's list shows, in order: everything the list itself would show (also used by the ∨ grid)
+  const listItems = (tab) => {
+    const kind = tabKind(tab);
+    if (!kind) return null;
+    const x = kind === "xbrowse" ? xtabOf(tab) : null;
+    const c = x || (tab === "explore" ? currentCol() : tab === HIST_TAB ? null : chanById(tab.slice(4)));
+    let items = [];
+    if (kind === "live") orderQueue();
+    if (kind === "live") items = sortOff() ? state.queue.slice() : state.queue.filter((v, i) => i <= state.pos || v.f || !played.has(v.id)); // up next never shows what you've already watched (sorting off: it's all there)
+    else if (kind === "base") items = state.base || [];
+    else if (kind === "idle") items = feedStore;
+    else if (kind === "xbrowse") items = x.items;
+    else if (kind === "hist") items = histItems();
+    else {
+      let e = browse.get(c.id);
+      const m = state.mem[c.id];
+      if (!e && m && m.queue.length) { e = { items: m.queue.slice(m.pos), at: Date.now(), busy: null }; browse.set(c.id, e); } // the list you left, as you left it
+      if (!e) loadBrowse(c, "open").then(() => (state.panel === tab || (ui && ui.vgrid && !ui.vgrid.hidden && grid.tab === tab)) && schedulePanel()); // (the list panel, or the ∨ menu, showing it)
+      e = browse.get(c.id);
+      items = e ? e.items : [];
+      if ((!e || e.busy) && !items.length) return { kind, c, x, items: [], fTotal: 0, fOn: false, loading: true };
+    }
+    const own = kind === "hist"; // (History shows everything it holds)
+    if (kind !== "idle" && kind !== "xbrowse" && !own) items = items.filter((v, i) => (kind === "live" && i <= state.pos) || v.f || v.nx || !isBlocked(c || currentCol() || {}, v));
+    const feedTab = tab === FEED_TAB || (kind === "live" && onFeed());
+    if (!feedTab && kind !== "idle" && !own) items = items.filter((v, i) => (kind === "live" && i <= state.pos) || v.nx || !inFeed(v.id)); // on your Feed: in no other list
+    // what this channel wouldn't play any more (seen since the list loaded, a creator you hid, music…) isn't shown
+    // either, so the list is what will really play
+    const ucol = kind === "live" || kind === "base" ? currentCol() : kind === "browse" ? c : null;
+    if (ucol && !ucol.twitch && !(sortOff() && kind === "live")) {
+      const cur = current(), curAt0 = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
+      items = items.filter((v, i) => i <= curAt0 || v.f || v.nx || usable(ucol, v));
+    }
+    // the filter (funnel above the list): what's playing and what you watched above it always stay
+    const fOn = filterLive() && kind !== "idle" && kind !== "hist" && !feedTab && !(c && c.twitch);
+    const fTotal = items.length;
+    if (fOn) {
+      if (flt().subbed !== "any") loadSubs();
+      const cur = current(), curAt = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
+      items = items.filter((v, i) => i <= curAt || v.nx || passFilter(v));
+    }
+    // the order you picked: for the playing list it's already the queue's own order (see orderQueue); other tabs are
+    // sorted here (what's playing and above it stay put)
+    if (fOn && orderOn()) {
+      if (kind !== "live") items = ordered(items);
+    }
+    return { kind, c, x, items, fTotal, fOn, feedTab, loading: false };
+  };
   const drawList = (tab, fresh) => {
     const kind = tabKind(tab);
     if (!kind) return;
@@ -2319,52 +2523,19 @@
       fresh = true;
     }
     const list = box.querySelector(".list"), empty = box.querySelector(".empty"), hint = box.querySelector(".hintline");
-    let items = [];
-    if (kind === "live") orderQueue();
-    if (kind === "live") items = sortOff() ? state.queue.slice() : state.queue.filter((v, i) => i <= state.pos || v.f || !played.has(v.id)); // up next never shows what you've already watched (sorting off: it's all there)
-    else if (kind === "base") items = state.base || [];
-    else if (kind === "idle") items = feedStore;
-    else if (kind === "xbrowse") items = x.items;
-    else if (kind === "hist") items = histItems();
-    else {
-      let e = browse.get(c.id);
-      const m = state.mem[c.id];
-      if (!e && m && m.queue.length) { e = { items: m.queue.slice(m.pos), at: Date.now(), busy: null }; browse.set(c.id, e); } // the list you left, as you left it
-      if (!e) loadBrowse(c, "open").then(() => state.panel === tab && schedulePanel());
-      e = browse.get(c.id);
-      items = e ? e.items : [];
-      if ((!e || e.busy) && !items.length) { empty.hidden = false; empty.replaceChildren(skeleton()); list.replaceChildren(); if (fresh) ui.pbody.scrollTop = 0; return; }
-    }
-    const own = kind === "hist"; // (History shows everything it holds)
-    if (kind !== "idle" && kind !== "xbrowse" && !own) items = items.filter((v, i) => (kind === "live" && i <= state.pos) || v.f || v.nx || !isBlocked(c || currentCol() || {}, v));
-    const feedTab = tab === FEED_TAB || (kind === "live" && onFeed());
-    if (!feedTab && kind !== "idle" && !own) items = items.filter((v, i) => (kind === "live" && i <= state.pos) || v.nx || !inFeed(v.id)); // on your Feed: in no other list
+    const L = listItems(tab);
+    if (L.loading) { empty.hidden = false; empty.replaceChildren(skeleton()); list.replaceChildren(); if (fresh) ui.pbody.scrollTop = 0; return; }
+    let items = L.items; const { fTotal, fOn } = L;
     if (!(c && c.twitch)) notePartial(items);
-    // what this channel wouldn't play any more (seen since the list loaded, a creator you hid, music…) isn't shown
-    // either, so the list is what will really play
-    const ucol = kind === "live" || kind === "base" ? currentCol() : kind === "browse" ? c : null;
-    if (ucol && !ucol.twitch && !(sortOff() && kind === "live")) {
-      const cur = current(), curAt0 = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
-      items = items.filter((v, i) => i <= curAt0 || v.f || v.nx || usable(ucol, v));
-    }
-    // the filter (funnel above the list): what's playing and what you watched above it always stay
-    const fOn = filterCount() > 0 && kind !== "idle" && kind !== "hist" && !feedTab && !(c && c.twitch);
-    const fTotal = items.length;
-    if (fOn) {
-      if (flt().subbed !== "any") loadSubs();
-      const cur = current(), curAt = kind === "live" && cur ? items.findIndex((v) => v.id === cur.id) : -1;
-      items = items.filter((v, i) => i <= curAt || v.nx || passFilter(v));
-    }
-    // the order you picked: for the playing list it's already the queue's own order (see orderQueue); other tabs are
-    // sorted here (what's playing and above it stay put)
-    if (fOn && orderOn()) {
-      if (kind !== "live") items = ordered(items);
-    }
     state.fShown = { tab, shown: items.length, total: fTotal };
     hint.hidden = kind !== "base" && kind !== "xbrowse";
 
     if (kind === "base") hint.textContent = `What’s next on ${c ? c.name : "the channel"}. Pick one to close the topic and play it.`;
     if (kind === "xbrowse") hint.textContent = `Pick a video to carry on exploring “${x.query}” from there.`;
+    // a search's channels: on top, click one for its page (Info: their Latest and Popular videos)
+    { let xc = box.querySelector(":scope > .xchans"); const chs = kind === "xbrowse" && x.chans ? x.chans : [];
+      if (!chs.length) { if (xc) xc.remove(); }
+      else if (!xc || xc._for !== x.id) { if (xc) xc.remove(); xc = el("div", "xchans"); xc._for = x.id; xc.append(...chs.map(chanChip)); box.insertBefore(xc, list); } }
     // A long list opens at once: the rows you'll see first are made now, the rest a moment later in the background
     let n;
     if (fresh && items.length > 70) {
@@ -2379,9 +2550,11 @@
     } else n = reconcile(list, items, kind, c, !fresh);
     empty.hidden = n > 0;
     const wlEnd = !!(c && c.watchLater && kind !== "xbrowse" && !(tab === "explore" && state.stay));
-    box.querySelector(".more").hidden = (!n && !(fOn && fTotal)) || !canPull(kind) || !!(c && (c.twitch || c.cont)) || wlEnd;
+    const canMore = !((!n && !(fOn && fTotal)) || !canPull(kind) || !!(c && (c.twitch || c.cont)) || wlEnd);
+    box.dataset.more = canMore ? "1" : ""; // (more can load here: by pulling past the end, or with the button)
+    box.querySelector(".more").hidden = !canMore || !!pullK("list"); // (pulling past the end does it: no button too)
     const endl = box.querySelector(".endline"); endl.hidden = !(wlEnd && (n || fTotal)); if (wlEnd && (n || fTotal)) endl.textContent = `End of your ${c.name} · ${fTotal} video${fTotal === 1 ? "" : "s"}${fOn && n !== fTotal ? ` (${n} match your filters)` : ""}`;
-    if (fresh && !box.querySelector(".more").hidden) setTimeout(() => { if (ui && ui.pbody.scrollHeight <= ui.pbody.clientHeight + 40) autoMore(); }, 400); // too short to scroll: fill it up
+    if (fresh && canMore) setTimeout(() => { if (ui && ui.pbody.scrollHeight <= ui.pbody.clientHeight + 40) autoMore(true); }, 400); // too short to scroll: fill it up
     // Twitch: who's offline folds away under one line (open or closed, as you left it)
     // what you already watched on this channel sits folded away right above what's playing, under one "Watched" bar
     // (open or closed, as you left it)
@@ -2445,6 +2618,14 @@
       else if (m != null) ui.pbody.scrollTop = memTop(m);
       else if (!keepPlace) { const cur = list.querySelector(".sw.curw:not(.still)"), wbar = list.querySelector(":scope > .wbar"); if (cur) ui.pbody.scrollTop = (wbar || cur).offsetTop; } // Twitch starts at the top
       box.dataset.key = key;
+      // the rows come in one after another from the top of what you see (not from the top of the list: the list of
+      // what's playing opens scrolled down to it, and its rows would otherwise all come in at once)
+      const top = ui.pbody.scrollTop, bottom = top + ui.pbody.clientHeight; let j = 0;
+      for (const r of list.children) {
+        if (!r.classList.contains("enter")) continue;
+        const y = r.offsetTop, h = r.offsetHeight;
+        r.style.animationDelay = y + h <= top || y >= bottom ? "0ms" : `${Math.min(j++, 12) * 18}ms`;
+      }
     }
     markStuck();
     requestAnimationFrame(markStuck); // once the rows have their final size
@@ -2512,7 +2693,7 @@
       let got = [];
       if (mode === "more") { // the next pages of this channel's sources: there's always more
         const have = new Set(e.items.map((x) => x.id));
-        try { got = await moreLineup(c, 15, have); } catch {}
+        try { got = await moreLineup(c, PULL_MORE, have); } catch {}
         let add = got.filter((x) => !have.has(x.id));
         if (!add.length) add = await moreFallback(c, e.items[e.items.length - 1], have);
         add = [...new Map(add.map((x) => [x.id, x])).values()];
@@ -2525,8 +2706,8 @@
     return e.busy;
   };
   // ↻ or a pull from the top: a fresh list for this tab. Your Feed is yours, so it never changes by itself.
-  const refreshTab = async () => {
-    const tab = state.panel, kind = tabKind(tab);
+  const refreshTab = async (tab = state.panel) => {
+    const kind = tabKind(tab);
     if (!canPull(kind)) return 0;
     const col = currentCol();
     if (kind === "browse") return loadBrowse(chanById(tab.slice(4)), "refresh");
@@ -2543,22 +2724,26 @@
     else if (state.stay) got = (await Promise.all(SORTS.map((so) => searchTopic(state.stay.query, so)))).flat().filter((x) => matchesTopic(x, state.stay.query, true));
     else got = await buildLineup(col, () => {}, () => {}, true);
     const cur = current();
-    let fresh = []; const ids = new Set([cur && cur.id]);
+    // the ones you put up next yourself (Shift-swipe, Play next, dragged there) stay exactly where they are
+    const mine = state.queue.map((x, k) => [k - state.pos - 1, x]).filter(([d, x]) => d >= 0 && x && x.nx);
+    let fresh = []; const ids = new Set([cur && cur.id, ...mine.map(([, x]) => x.id)]);
     for (const x of got) if (x && !ids.has(x.id) && !played.has(x.id) && usable(col, x)) { ids.add(x.id); fresh.push(x); }
     if (!fresh.length) return 0;
     if (col && col.shuffle) fresh = shuffled(fresh);
-    state.queue = [...state.queue.slice(0, state.pos + 1), ...(col && col.watchLater ? fresh : fresh.slice(0, 120))];
+    const rest = col && col.watchLater ? fresh : fresh.slice(0, 120);
+    for (const [d, x] of mine) rest.splice(Math.min(d, rest.length), 0, x);
+    state.queue = [...state.queue.slice(0, state.pos + 1), ...rest];
     saveSession(); schedulePanel();
     return fresh.length;
   };
   // A pull past the end: more videos for this tab.
-  const loadMoreTab = async () => {
-    const tab = state.panel, kind = tabKind(tab);
+  const loadMoreTab = async (tab = state.panel) => {
+    const kind = tabKind(tab);
     if (!canPull(kind)) return 0;
-    if (kind === "live") return topUp();
+    if (kind === "live") return topUp(PULL_MORE);
     if (kind === "browse") return loadBrowse(chanById(tab.slice(4)), "more");
     if (kind === "base") {
-      const got = await moreLineup(currentCol(), 15, new Set([...(state.base || []), ...state.queue].map((x) => x.id)));
+      const got = await moreLineup(currentCol(), PULL_MORE, new Set([...(state.base || []), ...state.queue].map((x) => x.id)));
       if (!state.stay) return 0;
       const have = new Set(state.base.map((x) => x.id));
       const add = got.filter((x) => !have.has(x.id) && !played.has(x.id));
@@ -2669,6 +2854,7 @@
   };
   // A row leaves the list: it fades (your fade-out time) while the rows below glide up into its place.
   const leave = (w) => {
+    if (w._grid) return leaveTile(w);
     const move = motionOn();
     // its "slide in" animation (kept on with fill-mode) would pin the opacity and skip the fade: drop it first
     w.classList.remove("enter"); w.style.animation = "none";
@@ -2740,7 +2926,9 @@
     lastPt = { x: e.clientX, y: e.clientY };
     const unit = e.deltaMode === 1 ? 16 : 1, dx = e.deltaX * unit, dy = e.deltaY * unit;
     const hit = e.target && e.target.closest && e.target.closest(".sw");
-    if (hit && dx !== 0) hit._user = performance.now();
+    // (only a push that's really sideways makes a row yours: a trackpad's up/down scroll always wobbles a pixel or two
+    // sideways, and a row the list then moves under the pointer, e.g. as more videos load, must not slide open)
+    if (hit && dx !== 0 && (Math.abs(dx) * 2.5 >= Math.abs(dy) || Math.abs(hit.scrollLeft - (hit._R || 0)) > 3)) hit._user = performance.now();
     shiftDown = e.shiftKey;
     if (wg.no && hit !== wg.no) wg.no = null; // onto another row: that's a new push there
     const gap = e.timeStamp - wg.last; wg.last = e.timeStamp;
@@ -2772,17 +2960,17 @@
     }
     if (!wg.manual) return;
     if (e.cancelable) e.preventDefault();
-    ui.pbody.scrollTop += dy;
+    (e.currentTarget && e.currentTarget.nodeType === 1 ? e.currentTarget : ui.pbody).scrollTop += dy; // (the list, or the ∨ grid)
     clearTimeout(wg.endT); wg.endT = setTimeout(() => { wg.manual = false; }, 140);
   };
 
   // ---- loading more: scroll near the end of a list and the next page loads by itself (the button still works too).
   // When YouTube has nothing new it waits a little before asking again, so a list at its end doesn't keep asking.
   const autoMoreState = { quietUntil: 0, chain: 0 };
-  const autoMore = () => {
+  const autoMore = (fill = false) => { // (fill: a list too short to scroll fills up, also when more comes by pulling)
     if (!ui) return;
-    const b = ui.pbody.querySelector(":scope > .lbox > .more");
-    if (!b || b.hidden || b.classList.contains("go") || performance.now() < autoMoreState.quietUntil) return;
+    const b = ui.pbody.querySelector(":scope > .lbox > .more"), box = b && b.parentNode;
+    if (!b || (b.hidden && !(fill && box.dataset.more === "1")) || b.classList.contains("go") || performance.now() < autoMoreState.quietUntil) return;
     const pb = ui.pbody, left = pb.scrollHeight - pb.scrollTop - pb.clientHeight;
     if (left > Math.max(500, pb.clientHeight * 0.75)) { autoMoreState.chain = 0; return; }
     loadMoreClick(b, true);
@@ -2845,13 +3033,14 @@
     if (ui.pbody._hw) return;
     ui.pbody._hw = true;
     ui.nowbar.addEventListener("click", () => { const cur = ui.pbody.querySelector(".sw.curw"); if (cur) ui.pbody.scrollTo({ top: cur.offsetTop, behavior: motionOn() ? "smooth" : "auto" }); });
+    ui.pbody.addEventListener("wheel", listWheel, { passive: false }); // (first: pulling past the end for more)
     ui.pbody.addEventListener("wheel", onWheel, { passive: false });
     ui.pbody.addEventListener("contextmenu", (e) => {
       const w = e.target.closest && e.target.closest(".sw"), api = w && rowApi.get(w);
       if (!api || e.shiftKey) return; // (Shift + right-click: the browser's own menu)
       if (openRowMenu(api, e.clientX, e.clientY)) e.preventDefault();
     });
-    ui.pbody.addEventListener("scroll", (e) => { if (e.target === ui.pbody) { markStuck(); autoMore(); cvScroll(); } else onRowScroll(e); }, true);
+    ui.pbody.addEventListener("scroll", (e) => { if (e.target === ui.pbody) { markStuck(); if (!pullK("list")) autoMore(); cvScroll(); } else onRowScroll(e); }, true); // (more: by pulling past the end; with that off, as you near the end)
     ui.pbody.addEventListener("scrollend", onRowScrollEnd, true);
     let lastMove = 0;
     ui.pbody.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") { const w = e.target.closest && e.target.closest(".sw"); if (w) w._user = performance.now() + 60000; } });
@@ -2892,6 +3081,7 @@
   const F_DEFAULT = { under: false, underMin: 10, over: false, overMin: 8, age: "any", ageN: 2, ageUnit: "weeks", watched: "any", watchedPct: 80, subbed: "any", orderBy: "none", orderDir: "desc" };
   const F_UNIT = { days: 1, weeks: 7, months: 30 };
   const flt = () => (cfg && cfg.tv.filter) || F_DEFAULT;
+  const filterLive = () => filterCount() > 0 && !flt().off; // set, and switched on
   const filterCount = () => { const f = flt(); return (f.under ? 1 : 0) + (f.over ? 1 : 0) + (f.age !== "any" ? 1 : 0) + (f.watched !== "any" ? 1 : 0) + (f.subbed !== "any" ? 1 : 0) + (f.orderBy && f.orderBy !== "none" ? 1 : 0); };
   // ---- the order (also in the funnel): newest / oldest, shortest / longest, least / most watched. It decides what
   // plays next too, not just how the list looks. What's playing and what's above it stay; videos you put next yourself
@@ -2959,7 +3149,7 @@
     return true;
   };
   /** Is the filter on for what this channel plays? (not your Feed, not Twitch) */
-  const filterFor = (col) => filterCount() > 0 && !!col && !col.twitch && !(col.feed && !state.stay);
+  const filterFor = (col) => filterLive() && !!col && !col.twitch && !(col.feed && !state.stay);
   /** Can this tab be filtered? */
   const filterable = (tab) => {
     const kind = tabKind(tab);
@@ -2972,7 +3162,7 @@
   let fSaveT = 0;
   const setFilter = (patch) => {
     if (!cfg) return;
-    cfg.tv.filter = { ...flt(), ...patch };
+    cfg.tv.filter = { ...flt(), ...("off" in patch ? {} : { off: false }), ...patch }; // (changing a filter switches it on again)
     if (cfg.tv.filter.subbed !== "any") loadSubs();
     updateFilterUi(); schedulePanel();
     clearTimeout(fSaveT); fSaveT = setTimeout(() => writeCfg(), 450);
@@ -2993,16 +3183,17 @@
     if (!ui || !ui.filtB) return;
     const n = filterCount(), can = filterable(state.panel);
     ui.filtB.hidden = !can;
-    ui.filtB.classList.toggle("on", n > 0);
+    const paused = n > 0 && flt().off, menuFirst = cfg && cfg.tv.filterClick === "menu";
+    ui.filtB.classList.toggle("on", n > 0 && !paused); ui.filtB.classList.toggle("paused", paused);
     ui.fdot.hidden = !n; ui.fdot.textContent = n ? String(n) : "";
-    ui.filtB.title = n ? `Filter the list (${n} on)` : "Filter the list";
+    ui.filtB.title = (n ? (paused ? `Filter off (${n} set)` : `Filter on (${n})`) : "Filter the list") + (n ? (menuFirst ? " · Shift-click: off / on" : " · click: off / on, Shift-click: change") : "");
     const off = sortOff(), sb = ui.sortB;
     if (sb.dataset.off !== String(off)) {
       sb.dataset.off = String(off); sb.replaceChildren(icon(off ? "sort-off" : "sort"));
       const t = off ? "Sorting off (S)" : "Sorting on (S)"; sb.title = t; sb.setAttribute("aria-label", t); sb.setAttribute("aria-pressed", String(!off));
     }
-    ui.fstrip.hidden = !(can && n);
-    if (can && n) {
+    ui.fstrip.hidden = !(can && n && !paused);
+    if (can && n && !paused) {
       const sig = JSON.stringify(flt());
       if (ui.fstrip.dataset.sig !== sig) {
         ui.fstrip.dataset.sig = sig;
@@ -3128,6 +3319,16 @@
       twitchCache.at = 0; twitchTick(); if (state.panel === "src:" + TWITCH_ID) { browse.delete(TWITCH_ID); schedulePanel(); }
     });
     row.append(av, tx, add);
+    // a click on the row: live, watch them; offline, their page (Info: what they streamed before, and add / remove)
+    row.style.cursor = "pointer";
+    row.addEventListener("click", (e) => {
+      if (e.target.closest && e.target.closest(".twadd")) return;
+      const name = String(u.name || u.login).slice(0, 60), avatar = /^https:\/\/static-cdn\.jtvnw\.net\//.test(u.avatar || "") ? u.avatar : "";
+      if (u.live) return watchStream(toLiveItem(u));
+      closeTwSearch();
+      state.twInfo = { id: "tw:" + u.login, tw: true, off: true, login: u.login, channel: name, title: name, creator: "", len: "", age: "", avatar, thumb: avatar };
+      if (state.panel === "info") renderPanel(true); else showPanel("info");
+    });
     return row;
   };
   const drawTwResults = (out, r) => {
@@ -3240,7 +3441,7 @@
   const toggleTwBrowse = () => (ui && !ui.twpop.hidden && ui.twpop.dataset.mode === "browse" ? closeTwSearch() : openTwBrowse());
 
   // ---- Settings, opened right over TV (no new tab, so full screen stays as it is). Esc or ✕ closes it.
-  const openSettings = (hash = "#channels") => {
+  const openSettings = (hash = "") => { // (no page given: where you left off)
     if (!ui) return;
     const w = ui.setFrame;
     if (!w.firstChild) {
@@ -3251,8 +3452,17 @@
       box.append(bar, f); w.append(box);
       w.onclick = (e) => { if (e.target === w) closeSettings(); };
     }
-    w.hidden = false; ui.root.classList.add("show-set"); wake();
+    w.hidden = false; ui.root.classList.add("show-set");
+    if (ui.root.classList.contains("show-guide")) showGuide(false); // (the overview behind it closes: one thing at a time)
+    closeGrid(); wake();
   };
+  // Esc inside the settings page (its own frame) closes it too
+  window.addEventListener("message", (e) => {
+    const ORIGIN = new URL(chrome.runtime.getURL("")).origin; // (YTV's own settings page)
+    if (e.origin !== ORIGIN || !ui || !e.data || e.data.ytvSettings !== "close") return;
+    const f = ui.setFrame && ui.setFrame.querySelector("iframe"); if (!f || e.source !== f.contentWindow) return;
+    closeSettings();
+  });
   const closeSettings = () => {
     if (!ui || !ui.setFrame || ui.setFrame.hidden) return false;
     ui.setFrame.hidden = true; ui.setFrame.replaceChildren(); ui.root.classList.remove("show-set"); wake(); // (the page goes, so it costs nothing while closed)
@@ -3287,7 +3497,9 @@
     // on your list or not: add them, or take them off (what's playing keeps playing until you switch)
     const onList = () => cfg.tv.twitch.logins.includes(v.login);
     const mb = el("button", "twmine"); mb.type = "button";
-    const drawMine = () => { mb.replaceChildren(icon(onList() ? "trash-2" : "plus"), el("span", null, onList() ? `Remove ${v.channel} from Twitch Live` : `Add ${v.channel} to Twitch Live`)); mb.classList.toggle("on", onList()); };
+    // (a small icon at the top right: rarely needed; what it does is in its tooltip)
+    // (not on your list: a clear Add button; once added it turns into a small bin at the top right)
+    const drawMine = () => { const on = onList(), t = on ? `Remove ${v.channel} from Twitch Live` : `Add ${v.channel} to Twitch Live`; mb.replaceChildren(icon(on ? "trash-2" : "plus")); if (!on) mb.append(el("span", null, "Add to Twitch Live")); mb.title = t; mb.setAttribute("aria-label", t); mb.classList.toggle("on", on); mb.classList.toggle("big", !on); };
     mb.addEventListener("click", async () => {
       const had = onList();
       cfg.tv.twitch.logins = had ? cfg.tv.twitch.logins.filter((x) => x !== v.login) : [...cfg.tv.twitch.logins, v.login];
@@ -3314,6 +3526,7 @@
         row.addEventListener("click", () => { const base = v.off ? v : current() && current().tw && current().login === v.login ? current() : v; playTwitch(base, item); });
         return row;
       }));
+      if (motionOn()) [...list.children].forEach((row, k) => { if (k >= 20) return; row.classList.add("cin"); row.style.animationDelay = `${k * 16}ms`; row.addEventListener("animationend", () => { row.classList.remove("cin"); row.style.animationDelay = ""; }, { once: true }); }); // (they come in one after another, as the comments do)
     });
   };
   // a line of facts, each with its small icon (Info)
@@ -3372,8 +3585,26 @@
   };
   // Info and Comments open at the top: each time you open them, and for each new video (a redraw of the same one keeps your place)
   const atTopOnOpen = (v) => { const k = state.panel + "|" + (v ? v.id : ""); if (ui.pbody._ik !== k) { ui.pbody._ik = k; ui.pbody.scrollTop = 0; } };
+  // Info for a video that isn't playing (right-click → More from …): its creator's videos, with a Play button
+  const infoVid = () => state.infoV || current();
+  // a channel (from a search): its page in Info, the same way (a stand-in "video" that carries only who it is)
+  // a channel's picture, from YouTube's own picture server only (anything else: no picture)
+  const ytPic = (url) => { const yurl = String(url || ""); if (!/^https:\/\/yt3\.(ggpht|googleusercontent)\.com\//.test(yurl)) return null; const img = el("img"); img.alt = ""; img.loading = "lazy"; img.src = yurl; return img; };
+  const showChannelInfo = (ch) => showInfoFor({ id: "ch:" + ch.creator, isCh: true, creator: ch.creator, channel: ch.name, title: ch.name, subs: ch.subs || "", avatar: ch.avatar || "" }, null);
+  const chanChip = (ch) => {
+    const b = el("button", "xch"); b.type = "button"; b.title = `${ch.name}: their videos`;
+    const av = el("span", "xav"), pic = ytPic(ch.avatar); if (pic) av.append(pic); else av.textContent = (ch.name || "?").slice(0, 1).toUpperCase();
+    const tx = el("span", "xtx"); tx.append(el("b", null, ch.name), el("span", null, ch.subs || ""));
+    b.append(av, tx); b.addEventListener("click", () => showChannelInfo(ch));
+    return b;
+  };
+  const showInfoFor = (v, api) => {
+    const cur = current();
+    state.infoV = cur && cur.id === v.id ? null : v; state.infoOpen = api && api.open ? api.open : null;
+    if (state.panel === "info") renderPanel(true); else showPanel("info");
+  };
   const renderInfo = async () => {
-    const v = current();
+    const v = infoVid();
     state.panelVid = v ? v.id : "";
     if (!v) return ui.pbody.replaceChildren(el("p", "empty", "Nothing playing."));
     if (state.twInfo && state.twInfo.tw) { const w = state.twInfo; return renderTwitchInfo(w); } // an offline streamer you picked
@@ -3381,32 +3612,58 @@
     setupBody(); // (scrolling and swiping the creator's videos work as in the list)
     if (ui.pbody._infoFor === v.id && ui.pbody.querySelector(":scope > .desc")) { drawCreatorVideos(v); return; } // same video: only its list changes (a swipe)
     ui.pbody._infoFor = v.id;
+    if (v.isCh) { // a channel's page: who they are, then their videos
+      const box = el("div", "desc chpage"), top = el("div", "chtop"), av = el("span", "xav big");
+      const pic = ytPic(v.avatar); if (pic) av.append(pic); else av.textContent = (v.channel || "?").slice(0, 1).toUpperCase();
+      const tx = el("div"); tx.append(el("h3", null, v.channel || ""), el("div", "subs", [v.creator.startsWith("@") ? v.creator : "", v.subs].filter(Boolean).join(" · ")));
+      top.append(av, tx); box.append(top);
+      ui.pbody.replaceChildren(box, creatorBox()); drawCreatorVideos(v); atTopOnOpen(v);
+      return;
+    }
     const box = el("div", "desc");
     const subsLine = el("div", "subs"); subsLine.hidden = true;
     box.append(el("h3", null, v.title || ""), iconLine("by", [["user", whoOf(v)], ["cal", v.age], ["clock", v.len]]), subsLine);
+    if (state.infoV && state.infoV === v) { // (not what's playing: one click plays it)
+      const go = btn("", "Play this video", () => { const x = state.infoV, open = state.infoOpen; state.infoV = null; state.infoOpen = null; if (open) open(); else playHere(x); }, "ipl");
+      const ic = el("span", "mic"); ic.append(icon("play")); go.append(ic, el("span", null, "Play now")); box.append(go);
+    }
     ownerOf(v.id).then((o) => { if (o && o.handle && !v.creator) state.ownerHandle[v.id] = o.handle; if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
-    const body = el("div", null, state.desc[v.id] || "Loading description…");
-    box.append(body);
+    // a long description starts folded to a few lines, so the creator's videos below are in view
+    const body = el("div", "dtx clamp", state.desc[v.id] || "Loading description…");
+    // (it opens and folds smoothly: its height glides)
+    const moreB = btn("Show more", "Show the whole description", () => {
+      const h0 = body.offsetHeight, folding = !body.classList.contains("clamp");
+      for (const a of body.getAnimations()) a.cancel();
+      body.classList.toggle("clamp", folding); moreB.textContent = folding ? "Show more" : "Show less";
+      if (!motionOn()) return;
+      const h1 = body.offsetHeight, ms = Math.round(Math.min(520, 240 + Math.abs(h1 - h0) * 0.35));
+      body.style.overflow = "hidden";
+      const an = body.animate([{ height: h0 + "px" }, { height: h1 + "px" }], { duration: ms, easing: "cubic-bezier(.4,0,.2,1)" });
+      an.onfinish = an.oncancel = () => { body.style.overflow = ""; };
+    }, "dmore"); moreB.hidden = true;
+    const fold = () => requestAnimationFrame(() => { if (!body.isConnected) return; moreB.hidden = !(body.classList.contains("clamp") ? body.scrollHeight > body.clientHeight + 4 : true); });
+    box.append(body, moreB); fold();
     ui.pbody.replaceChildren(box, creatorBox()); drawCreatorVideos(v); atTopOnOpen(v); // always opens at the top (the list's own place is kept for when you go back)
     if (state.desc[v.id] === undefined) {
       const d = await descriptionOf(v.id);
       state.desc[v.id] = d || "This video has no description.";
       const ks = Object.keys(state.desc); if (ks.length > 60) for (const k of ks.slice(0, ks.length - 60)) delete state.desc[k]; // keep the last few only
-      if (ui && state.panel === "info" && current() && current().id === v.id) body.textContent = state.desc[v.id];
+      if (ui && state.panel === "info" && infoVid() && infoVid().id === v.id) { body.textContent = state.desc[v.id]; fold(); }
     }
   };
   // ---- under Info: the creator's own videos, Latest or Popular (as on their channel), loading more as you scroll down
   const cvCache = new Map(); // creator|sort → { items, more, busy, done }
   const cvState = { list: null };
   if (!state.ownerHandle) state.ownerHandle = {};
-  const cvSort = () => (lsGet("ytv:infosort", "latest") === "popular" ? "popular" : "latest");
+  const cvSortBy = new Map(); // video → Latest or Popular, as you last had it on that video (Latest the first time)
+  const cvSort = () => { const v = infoVid(); return (v && cvSortBy.get(v.id)) || "latest"; };
   const cvCreator = (v) => { const c = SW.normalizeCreator ? SW.normalizeCreator(v.creator || "") : v.creator; return /^(@|channel\/UC)/.test(c || "") ? c : state.ownerHandle[v.id] || ""; };
   const creatorBox = () => {
     const box = el("div", "cvbox");
     const seg = el("div", "cvseg"); seg.setAttribute("role", "tablist");
     for (const [k, label] of [["latest", "Latest"], ["popular", "Popular"]]) {
       const b = el("button", null, label); b.type = "button"; b.dataset.k = k; b.setAttribute("role", "tab");
-      b.addEventListener("click", () => { lsSet("ytv:infosort", k); const v = current(); if (v) drawCreatorVideos(v); });
+      b.addEventListener("click", () => { const v = infoVid(); if (!v) return; cvSortBy.set(v.id, k); if (cvSortBy.size > 300) cvSortBy.delete(cvSortBy.keys().next().value); drawCreatorVideos(v); });
       seg.append(b);
     }
     const head = el("div", "cvhead"); head.append(el("b", "cvt", "Videos"), seg);
@@ -3428,6 +3685,15 @@
     if (!L.started) { cvMore(v, L, key); }
     const shown = L.items.filter((x) => !removed.has(x.id));
     reconcile(list, shown, "creator", null, true);
+    // (new ones come in one after another, top to bottom, like the comments)
+    if (!list._had || list._hadKey !== key) { list._had = new Set(); list._hadKey = key; }
+    let k = 0;
+    for (const w of list.children) {
+      const id = w.dataset.id; if (!id || list._had.has(id)) continue; list._had.add(id);
+      if (!motionOn() || k >= 20) continue;
+      w.classList.add("cin"); w.style.animationDelay = `${k++ * 16}ms`;
+      w.addEventListener("animationend", () => { w.classList.remove("cin"); w.style.animationDelay = ""; }, { once: true });
+    }
     for (const w of list.children) w.classList.toggle("curw", w.dataset.id === v.id);
     note.textContent = L.busy ? (shown.length ? "Loading more…" : "Loading…") : !shown.length && L.done ? "Nothing here." : "";
   };
@@ -3440,14 +3706,14 @@
     const have = new Set(L.items.map((x) => x.id));
     for (const x of pg.videos || []) if (x && !have.has(x.id)) { have.add(x.id); L.items.push({ ...x, channel: x.channel || v.channel, creator: x.creator || who }); }
     L.more = pg.more || null; L.done = !L.more; L.busy = false;
-    const cur = current();
+    const cur = infoVid();
     if (ui && state.panel === "info" && cur && cvCreator(cur) === who && cvSort() === sort) drawCreatorVideos(cur);
   };
   // near the bottom of Info: the next page
   const cvScroll = () => {
     if (!ui || state.panel !== "info" || !cvState.list) return;
     const b = ui.pbody; if (b.scrollHeight - b.scrollTop - b.clientHeight > 600) return;
-    const v = current(), L = cvState.list; if (!v || L.busy || L.done) return;
+    const v = infoVid(), L = cvState.list; if (!v || L.busy || L.done) return;
     const list = b.querySelector(".cvlist"); if (list && list.dataset.key) cvMore(v, L, list.dataset.key);
   };
   const renderComments = () => {
@@ -3455,6 +3721,7 @@
     state.panelVid = v ? v.id : "";
     if (!v) return ui.pbody.replaceChildren(el("p", "empty", "Nothing playing."));
     if (v.tw) return renderTwitchChatPanel(v); // a stream's chat, YTV style
+    setupBody(); // (pulling past the end loads more comments, as in the list)
     const comBox = el("div", "coms");
     ui.pbody.replaceChildren(comBox); atTopOnOpen(v); // always opens at the top (the list's own place is kept for when you go back)
     loadComments(v, comBox);
@@ -3474,36 +3741,44 @@
     })();
     return entry;
   };
+  let comPull = null;
   const loadComments = async (v, boxEl) => {
     let entry = comments.get(v.id);
+    // (only new comments are added: the ones you see stay put, and the new ones come in one after another, top to bottom)
+    const made = [];
     const draw = () => {
       if (!ui || state.panel !== "comments" || !current() || current().id !== v.id || !boxEl.isConnected) return;
-      const parts = [];
-      if (!entry || (entry.loading && !entry.list.length)) parts.push(el("p", "muted", "Loading comments…"));
-      else if (entry.off) parts.push(el("p", "muted", "Comments are turned off for this video."));
-      else if (!entry.list.length) parts.push(el("p", "muted", entry.failed ? "YouTube didn’t send the comments. Try again in a moment." : "No comments yet."));
-      for (const c of entry ? entry.list : []) {
-        const item = el("div", "com");
+      for (const n of [...boxEl.children]) if (!n.classList.contains("com")) n.remove();
+      if (!entry || (entry.loading && !entry.list.length)) boxEl.append(el("p", "muted", "Loading comments…"));
+      else if (entry.off) boxEl.append(el("p", "muted", "Comments are turned off for this video."));
+      else if (!entry.list.length) boxEl.append(el("p", "muted", entry.failed ? "YouTube didn’t send the comments. Try again in a moment." : "No comments yet."));
+      const list = entry ? entry.list : [];
+      if (made.length > list.length || made.some((n, k) => n._c !== list[k])) { for (const n of made) n.remove(); made.length = 0; }
+      let k = 0;
+      for (let i = made.length; i < list.length; i++, k++) {
+        const c = list[i], item = el("div", "com"); item._c = c;
         const head = el("div", "ch");
         head.append(el("b", null, c.author || "Someone"), el("span", null, [c.age, c.likes && `👍 ${c.likes}`].filter(Boolean).join(" · ")));
         item.append(head, el("div", "ct", c.text));
-        parts.push(item);
+        if (motionOn() && k < 20) { item.classList.add("cin"); item.style.animationDelay = `${k * 16}ms`; item.addEventListener("animationend", () => { item.classList.remove("cin"); item.style.animationDelay = ""; }, { once: true }); }
+        boxEl.append(item); made.push(item);
       }
-      if (entry && entry.next && !entry.off) {
+      if (entry && entry.next && !entry.off && !pullK("list")) { // (pulling past the end loads more; with pulling off, a button)
         const more = btn(entry.loading ? "Loading…" : "Load more comments", "Load more comments", () => loadMore());
         more.disabled = !!entry.loading;
-        parts.push(more);
+        boxEl.append(more);
       }
-      boxEl.replaceChildren(...parts);
     };
     const loadMore = async () => {
-      if (!entry || entry.loading) return;
+      if (!entry || entry.loading) return 0;
       entry.loading = true; draw();
       const res = await SW.yt.commentsFor("", entry);
       entry.loading = false;
       entry.list.push(...res.comments); entry.next = res.next; entry.failed = !!res.failed && !entry.list.length;
       draw();
+      return res.comments.length;
     };
+    comPull = { id: v.id, can: () => !!(entry && entry.next && !entry.off && !entry.loading), load: loadMore };
     if (entry && entry.failed && !entry.list.length && !entry.loading) { comments.delete(v.id); entry = null; } // opening the tab again retries
     if (!entry) { fetchComments(v); entry = comments.get(v.id); }
     draw();
@@ -3611,7 +3886,7 @@
     if (sig !== tabsSig) {
       tabsSig = sig;
       const mk = (id, title, parts, cls = "tab") => {
-        const b = el("button", cls); b.type = "button"; b.title = title;
+        const b = el("button", cls); b.type = "button"; b.title = title; b._id = id;
         b.dataset.k = id === "explore" || id.startsWith("x:") ? "q:" + (id === "explore" ? state.stay.query : (xtabOf(id) || {}).query) : id;
         b.setAttribute("role", "tab"); b.setAttribute("aria-selected", String(state.panel === id));
         b.append(...parts);
@@ -3667,6 +3942,8 @@
       const topics = rest.filter((b) => !keyOf(b).startsWith("src:")).sort((a, b) => tabSeq.indexOf(keyOf(a)) - tabSeq.indexOf(keyOf(b)));
       ui.ptabs.replaceChildren(feed, ...chTabs, ...topics, plus, ui.tabInd);
     }
+    if (ui.vgrid && !ui.vgrid.hidden && isListTab(state.panel) && state.panel !== grid.tab) selectGridTab(state.panel); // (a tab picked in the list panel shows in the grid too)
+    syncGridTabs();
     requestAnimationFrame(moveIndicator);
   };
   // The ▾ list of channels: look at one's videos here without changing what's playing. From the +, it pins one as a tab.
@@ -3681,7 +3958,7 @@
       const b = el("button", "cm" + (mode === "view" && "src:" + c.id === state.panel ? " sel" : "") + (mode === "pin" && isPin ? " sel" : "")); b.type = "button";
       b.append(el("span", "n", String(c.num)), ...(CHAN_ICON[c.id] ? [chanIcon(c.id, "cmi")] : []), el("span", "nm", c.name), ...(c.id === state.colId ? [el("span", "live")] : []), ...(mode === "pin" ? [el("span", "ck", isPin ? "✓" : "")] : []));
       b.addEventListener("click", () => {
-        if (mode === "pin") { closeChanMenu(); setPins(isPin ? pins.filter((p) => p !== c.id) : [...pins, c.id]); if (!isPin) showPanel("src:" + c.id); return; }
+        if (mode === "pin") { const g = m.classList.contains("ingrid"); closeChanMenu(); setPins(isPin ? pins.filter((p) => p !== c.id) : [...pins, c.id]); if (!isPin) { if (g) { renderTabs(); selectGridTab("src:" + c.id); } else showPanel("src:" + c.id); } return; }
         closeChanMenu(); openChan(c.id); showPanel("src:" + c.id);
       });
       return b;
@@ -3690,8 +3967,13 @@
     const ov = el("button", "cm more"); ov.type = "button"; ov.append(el("span", "n", "▦"), el("span", "nm", "Channel overview"));
     ov.addEventListener("click", () => { closeChanMenu(); showGuide(true); });
     m.replaceChildren(head, ...items, el("div", "sep"), ov);
-    const r = anchor.getBoundingClientRect(), pr = ui.root.querySelector(".panel").getBoundingClientRect();
-    m.style.left = `${Math.max(8, Math.min(r.left - pr.left, pr.width - 258))}px`; m.style.top = `${r.bottom - pr.top + 6}px`;
+    // (from the ∨ menu's + it opens over the ∨ menu; from the list's tabs, in the list panel)
+    const inGrid = !!(ui.vgrid && ui.vgrid.contains(anchor)), host = inGrid ? ui.root : ui.root.querySelector(".panel");
+    if (m.parentNode !== host) host.append(m);
+    m.classList.toggle("ingrid", inGrid);
+    const z = inGrid ? (cfg ? cfg.tv.uiScale : 100) / 100 : 1;
+    const r = anchor.getBoundingClientRect(), pr = host.getBoundingClientRect();
+    m.style.left = `${Math.max(8, Math.min((r.left - pr.left) / z, pr.width / z - 258))}px`; m.style.top = `${(r.bottom - pr.top) / z + 6}px`;
     m.hidden = false; void m.offsetWidth; m.classList.add("on");
     const sel = m.querySelector(".cm.sel") || m.querySelector(".cm"); sel && sel.focus();
   };
@@ -3743,18 +4025,21 @@
     panelRaf = requestAnimationFrame(() => {
       panelRaf = 0;
       if (!ui) return;
-      try { if (isListTab(state.panel)) renderPanel(false); else renderTabs(); } catch (err) { logErr("list", err); } // (one bad row never breaks the list for good)
+      try { if (isListTab(state.panel)) renderPanel(false); else renderTabs(); } catch (err) { logErr("list", err); }
+      try { if (gridShown()) drawGrid(); } catch (err) { logErr("grid", err); } // (the grid shows the same list) // (one bad row never breaks the list for good)
       });
   };
   const refreshList = () => schedulePanel();
   const showPanel = (which) => {
     if (!ui) return;
     which = which || "";
-    if (which !== "info") state.twInfo = null; // (an offline streamer's page is only for that one visit)
+    if (which !== "info") { state.twInfo = null; state.infoV = null; } // (an offline streamer's page, or another video's Info, is only for that one visit)
     ui.root.classList.toggle("panchat", which === "comments" && ui.root.classList.contains("on-twitch")); // the chat in the panel: the panel itself see-through
     if (ui.root.classList.contains("on-twitch")) setTimeout(() => { if (!ui) return; if (which !== "comments" && !cfg.tv.twitch.chat.show) stopChat(); chatBox(); }, 0); // one chat at a time; none showing: no chat connection at all
     if (which === "explore" && !state.stay) which = playingTab();
     if (which.startsWith("src:") && !chanById(which.slice(4))) which = playingTab();
+    if (cfg && !cfg.tv.listOn && isListTab(which) && which !== HIST_TAB) { if (gridShown()) selectGridTab(which); which = ""; }
+    if (which && gridShown()) closeGrid(); // (one at a time: a panel on the right closes the ∨ menu) // (the list menu is off in settings: its tabs live in the ∨ menu)
     if (which.startsWith("src:")) openChan(which.slice(4)); // any channel you look at has a tab (on the right)
     const changed = which !== state.panel;
     if (!which || !state.panel) state.edgeOpened = false; // opened with a key or a click: it stays until you close it
@@ -3784,7 +4069,8 @@
   // the panel hid by itself (the mouse went away) while Info, Comments or History was open: it comes back as the list
   const pageHidden = () => { if (ui && PAGES.has(state.panel) && ui.root.classList.contains("fade")) showPanel(lastListTab && isListTab(lastListTab) ? lastListTab : playingTab()); };
   // The list key: opens the tab of what's playing (or closes the panel).
-  const toggleList = () => showPanel(isListTab(state.panel) ? "" : playingTab());
+  // (with the list menu off in settings, U is the ∨ menu's key too)
+  const toggleList = () => (cfg && !cfg.tv.listOn ? (cfg.tv.gridOn ? toggleGrid() : null) : showPanel(isListTab(state.panel) ? "" : playingTab()));
 
   // ---------------------------------------------------------------- channel overview (guide)
   // A card per channel: what's on now and next. Drag cards to put the channels in your order (the numbers follow),
@@ -3972,7 +4258,7 @@
     list.append(nc);
     const gtop = el("div", "gtop");
     gtop.append(btn("＋ Add links to Watch Later", "Paste video links (one per line) to add them to your Watch Later list", () => openBulkAdd()),
-      btn("⚙ Settings", "Open YTV settings", () => openSettings("#channels")),
+      btn("⚙ Settings", "Open YTV settings", () => openSettings("")),
       btn("✕ Close", "Close the overview", () => (!state.colId ? closeTv() : showGuide(false))));
     const help = cfg.tv.keysOn
       ? SW.TV_ACTIONS.filter(([id]) => keyOf(id)).map(([id, label]) => `${keyName(id)} ${label.toLowerCase()}`).join(" · ") + " · Shift with the tab keys: go there and play · Shift+E search YouTube · Shift+[ and Shift+] back and forth through everything you watched · Cmd+Z undo · Esc close"
@@ -3992,6 +4278,8 @@
   };
   const showGuide = (on) => {
     if (!ui) return;
+    if (on && ui.vgrid && !ui.vgrid.hidden) closeGrid(); // (one at a time)
+    if (on && state.panel) showPanel("");
     if (on) renderGuide();
     const was = ui.root.classList.contains("show-guide");
     ui.root.classList.toggle("show-guide", on);
@@ -4014,7 +4302,7 @@
   const showNow = () => {
     const c = currentCol(), v = state.twVod || current(); // (a Twitch past broadcast shows its own title)
     if (v && v.title) document.title = `${v.title} - YouTube`; // the browser tab follows the video
-    ui.stay.hidden = !state.stay;
+    ui.stay.hidden = true; // (no "Exploring … Back" pill any more: the list tab says it, B goes back)
     if (state.stay) {
       ui.stayTxt.textContent = state.stay.by ? `Only ${state.stay.query}` : state.stay.mode === "explore" ? `Exploring: ${state.stay.query}` : `Only: ${state.stay.title || "this creator"}`;
       ui.stayBtn.title = `Back to ${c ? c.name : "the mix"}`;
@@ -4037,7 +4325,7 @@
     refreshCreatorButton();
     if (state.panel === "explore" && !state.stay) state.panel = playingTab(); // the topic was closed
     if (state.panel && isListTab(state.panel)) schedulePanel();
-    else if ((state.panel === "info" || state.panel === "comments") && v && state.panelVid !== v.id) renderPanel();
+    else if ((state.panel === "info" || state.panel === "comments") && v && state.panelVid !== v.id && !(state.panel === "info" && state.infoV)) renderPanel();
     else renderTabs();
     wake();
   };
@@ -4104,6 +4392,9 @@
     if (mine.move) { state.twIdleAt = Date.now(); if (state.overVideo) state.overVideo(); if (state.syncControls) state.syncControls(); return; } // the mouse over the stream wakes YTV's UI
     if (mine.dbl) { toggleFullscreen(); return; }
     if (mine.click) { if (state.panel && !state.edgeOpened && ui.root.classList.contains("show-panel")) showPanel(""); return; } // a click on the stream: the list closes (opened with its key, as on YouTube)
+    if (typeof mine.wheel === "number") { if (state.gridWheel) state.gridWheel({ dy: mine.wheel, notch: !!mine.notch }); return; }
+    if (typeof mine.muted === "boolean" && !mine.playing) { tw.muted = mine.muted; toast(mine.muted ? "Muted" : "Sound on"); return; }
+    if (typeof mine.paused === "boolean") { tw.paused = mine.paused; if (mine.said) toast(mine.paused ? "Paused" : "Playing"); return; }
     if (mine.qualityLocked) { if (!tw.lockedSaid) { tw.lockedSaid = true; toast("Twitch only plays higher quality when you’re logged in to twitch.tv in this browser"); } return; }
     try { twEvents.push(JSON.stringify(mine).slice(0, 120)); if (twEvents.length > 12) twEvents.shift(); } catch {}
     if (mine.playing) { tw.playing = true; if (mine.muted) { tw.muted = true; toast("The browser held the sound back — press M, or use the stream’s volume"); } }
@@ -4112,9 +4403,8 @@
   const twCmd = (cmd, extra = {}) => twFrameCmd(ui && ui.root.querySelector(".twframe"), { cmd, ...extra });
   const twKey = (e) => { // Space / K pause and play, M and ↑ ↓ for the stream's sound (a click on the picture never pauses)
     const k = e.key;
-    if (k === " " || k === "k" || k === "K") return () => { tw.paused = !tw.paused; twCmd(tw.paused ? "pause" : "play"); toast(tw.paused ? "Paused" : "Playing"); };
-    if (k === "m" || k === "M") return () => { tw.muted = !tw.muted; twCmd("mute", { on: tw.muted }); toast(tw.muted ? "Muted" : "Sound on"); };
-    // (no volume keys: a Twitch stream always plays at full volume)
+    if (k === " " || k === "k" || k === "K") return () => twCmd("toggle"); // (the stream says which it is now: also after Twitch's own button)
+    if (k === "m" || k === "M") return () => twCmd("mutetoggle"); // (the stream says which it is now)
     return null;
   };
   const twSrc = (v, warm) => {
@@ -4397,7 +4687,7 @@
     }
     return got;
   };
-  const topUp = () => {
+  const topUp = (want = 15) => {
     if (topping) return topping;
     topping = (async () => {
       const col = currentCol();
@@ -4413,8 +4703,8 @@
         }
       } else if (state.stay && state.stay.by) more = await creatorVideos(current());
       else if (state.stay) more = await similarTo(current().id);
-      else more = await moreLineup(col, 15, new Set(state.queue.map((q) => q.id))); // the next pages: a channel never runs dry
-      let fresh = more.filter((v) => usable(col, v) && !played.has(v.id) && !state.queue.some((q) => q.id === v.id)).slice(0, 40);
+      else more = await moreLineup(col, want, new Set(state.queue.map((q) => q.id))); // the next pages: a channel never runs dry
+      let fresh = more.filter((v) => usable(col, v) && !played.has(v.id) && !state.queue.some((q) => q.id === v.id)).slice(0, Math.max(40, want));
       if (!fresh.length && !state.stay) { fresh = (await moreFallback(col, state.queue[state.queue.length - 1], new Set(state.queue.map((q) => q.id)))).slice(0, 40); }
       if (fresh.length) { state.queue.push(...fresh); saveSession(); refreshList(); }
       return fresh.length;
@@ -4540,6 +4830,7 @@
     saveSession();
     focusExploreTab();
     showNow();
+    if (state.panel !== "explore") showPanel("explore"); // (the list opens on it: what the topic found, right away)
     if (first) goTo(state.pos + 1); // a video picked in the list starts now; otherwise what's playing carries on and the topic follows
   };
   // Explore a creator: only their videos until you go back.
@@ -4566,41 +4857,56 @@
     showNow();
     if (first) goTo(state.pos + 1);
   };
-  // Explore box. For = which video it's about (the one playing, or one picked in Up next).
-  // Offers: only this creator, topics the video is about (its game or show first), or your own words.
-  const openExplore = async (forVideo) => {
+  // Search: a plain search box (E and Shift+E). Type and press Enter: YouTube's results open as a tab in the list (swipe
+  // to add, click to watch). Under it, the topics of what's playing (or of the video you right-clicked): click one to
+  // play only that topic until you go back (B).
+  let lastSearch = "";
+  const openSearch = (forVideo) => {
+    if (!ui) return;
     const v = forVideo || current();
-    if (!ui || !v) return;
     const anchor = forVideo && current() && forVideo.id !== current().id ? forVideo : null;
     const box = ui.explore;
-    const who = SW.normalizeCreator(creatorOf(v));
-    const name = goodName(v.channel) || (who && who.startsWith("@") ? who : "");
-    const input = el("input"); input.type = "text"; input.maxLength = 80; input.placeholder = "Or type a topic (commas for several)"; input.setAttribute("aria-label", "Topic to explore");
+    const input = el("input"); input.type = "search"; input.maxLength = 100; input.placeholder = "Search YouTube"; input.setAttribute("aria-label", "Search YouTube"); input.value = forVideo ? "" : lastSearch;
+    const note = el("p", "bulknote", ""); note.hidden = true;
     const ideas = el("div", "ideas");
-    // Cmd/Ctrl-click topics to pick several: they're explored together (a video about any of them plays)
-    const picked = [];
-    const together = (extra) => [...new Set([...picked, ...String(extra || "").split(",").map((x) => x.trim()).filter(Boolean)])].join(" + ");
-    const go = btn("Explore", "Start exploring", () => exploreTopic(together(input.value), anchor), "acc");
-    const drawGo = () => { go.textContent = picked.length > 1 ? `Explore ${picked.length} together` : "Explore"; };
-    input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); exploreTopic(together(input.value), anchor); } if (e.key === "Escape") { e.preventDefault(); closeExplore(); } });
-    const row = el("div", "row"); row.append(input, go);
-    const parts = [el("h3", null, "Explore"), el("p", null, anchor ? `Starts with “${anchor.title || "this video"}”, then only what you pick, until you go back.` : "Only what you pick will play until you go back.")];
-    if (who || name) parts.push(btn(`👤 Only ${name || "this creator"}’s videos`, "Play only this creator’s videos", () => exploreCreator(anchor), "acc"));
-    parts.push(el("p", "sub", "Topics in this video · Cmd-click to pick several"), ideas, row, (() => { const c = btn("Cancel", "Close", () => closeExplore()); c.style.marginTop = "14px"; return c; })());
+    let busy = false;
+    const search = async () => {
+      const q = input.value.trim().slice(0, 100);
+      if (!q || busy) return;
+      busy = true; note.hidden = false; note.textContent = `Searching for “${q}”…`;
+      let items = [], chans0 = [];
+      const chP = SW.yt.searchChannels(q).catch(() => null); // (channels that match, at the top of the results: click one for its page)
+      try {
+        const pg = await SW.yt.videosPage(`/results?search_query=${encodeURIComponent(q)}&sp=EgIQAQ%253D%253D`); // videos only
+        items = pg.videos.slice();
+        if (pg.more && items.length < 40) { const more = await SW.yt.moreVideos(pg.more); items.push(...more.videos); }
+      } catch {}
+      try { chans0 = ((await chP) || []).filter((c) => c && c.creator && c.name).slice(0, 4); } catch {}
+      busy = false;
+      if (!ui) return;
+      items = [...new Map(items.filter((x) => x && ID_RE.test(x.id)).map((x) => [x.id, x])).values()].slice(0, 80);
+      if (!items.length && !chans0.length) { note.textContent = `Nothing found for “${q}”. Try other words.`; return; }
+      lastSearch = q;
+      const id = Math.random().toString(36).slice(2, 9);
+      state.xtabs = [{ id, query: q, by: "", items, chans: chans0 }, ...(state.xtabs || []).filter((x) => x.query !== q)].slice(0, 6);
+      saveSession(); closeExplore(); tabsSig = "";
+      showPanel("x:" + id);
+    };
+    input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); search(); } if (e.key === "Escape") { e.preventDefault(); closeExplore(); } });
+    const field = el("div", "sfield"); const mag = el("span", "smag"); mag.append(icon("search")); field.append(mag, input);
+    const parts = [field, note];
+    const topics = !!(v && !v.tw && current());
+    if (topics) parts.push(el("p", "sub", "Play a topic from this video"), ideas);
     box.replaceChildren(...parts);
+    box.classList.add("searchbox");
     box.hidden = false;
+    if (motionOn()) { box.getAnimations().forEach((a) => a.cancel()); box.animate([{ opacity: 0, transform: "translate(-50%,-50%) translateY(-10px) scale(.96)" }, { opacity: 1, transform: "translate(-50%,-50%)" }], { duration: 240, easing: "cubic-bezier(.2,.9,.3,1.15)" }); }
+    input.focus(); input.select();
     wake();
+    if (!topics) return;
     const fill = (list, th) => {
       const label = (t) => (th && th.game && t === th.game ? "🎮 " : th && (th.tags || []).includes(t) ? "# " : "") + t;
-      ideas.replaceChildren(...(list.length ? list : ["…"]).map((t) => {
-        const b = btn(label(t), `Explore “${t}” (Cmd-click to pick several)`, (e) => {
-          if (t === "…") return;
-          if (e.metaKey || e.ctrlKey || e.shiftKey) { const i = picked.indexOf(t); if (i >= 0) picked.splice(i, 1); else picked.push(t); b.classList.toggle("picked", i < 0); drawGo(); return; }
-          exploreTopic(together(t), anchor);
-        });
-        if (picked.includes(t)) b.classList.add("picked");
-        return b;
-      }));
+      ideas.replaceChildren(...(list.length ? list : ["…"]).map((t) => btn(label(t), `Play only “${t}” until you go back (B)`, () => { if (t !== "…") exploreTopic(t, anchor); })));
     };
     fill(topicIdeas(v, v.keywords, {}), {});
     themeOf(v.id).then((th) => {
@@ -4609,48 +4915,8 @@
       fill(topicIdeas(v, v.keywords, th), th);
     });
   };
+  const openExplore = (forVideo) => openSearch(forVideo); // (Explore and Search are one box now)
   const closeExplore = () => { if (ui) { ui.explore.hidden = true; ui.explore.classList.remove("searchbox"); wake(); } };
-  // Shift+E: search YouTube for videos. The results open as a tab in the list: swipe one to add it to your Feed,
-  // click one to watch it (and carry on exploring the rest of the results from there).
-  let lastSearch = "";
-  const openSearch = () => {
-    if (!ui) return;
-    const box = ui.explore;
-    const input = el("input"); input.type = "search"; input.maxLength = 100; input.placeholder = "Search YouTube for videos"; input.setAttribute("aria-label", "Search YouTube for videos"); input.value = lastSearch;
-    const note = el("p", "bulknote", "");
-    let busy = false;
-    const go = async () => {
-      const q = input.value.trim().slice(0, 100);
-      if (!q) { input.focus(); return; }
-      if (busy) return;
-      busy = true; goB.disabled = true; note.textContent = `Searching for “${q}”…`;
-      let items = [];
-      try {
-        const pg = await SW.yt.videosPage(`/results?search_query=${encodeURIComponent(q)}&sp=EgIQAQ%253D%253D`); // videos only
-        items = pg.videos.slice();
-        if (pg.more && items.length < 40) { const more = await SW.yt.moreVideos(pg.more); items.push(...more.videos); }
-      } catch {}
-      busy = false; goB.disabled = false;
-      if (!ui) return;
-      items = [...new Map(items.filter((x) => x && ID_RE.test(x.id)).map((x) => [x.id, x])).values()].slice(0, 80);
-      if (!items.length) { note.textContent = `Nothing found for “${q}”. Try other words.`; return; }
-      lastSearch = q;
-      const id = Math.random().toString(36).slice(2, 9);
-      state.xtabs = [{ id, query: q, by: "", items }, ...(state.xtabs || []).filter((x) => x.query !== q)].slice(0, 6);
-      saveSession(); closeExplore(); tabsSig = "";
-      showPanel("x:" + id);
-      toast(`${items.length} videos for “${q}”: swipe to add to your ${nameOf(FEED_ID)}, click to watch`);
-    };
-    const goB = btn("Search", "Search YouTube", () => go(), "acc");
-    input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); go(); } if (e.key === "Escape") { e.preventDefault(); closeExplore(); } });
-    const row = el("div", "row"); row.append(input, goB);
-    box.replaceChildren(el("h3", null, "Search"), el("p", null, `The results open as a tab in the list: swipe one to add it to your ${nameOf(FEED_ID)}, click one to watch it.`), row, note,
-      (() => { const c = btn("Cancel", "Close", () => closeExplore()); c.style.marginTop = "6px"; return c; })());
-    box.classList.add("searchbox");
-    box.hidden = false;
-    input.focus(); input.select();
-    wake();
-  };
 
   // Bulk add: paste video links, one per line, and add them all to your YouTube Watch Later list.
   const openBulkAdd = () => {
@@ -4752,7 +5018,7 @@
       return b;
     };
     const k = (a) => (keyOf(a) && cfg.tv.keysOn ? keyName(a) : "");
-    const items = [item("fwd", "Forward", "Shift+]", () => historyStep(1)), item("search", "Explore a creator or topic", k("explore"), () => openExplore())];
+    const items = [item("fwd", "Forward", "Shift+]", () => historyStep(1)), item("search", "Search", k("explore"), () => openSearch())];
     if (v && !tw) {
       items.push(item("user-plus", ui.addB.classList.contains("on") ? "This creator’s channels" : "Add this creator to a channel", "", (a) => openCreatorMenu(a)));
       items.push(item("eye-off", "Hide this creator on this channel", "", () => hideCreator()));
@@ -4893,6 +5159,550 @@
   document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement) fsgClear(); });
   setInterval(() => { if (ui && document.fullscreenElement) { const v = current(); if (v && fsg.vid && v.id !== fsg.vid) fsgClear(); fsgCheck(); } }, 1000); // (opened with the ∨, or a new video)
 
+  // ---------------------------------------------------------------- the ∨ grid
+  // The open list (or, with no list open, the list of what's playing) as a big grid of videos over the video, like
+  // YouTube's grid in full screen, in and out of full screen. V, a scroll down on the video, or the ∨ at the bottom
+  // opens it; V, Esc, the ∧ or a scroll up at its top closes it. A click plays the video, as in the list.
+  const grid = { tab: "", tiles: new Map(), at: 0, busy: false, hover: null, closing: false, mems: new Map() };
+  // its tabs: the list's own tabs (same order, same live dot, same ✕), as chips. Picking one shows that list here, and
+  // in the list panel too when it's open; a tab picked in the list panel shows here as well.
+  const syncGridTabs = () => {
+    if (!ui || !ui.vgrid || ui.vgrid.hidden) return;
+    const row = ui.vgrid.querySelector(".vgtabs"); if (!row) return;
+    row.hidden = !cfg.tv.gridTabs;
+    if (row.hidden) return;
+    const src = [...ui.ptabs.children].filter((b) => b._id && !b.classList.contains("add"));
+    const plus = el("button", "tab add"); plus.type = "button"; plus.title = "Pin a channel as a tab"; plus.setAttribute("aria-label", "Pin a channel as a tab"); plus.append(icon("plus"));
+    plus.addEventListener("click", (e) => { e.stopPropagation(); toggleChanMenu(plus, "pin"); });
+    row.replaceChildren(plus, ...src.map((b) => {
+      const c = b.cloneNode(true); c._id = b._id; c.classList.remove("tdrag"); c.removeAttribute("title"); c.title = b.title;
+      c.setAttribute("aria-selected", String(b._id === grid.tab));
+      c.addEventListener("click", (e) => { e.stopPropagation(); if (e.target.closest && e.target.closest(".tx") && b._close) { b._close(); return; } selectGridTab(b._id); });
+      c.addEventListener("auxclick", (e) => { if (e.button === 1 && cfg.tv.tabMiddleClose && b._close) { e.preventDefault(); b._close(); } });
+      return c;
+    }));
+    row.append(plus);
+    const sel = row.querySelector('[aria-selected="true"]'); if (sel) { const r = sel.getBoundingClientRect(), rr = row.getBoundingClientRect(); if (r.left < rr.left || r.right > rr.right) row.scrollLeft += r.left - rr.left - 24; }
+  };
+  const selectGridTab = (id) => {
+    if (!ui || !ui.vgrid || id === grid.tab) return;
+    grid.mems.set(grid.tab, ui.vgrid.scrollTop);
+    grid.tab = id;
+    lastListTab = id; // (the list panel opens on it next time)
+    grid.animAll = true; drawGrid(); syncGridTabs();
+    ui.vgrid.scrollTop = grid.mems.get(id) || 0;
+  };
+  const gridOpen = () => !!(ui && ui.vgrid && !ui.vgrid.hidden && !ui.vgrid.classList.contains("peek") && !grid.closing);
+  const gridTab = () => (isListTab(state.panel) ? state.panel : playingTab());
+  const gridTitle = (tab) => {
+    if (tab === HIST_TAB) return "History";
+    if (tab === "explore") return state.stay ? state.stay.query || "Topic" : "Up next";
+    if (tab.startsWith("x:")) { const x = xtabOf(tab); return x ? x.query : "Topic"; }
+    const c = chanById(tab.slice(4)); return c ? c.name : "Up next";
+  };
+  const gridTile = (v, kind, c) => {
+    const a = el("div", "vgt"); a.tabIndex = 0; a.dataset.id = v.id; a.setAttribute("role", "button");
+    if (v.off) a.classList.add("voff"); // (a streamer who's offline: greyed out, as in the list)
+    const pic = el("div", "vgp"), sl = el("div", "vgs"), img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+    img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+    if (v.tw) { if (/^https:\/\/static-cdn\.jtvnw\.net\//.test(v.thumb || "")) img.src = v.thumb; } else if (ID_RE.test(v.id)) img.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
+    sl.append(img);
+    if (v.tw && !v.off && v.viewers) { // how many watch, with an eye (as in the list)
+      const d = el("span", "vgd vgeye"); d.title = `${v.viewers.toLocaleString()} watching`; d.append(icon("eye"), document.createTextNode(Intl.NumberFormat(undefined, { notation: "compact" }).format(v.viewers))); sl.append(d);
+    } else { const len = v.tw ? (v.off ? "Offline" : "Live") : v.len; if (len) sl.append(el("span", "vgd", len)); }
+    const pr = !v.tw ? progressOf(v) : 0; if (pr > 0) { const b = el("span", "vgpg"); b.style.width = Math.min(100, pr) + "%"; sl.append(b); }
+    // the picture sits on the same sideways track as a row in the list: [bin or plus | picture | plus or bin]
+    const wrap = el("div", "sw" + (v.tw ? " still" : "")); wrap.dataset.id = v.id; wrap._flip = flipped(); wrap._grid = a;
+    const leftAdd = !wrap._flip, track = el("div", "track");
+    const la = el("div", "act left " + (leftAdd ? "add" : "rm")), ra = el("div", "act right " + (leftAdd ? "rm" : "add"));
+    la.append(icon(leftAdd ? "plus" : "trash-2")); ra.append(icon(leftAdd ? "trash-2" : "plus"));
+    track.append(la, sl, ra); wrap.append(track); pic.append(wrap);
+    const api = { v, kind, c, wrap, row: sl, tile: a, ...actionsFor(kind, v, c) };
+    if (v.tw) api.canAdd = () => false; // (as in the list: streams don't go on your Feed)
+    rowApi.set(wrap, api); a._api = api; a._sw = wrap;
+    a.addEventListener("mouseenter", () => { grid.hover = a; });
+    a.addEventListener("mouseleave", () => { if (grid.hover === a) grid.hover = null; });
+    const meta = v.tw ? [v.channel, v.game].filter(Boolean).join(" · ") : [whoOf(v), v.age].filter(Boolean).join(" · ");
+    a.append(pic, el("div", "vgtt", v.title || ""), el("div", "vgm", meta));
+    const go = () => { if (wrap.classList.contains("gone") || Math.abs(wrap.scrollLeft - (wrap._R || 0)) > 3) return; closeGrid(); try { const act = a._api; if (act && act.open) act.open(); } catch (err) { logErr("grid", err); } };
+    a.addEventListener("click", go);
+    a.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); go(); } });
+    return a;
+  };
+  const shakeTile = (a) => { if (a._api) rowMark(a._api, "no"); };
+  // A / D (Shift+A) and Delete with the grid open: the tile under the pointer
+  const gridKey = (act, shift) => {
+    if (!gridOpen() || !grid.hover || !grid.hover.isConnected || !grid.hover._api || grid.hover._api.v.tw) return false;
+    shiftDown = !!shift;
+    const a = grid.hover, api = a._api;
+    if (busyRows.has(api.wrap) || api.wrap.classList.contains("gone")) return true;
+    if (act === "rm" ? !api.canRm() : !can(api, "add")) { shakeTile(a); return true; }
+    fire(api, act); // exactly what A / D do on a row
+    return true;
+  };
+  const gridShown = () => !!(ui && ui.vgrid && !ui.vgrid.hidden);
+  const drawGrid = () => {
+    if (!gridShown()) return;
+    const tab = grid.tab, L = listItems(tab), box = ui.vgrid;
+    box.style.setProperty("--vgc", String(cfg.tv.fsGridCols || 3));
+    const list = box.querySelector(".vgl");
+    box.querySelector(".vgref").hidden = !canPull(tabKind(tab));
+    if (!L || L.loading) { if (!list.querySelector(".vgload")) list.replaceChildren(el("div", "vgend vgload", "Loading…")); return; }
+    const cur = current();
+    // (opened, or another tab picked: every video comes in, also ones kept from last time, e.g. the list that's playing)
+    const all = !!grid.animAll && motionOn() && !state.quiet; grid.animAll = false;
+    // (what you've already watched isn't shown here: only what's playing and what's still to come)
+    const qi = L.kind === "live" ? new Map(state.queue.map((v, i) => [v, i])) : null;
+    const items = qi ? L.items.filter((v) => { if (cur && v.id === cur.id) return true; if (v.tw) return true; const i = qi.has(v) ? qi.get(v) : -1; return !(i >= 0 && i < state.pos) && !v.w && !played.has(v.id); }) : L.items;
+    const want = []; let fresh = 0;
+    for (const v of items) {
+      let t = grid.tiles.get(v.id);
+      const made = !t || t._v !== v || t._sw.classList.contains("gone");
+      if (made) { t = gridTile(v, L.kind, L.c); t._v = v; grid.tiles.set(v.id, t); }
+      if (made && motionOn() && !state.quiet) { t.classList.add("venter"); t.style.animationDelay = `${Math.min(fresh++, 14) * 22}ms`; t.addEventListener("animationend", () => { t.classList.remove("venter"); t.style.animationDelay = ""; }, { once: true }); }
+      else if (all && !t._leaving) t.animate([{ opacity: 0, transform: "translateY(12px) scale(.985)" }, { opacity: 1, transform: "none" }], { duration: 340, delay: Math.min(fresh++, 14) * 22, easing: "cubic-bezier(.4,0,.2,1)", fill: "backwards" }); // (the same come-in as a new one)
+      const i = qi && qi.has(v) ? qi.get(v) : -1, now = !!(cur && cur.id === v.id && (L.kind === "live" || L.kind === "hist"));
+      t.classList.toggle("vnow", now);
+      t.classList.toggle("vdone", L.kind === "live" && !now && !v.tw && (sortOff() ? !!v.w : i >= 0 && i < state.pos));
+      let badge = t.querySelector(".vgn"); if (now && !badge) t.querySelector(".vgs").append(el("span", "vgn", "PLAYING")); else if (!now && badge) badge.remove();
+      want.push(t);
+    }
+    // a tile on its way out (swiped away) keeps its place until it has faded
+    const old = [...list.children].filter((n) => n.classList.contains("vgt"));
+    old.forEach((t, k) => { if (t._leaving && !want.includes(t)) want.splice(Math.min(k, want.length), 0, t); });
+    // Twitch: who's offline goes small, in a section of its own at the end (they're not what you came for)
+    const offT = want.filter((t) => t.classList.contains("voff")), onT = want.filter((t) => !t.classList.contains("voff"));
+    const offNow = !!list.querySelector(":scope > .vgoffs");
+    const reorder = onT.length !== old.length || onT.some((t, k) => t !== old[k]) || offNow !== offT.length > 0;
+    // (measured only when something moves: a redraw that changes nothing costs no layout work)
+    const glide = reorder && motionOn() && old.length ? new Map(old.map((t) => [t, t.getBoundingClientRect()])) : null;
+    const end = el("div", "vgend", canPull(L.kind) ? "" : items.length ? "End of the list" : "Nothing here yet");
+    let offBox = list.querySelector(":scope > .vgoffs");
+    if (offT.length) {
+      if (!offBox) { offBox = el("div", "vgoffs"); offBox.append(el("div", "vgoh"), el("div", "vgog")); }
+      const g = offBox.lastChild; if (g.children.length !== offT.length || offT.some((t, k) => g.children[k] !== t)) g.replaceChildren(...offT);
+      offBox.firstChild.textContent = `Offline · ${offT.length}`;
+    }
+    // (taking an element out of the page and back resets its sideways scroll to 0, which shows the plus or the bin: every
+    // tile is put back where it was afterwards. That's what showed a tile in the "remove" state after Play next)
+    const keepX = reorder ? new Map(old.map((t) => [t, t._sw ? t._sw.scrollLeft : 0])) : null;
+    if (reorder) list.replaceChildren(...onT, ...(offT.length ? [offBox] : []), end);
+    else if (list.lastChild && list.lastChild.className === "vgend") list.lastChild.textContent = end.textContent;
+    const wantIds = new Set(want.map((t) => t.dataset.id));
+    for (const id of [...grid.tiles.keys()]) if (!wantIds.has(id)) grid.tiles.delete(id);
+    // the swipe tracks rest on the picture (as rows rest on the video)
+    const w0 = want.length ? want[0].querySelector(".vgp").clientWidth : 0;
+    const R = Math.round(Math.max(60, Math.min(Math.max(thr() * 2, 80), (w0 || 400) * 0.9)));
+    list.style.setProperty("--R", R + "px");
+    if (keepX) for (const t of want) {
+      const w = t._sw; if (!w || !keepX.has(t)) continue;
+      if (t._leaving || w.classList.contains("gone")) { w.scrollLeft = keepX.get(t); continue; } // (fading out: stays as it was)
+      w._R = R; w.scrollLeft = R; // (also one that's still settling after its swipe: it's done, it goes home)
+      if (!busyRows.has(w)) { w._user = 0; w._side = 0; w.classList.remove("armed", "no", "toadd", "nextup"); w.style.setProperty("--p", "0"); }
+    }
+    const rest = () => { for (const t of want) { const w = t._sw; if (!w || w.classList.contains("gone") || busyRows.has(w) || (w._R != null && userSwiped(w))) continue; if (w._R == null) w.classList.remove("armed", "no", "toadd", "nextup"); w._R = R; if (Math.abs(w.scrollLeft - R) > 1) w.scrollLeft = R; } };
+    rest(); requestAnimationFrame(rest);
+    // the others glide into the gap
+    if (glide) for (const t of want) {
+      const r0 = glide.get(t); if (!r0) continue;
+      const r1 = t.getBoundingClientRect(), dx = r0.left - r1.left, dy = r0.top - r1.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
+      t.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.4,0,.2,1)" });
+    }
+  };
+  // a tile swiped away (or A / D): it fades where it is, then the others glide into its place
+  const leaveTile = (w) => {
+    const t = w._grid; w.classList.add("gone", "armed"); w._busy = true; w._user = 0; t._leaving = true;
+    // (it's taken out by the redraw itself, so the others measure from where they were and glide into the gap)
+    const done = () => { t._leaving = false; w._busy = false; try { drawGrid(); } catch (err) { logErr("grid", err); } if (t.isConnected && grid.tiles.get(t.dataset.id) !== t) t.remove(); };
+    if (!motionOn()) return done();
+    t.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.9)" }], { duration: Math.max(140, Math.round(cfg.tv.swipeFadeMs * 0.6)), easing: "ease", fill: "forwards" }).onfinish = done;
+  };
+  const gridMore = async () => {
+    if (grid.busy || !gridOpen()) return;
+    const kind = tabKind(grid.tab); if (!canPull(kind)) return;
+    const box = ui.vgrid; if (box.scrollHeight - box.scrollTop - box.clientHeight > box.clientHeight * 0.8) return;
+    grid.busy = true;
+    try { await loadMoreTab(grid.tab); } catch {} finally { grid.busy = false; }
+    drawGrid();
+  };
+  // ---- pulling: the ∨ grid open and closed, and "more" at the end of a list. The same swipe everywhere (tuned in the
+  // Pull Lab): while you scroll it just follows you; it acts when you let go (fast enough, far enough, or enough of it
+  // showing) or, for the grid, the moment it's past its %. Otherwise it slides back. A scroll that runs into an edge stops
+  // there with one overshoot; the rest of a scroll that did something is dropped, and the next swipe is yours at once.
+  const PULL_FEEL = { // Settings → Playing / List: easily, normal (as tuned), firm
+    grid: {
+      easy: { dist: 130, pct: 30, speed: 0.7, min: 25, give: 260, spring: 240, hold: 110, over: 24, live: 1 },
+      normal: { dist: 250, pct: 50, speed: 1.1, min: 45, give: 180, spring: 240, hold: 110, over: 34, live: 1 },
+      firm: { dist: 380, pct: 60, speed: 1.6, min: 70, give: 160, spring: 260, hold: 110, over: 28, live: 1 },
+    },
+    list: {
+      easy: { dist: 90, pct: 15, speed: 0.7, min: 25, give: 160, snap: 180, spring: 220, hold: 110, over: 18, live: 0 },
+      normal: { dist: 240, pct: 35, speed: 1.6, min: 60, give: 100, snap: 220, spring: 260, hold: 110, over: 24, live: 0 },
+      firm: { dist: 320, pct: 45, speed: 2, min: 80, give: 90, snap: 220, spring: 260, hold: 110, over: 24, live: 0 },
+    },
+  };
+  const pullK = (which) => {
+    if (!cfg) return null;
+    const k = PULL_FEEL[which][which === "grid" ? cfg.tv.gridScroll : cfg.tv.listPull];
+    if (!k) return null;
+    // how far you have to drag (Settings): the feel's own distances, scaled to it
+    if (which === "grid") { const f = cfg.tv.gridPullPct / 50; return { ...k, pct: Math.round(k.pct * f), dist: Math.round(k.dist * f), snap: cfg.tv.gridSnapMs, spring: Math.round(k.spring * 1.2) }; }
+    const f = cfg.tv.listPullPx / 240; return { ...k, dist: Math.round(k.dist * f), pct: Math.max(5, Math.round(k.pct * f)) };
+  };
+  const anims = new Map();
+  const easeOut = (u) => 1 - Math.pow(1 - u, 3); // (an overshoot going out: carried by its speed, slowing down)
+  const easeG = (u) => (u < 0.5 ? 16 * u ** 5 : 1 - Math.pow(-2 * u + 2, 5) / 2); // the ∨ menu opening / closing: a stronger easy ease (1.36)
+  const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2); // easy ease: slow in, slow out
+  const tween = (key, from, to, ms, set, done, ease = easeInOut) => {
+    cancelAnimationFrame(anims.get(key) || 0);
+    if (!motionOn() || ms <= 0) { anims.delete(key); set(to); if (done) done(); return; }
+    const t0 = performance.now();
+    const step = () => { const u = Math.min(1, (performance.now() - t0) / ms); set(from + (to - from) * ease(u)); if (u < 1) anims.set(key, requestAnimationFrame(step)); else { anims.delete(key); set(to); if (done) done(); } };
+    anims.set(key, requestAnimationFrame(step));
+  };
+  const stopTween = (key) => { cancelAnimationFrame(anims.get(key) || 0); anims.delete(key); };
+  // One edge: o = { K(), dir (+1: pulled by scrolling down), size() (for the %), ready() (at the edge?), busy(),
+  // scrolls (the content itself scrolls toward the edge), show(px, ready, progress), act(px), back(px), bump(px), lockRef }
+  const BUMP_MIN = 0.55; // px per ms: slower than this into an edge, and there's no overshoot at all
+  const pullEngine = (o) => {
+    // killed: everything still coming from the scroll that just did something (it acted, slid back, or hit the edge)
+    // is dropped; the next swipe is picked up at once. (The grid's two edges share it.)
+    const L = o.lockRef || { killed: false, prevAx: 0, last: 0, dir: 0 };
+    const sw = { on: false, raw: 0, ev: [], endT: 0, last: 0, pend: [], pendT: [], recent: [], vPeak: 0, dys: [], gaps: [], peakD: 0, scrollAt: 0, vMax: 0, vAt: 0, shown: 0, lastAx: 0, lastDir: 0 };
+    // how far it shows for how far you scrolled: Follow 180 = 1:1 at first, then less and less
+    const shownOf = (raw) => { const h = Math.max(1, o.size()), k = o.K().give / 180; return h * (1 - Math.exp(-raw * k / h)); };
+    const speedNow = (t) => sw.ev.filter((x) => t - x.t < 64).reduce((a, x) => a + x.d, 0) / 64;
+    const pctNow = () => (sw.shown / Math.max(1, o.size())) * 100;
+    const lock = () => { L.killed = true; L.strict = !!o.strict; L.peak = sw.lastAx || 0; L.fell = false; L.low = 0; L.prevAx = sw.lastAx || 0; L.dir = sw.lastDir || o.dir; sw.pend = []; };
+    const would = () => sw.raw >= o.K().dist || pctNow() >= o.K().pct;
+    const letGo = (v) => {
+      const K = o.K();
+      clearTimeout(sw.endT); sw.on = false; lock();
+      if (v >= K.speed && sw.raw >= K.min) return o.act(sw.shown); // a fast swipe
+      if (v > -K.speed * 0.6 && (sw.raw >= K.dist || pctNow() >= K.pct)) return o.act(sw.shown); // far enough
+      L.strict = false; o.back(sw.shown); // (slid back: the next swipe is yours as usual)
+    };
+    // the edge was hit: one overshoot, out and straight back (the harder, the further), and the rest of that scroll is dropped
+    // (how far it overshoots, and how long it takes to settle, follow how fast the scroll was going when it hit the edge:
+    // a slow scroll barely gives and settles at once, a fast one gives the most and settles slowly)
+    const kill = (ax) => {
+      L.killed = true; L.strict = false; L.prevAx = ax; L.dir = o.dir; sw.pend = [];
+      const K = o.K(); if (!K.over || !o.bump) return;
+      const t = performance.now(), speed = sw.recent.filter((r) => t - r.t < 90).reduce((a, r) => a + r.ax, 0) / 90; // px per ms
+      if (speed < BUMP_MIN) return; // (a calm scroll into the edge just stops there: only a real flick gives)
+      const f = Math.max(0, Math.min(1, (speed - BUMP_MIN) / (2.4 - BUMP_MIN)));
+      o.bump(Math.max(3, K.over * 0.7 * Math.pow(f, 0.8)), 55 + 55 * f, 110 + 170 * f); // (a little less far and quicker back since 1.36)
+    };
+    const wheel = (dy, t) => {
+      const K = o.K(), ax = Math.abs(dy), gap = t - sw.last, gapL = t - (L.last || 0); sw.last = t; L.last = t; sw.lastAx = ax; sw.lastDir = Math.sign(dy);
+      sw.recent.push({ t, ax }); if (sw.recent.length > 10) sw.recent.shift(); // (how fast it's going, for the overshoot at an edge)
+      if (L.killed && !o.ready() && Math.sign(dy) === o.dir) L.killed = false; // (there's something to scroll again, e.g. new videos: yours)
+      if (L.killed) {
+        // dropped until a new swipe: a pause (70 ms; a trackpad sends ~60 a second), a push that grows again, or the other way
+        // (strict, after the ∨ menu opened: a hard swipe that opened it is often still pushing, and none of that may scroll
+        // the menu that just came up. So the rest of it has to die down first (well under its peak); a push that then
+        // grows again is your next swipe, and it's yours at once, as is a pause or the other way)
+        let fresh;
+        if (L.strict) {
+          if (!L.fell) { if (ax > L.peak) L.peak = ax; else if (ax < L.peak * 0.5) { L.fell = true; L.low = ax; } }
+          else if (ax < L.low) L.low = ax;
+          fresh = gapL >= 70 || Math.sign(dy) !== L.dir || (L.fell && ax >= Math.max(6, L.low * 2.5));
+        } else fresh = gapL >= 70 || Math.sign(dy) !== L.dir || (ax > L.prevAx * 2 && ax >= 6);
+        L.prevAx = Math.min(L.prevAx || ax, ax);
+        if (!fresh) return true;
+        L.killed = false; sw.pend = [];
+      }
+      if (!sw.on) {
+        if (o.busy()) { sw.pend = []; return !o.scrollWhileBusy; } // (snapping: nothing scrolls meanwhile; loading more: the list still scrolls)
+        if (Math.sign(dy) !== o.dir) { sw.pend = []; if (o.scrolls) sw.scrollAt = t; return false; }
+        if (!o.ready()) { sw.pend = []; sw.scrollAt = t; return false; } // the content still scrolls that way
+        if (o.scrolls && t - sw.scrollAt < 70) { sw.scrollAt = 0; kill(ax); return true; } // ran into the edge: stops there
+        // a new swipe? Its first steps tell: a hand speeds up, the trackpad's coasting (which can come after a short pause,
+        // once your fingers are off) only fades. Coasting stops at the edge too, it never pulls.
+        if (gap >= 120) sw.pend = [];
+        if (!sw.pend.length) sw.pendT = [];
+        sw.pend.push(ax); sw.pendT.push(t);
+        if (sw.pend.length < 2) return true; // (two steps tell it: it reacts at once)
+        const P = sw.pend; sw.pend = [];
+        if (P[1] < P[0] * 0.95 && P[0] >= 5) { kill(P[0]); return true; }
+        sw.dys = []; sw.gaps = []; sw.peakD = 0; sw.vMax = 0; sw.vPeak = 0;
+        sw.on = true; sw.raw = P[0]; sw.ev = [{ t: sw.pendT[0], d: P[0] }]; // (its first step counts too)
+      }
+      const toward = dy * o.dir;
+      sw.raw = Math.max(0, sw.raw + toward);
+      sw.ev.push({ t, d: toward }); if (sw.ev.length > 12) sw.ev.shift();
+      const v = speedNow(t); sw.vPeak = Math.max(sw.vPeak, v); sw.shown = shownOf(sw.raw);
+      o.show(sw.shown, would(), Math.max(sw.raw / K.dist, pctNow() / K.pct));
+      const now = () => { clearTimeout(sw.endT); sw.on = false; lock(); o.act(sw.shown); return true; };
+      if (K.live && pctNow() >= K.pct) return now(); // past the %: it just goes
+      if (K.live && v >= K.speed && sw.raw >= K.min) return now(); // a fast swipe: it just goes too
+      // your fingers came off: the trackpad coasts, and only that counts as letting go while things still move (a hand
+      // slowing down or speeding up mid-swipe never does): five steps in a row each 82–100% of the last (at least four
+      // really smaller), at the trackpad's steady ~60 a second, after the swipe's top
+      sw.dys.push(ax); if (sw.dys.length > 5) sw.dys.shift(); sw.gaps.push(gap); if (sw.gaps.length > 4) sw.gaps.shift(); sw.peakD = Math.max(sw.peakD, ax);
+      const D = sw.dys, fade = (i) => D[i] <= D[i - 1] && D[i] >= D[i - 1] * 0.82;
+      const coasting = D.length === 5 && [1, 2, 3, 4].every(fade) && [1, 2, 3, 4].filter((i) => D[i] < D[i - 1]).length >= 4 && D[0] >= 3 && D[0] <= sw.peakD * 0.97 && sw.gaps.every((g) => g > 6 && g < 30);
+      if (coasting) { letGo(Math.max(v, sw.vMax)); return true; }
+      sw.vMax = Math.max(v, t - sw.vAt < 120 ? sw.vMax : 0); sw.vAt = t;
+      clearTimeout(sw.endT); sw.endT = setTimeout(() => { if (sw.on) letGo(0); }, K.hold); // a slow drag that stopped
+      return true;
+    };
+    return { wheel, active: () => sw.on, reset: () => { clearTimeout(sw.endT); sw.on = false; sw.pend = []; } };
+  };
+  const wheelDy = (e) => e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1);
+
+  // ---- the ∨ grid: where it's drawn (0 = open, its height = out of sight below)
+  let gy = 0, gOpenNow = false;
+  const G_TRAVEL = 0.5; // how far it slides, of the screen's height
+  // (its height, read once and again only when the window changes: reading it on every frame forces a layout)
+  let gHc = 0;
+  window.addEventListener("resize", () => { gHc = 0; });
+  const gH = () => { if (gHc) return gHc; const h = ui && ui.vgrid && !ui.vgrid.hidden ? ui.vgrid.clientHeight : 0; if (h) gHc = h; return h || window.innerHeight; };
+  // where it's drawn for a position: (it only comes from halfway down: half the travel, so it's there sooner; it fades
+  // in as it comes up and out as it goes, showing right away as you start pulling)
+  const gStyle = (v) => {
+    const f = Math.max(0, Math.min(1, v / gH())), d = v * G_TRAVEL;
+    return { t: `translate3d(0,${d > 0.5 ? Math.round(d * 10) / 10 : 0}px,0)`, moved: d > 0.5, o: f > 0.001 ? Math.max(0, Math.min(1, (1 - f) * 2.6)) : 1, bg: Math.max(0, Math.min(1, (1 - f) * 2)) };
+  };
+  // (while it moves, its blur is off: the video behind stays smooth)
+  const gput = (v) => {
+    gy = v; const box = ui && ui.vgrid; if (!box) return;
+    const st = gStyle(v);
+    box.style.transform = st.moved ? st.t : "";
+    box.style.opacity = st.o < 1 ? String(st.o) : "";
+    if (ui.vgfoot) ui.vgfoot.style.opacity = box.hidden ? "0" : String(st.o);
+    const bg = ui.vgbg; if (bg) { bg.hidden = box.hidden; bg.style.opacity = String(st.bg); bg.classList.toggle("gmove", v > 0.5); }
+  };
+  // Snapping open or closed runs on the compositor (Web Animations of transform and opacity only), so it stays smooth at
+  // the screen's full frame rate even while the page is busy (the tiles being made, pictures decoding, YouTube's player).
+  // The easing is sampled into keyframes: exactly the same curve as before.
+  let gA = null;
+  const gNow = () => { if (!gA) return gy; const u = Math.min(1, Math.max(0, (performance.now() - gA.t0) / gA.ms)); return gA.from + (gA.to - gA.from) * gA.ease(u); };
+  const gStop = () => { if (!gA) return; const v = gNow(), a = gA; gA = null; gput(v); for (const x of a.list) x.cancel(); if (ui && ui.vgrid) ui.vgrid.classList.remove("gmoving"); };
+  const gBusy = () => !!gA;
+  // (from a key or a click it eases in and out; carrying on from a pull, it's already moving, so it only eases out:
+  // easing in again there made a fast swipe stop for a moment, a step, before it went on)
+  const gTween = (to, ms, done, ease = easeG) => {
+    const from = gNow(); gStop();
+    const box = ui && ui.vgrid;
+    if (!box || !motionOn() || ms <= 0 || Math.abs(to - from) < 1) { gput(to); if (done) done(); return; }
+    gput(from);
+    box.classList.add("gmoving"); if (ui.vgbg) ui.vgbg.classList.add("gmove");
+    const N = Math.max(12, Math.round(ms / 10)), kb = [], kg = [], kf = [];
+    for (let k = 0; k <= N; k++) { const st = gStyle(from + (to - from) * ease(k / N)); kb.push({ transform: st.t, opacity: st.o }); kg.push({ opacity: st.bg }); kf.push({ opacity: st.o }); }
+    const opt = { duration: ms, easing: "linear", fill: "forwards" };
+    const list = [box.animate(kb, opt)]; if (ui.vgbg) list.push(ui.vgbg.animate(kg, opt)); if (ui.vgfoot) list.push(ui.vgfoot.animate(kf, opt));
+    const me = { from, to, ms, t0: performance.now(), list, ease };
+    gA = me;
+    list[0].ready.then(() => { if (gA === me) me.t0 = performance.now(); }).catch(() => {}); // (its clock starts on the frame it really starts)
+    list[0].onfinish = () => { if (gA !== me) return; gA = null; gput(to); for (const x of list) x.cancel(); box.classList.remove("gmoving"); if (done) done(); };
+  };
+  const gridBox = () => {
+    if (ui.vgrid) return ui.vgrid;
+    const box = el("div", "vgrid"); box.hidden = true; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Videos");
+    // its bar, always at the very top: the tabs (and +) in the middle, refresh and ∧ on the right
+    const bar = el("div", "vgbar"), acts = el("div", "vgact");
+    const x = el("button", "vgx"); x.type = "button"; x.title = "Close (V)"; x.setAttribute("aria-label", "Close"); x.append(icon("chevron")); x.firstChild.style.transform = "rotate(180deg)";
+    x.addEventListener("click", (e) => { e.stopPropagation(); closeGrid(); });
+    const rf = el("button", "vgx vgref"); rf.type = "button"; rf.title = "Refresh this list"; rf.setAttribute("aria-label", "Refresh this list"); rf.append(icon("refresh"));
+    rf.addEventListener("click", async (e) => {
+      e.stopPropagation(); if (rf.classList.contains("spin")) return;
+      rf.classList.add("spin"); busy(+1);
+      try { await refreshTab(grid.tab); } catch {} finally { busy(-1); rf.classList.remove("spin"); }
+      if (ui && ui.vgrid) { ui.vgrid.scrollTop = 0; drawGrid(); }
+    });
+    acts.append(rf, x);
+    const tabs = el("div", "vgtabs"); tabs.setAttribute("role", "tablist");
+    bar.append(tabs, acts);
+    box.append(bar, el("div", "vgl"));
+    box.addEventListener("pointerdown", (e) => { if (!e.composedPath().includes(ui.chmenu)) closeChanMenu(); });
+    // a right-click on a video: the same menu as on a row in the list (Shift + right-click: the browser's own)
+    box.addEventListener("contextmenu", (e) => {
+      const t = e.target.closest && e.target.closest(".vgt"); if (!t || !t._api || e.shiftKey) return;
+      const a = { ...t._api, open: () => { closeGrid(); t._api.open(); } }; // (playing one closes the ∨ menu, as a click does)
+      if (openRowMenu(a, e.clientX, e.clientY)) e.preventDefault();
+    });
+    const bg = el("div", "vgbg"); bg.hidden = true; ui.vgbg = bg; ui.root.append(bg);
+    // first: a pull at its top (closes it) or at its end (more videos); otherwise the tiles' own swiping and scrolling
+    box.addEventListener("wheel", (e) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+      const t = performance.now(), dy = wheelDy(e);
+      const took = (pullK("grid") && gClose.wheel(dy, t)) || (pullK("list") && gMore.wheel(dy, t));
+      if (took) { e.preventDefault(); e.stopImmediatePropagation(); }
+    }, { passive: false });
+    box.addEventListener("wheel", onWheel, { passive: false }); // sideways: the tiles swipe, exactly as rows do
+    box.addEventListener("scroll", (e) => { if (e.target !== box) onRowScroll(e); }, true);
+    box.addEventListener("scrollend", onRowScrollEnd, true);
+    box.addEventListener("pointermove", (e) => { lastPt = { x: e.clientX, y: e.clientY }; topZone(e); });
+    box.addEventListener("pointerleave", () => zoneOff());
+    ui.vgrid = box; ui.root.append(box);
+    const foot = el("div", "vgfoot"); ui.vgfoot = foot; ui.root.append(foot); // (a soft fade where the videos run off the bottom)
+    // ↑ back to the top, once you've scrolled down a bit
+    const up = el("button", "totop vgup"); up.type = "button"; up.title = "Back to the top"; up.setAttribute("aria-label", "Back to the top"); up.append(icon("chevron"));
+    up.addEventListener("click", (e) => { e.stopPropagation(); box.scrollTo({ top: 0, behavior: motionOn() ? "smooth" : "auto" }); });
+    ui.vgup = up; ui.root.append(up);
+    let upRaf = 0;
+    box.addEventListener("scroll", (e) => { if (e.target !== box || upRaf) return; upRaf = requestAnimationFrame(() => { upRaf = 0; up.classList.toggle("on", !box.hidden && box.scrollTop > Math.min(500, box.clientHeight * 0.6)); }); }, { passive: true });
+    return box;
+  };
+  // a hot zone at the top of the open grid (Settings: how much of the screen): rest the pointer there a moment and it
+  // closes. Only closes, never opens.
+  // It glows red while you're in it, like the screen edge that brings the list out. Leaving the screen over the top closes
+  // it straight away.
+  const zoneGlow = (on) => {
+    if (!ui) return;
+    let g = ui.root.querySelector(":scope > .vgtop");
+    if (!g) { g = el("div", "vgtop"); ui.root.append(g); }
+    g.style.height = (cfg ? cfg.tv.gridTopZone : 8) + "vh";
+    g.classList.toggle("on", !!on);
+  };
+  const zoneOff = () => { clearTimeout(grid.zoneT); grid.zoneT = 0; zoneGlow(false); };
+  const topZone = (e) => {
+    const pc = cfg ? cfg.tv.gridTopZone : 0;
+    if (!pc || !gridOpen() || e.pointerType === "touch") return zoneOff();
+    const p0 = e.composedPath ? e.composedPath() : []; if (p0.some((n) => n.classList && (n.classList.contains("tab") || n.classList.contains("vgx")))) return zoneOff(); // (on a tab or the ∧: those are yours to click)
+    if (e.clientY > window.innerHeight * pc / 100) return zoneOff();
+    zoneGlow(true);
+    if (!grid.zoneT) grid.zoneT = setTimeout(() => { grid.zoneT = 0; if (gridOpen() && lastPt.y <= window.innerHeight * cfg.tv.gridTopZone / 100) { zoneOff(); closeGrid(); } }, 220);
+  };
+  // the pointer left the screen over the top (the window's edge, or full screen's): close
+  document.addEventListener("mouseout", (e) => {
+    if (e.relatedTarget || !cfg || !cfg.tv.gridTopZone || !gridOpen() || e.clientY > 2) return;
+    zoneOff(); closeGrid();
+  }, true);
+  const showGridBox = () => {
+    // one at a time: the ∨ menu closes the list panel and the overview
+    if (state.panel) showPanel("");
+    if (ui.root.classList.contains("show-guide")) showGuide(false);
+    const box = gridBox();
+    grid.tab = gridTab(); grid.at = performance.now();
+    box.hidden = false; if (ui.vgbg) ui.vgbg.hidden = false; ui.root.classList.add("vgon");
+    grid.animAll = true; drawGrid(); syncGridTabs();
+    const mem = grid.mems.get(grid.tab) || 0; // (opened again on the same list: where you left it)
+    box.scrollTop = mem; grid.restored = mem > 0;
+    return box;
+  };
+  const settleOpen = () => {
+    const box = ui && ui.vgrid; if (!box) return;
+    box.classList.remove("peek"); grid.closing = false; gOpenNow = true; gput(0); wake();
+    const now = box.querySelector(".vgt.vnow"); if (now && box.scrollTop === 0 && !grid.restored) { const r = now.getBoundingClientRect(); if (r.bottom > box.clientHeight) box.scrollTop += r.top - box.clientHeight / 2 + r.height / 2; }
+    if (box.scrollHeight <= box.clientHeight + 40) setTimeout(gridMore, 300); // (too few to scroll: fill it up)
+  };
+  const snapMs = () => (cfg ? cfg.tv.gridSnapMs : 240);
+  const openGrid = () => {
+    if (!ui || !cfg || !cfg.tv.gridOn || gridOpen()) return;
+    const box = showGridBox(); box.classList.remove("peek");
+    gput(gH()); gTween(0, snapMs(), settleOpen);
+  };
+  const hideGridBox = () => { if (!ui || !ui.vgrid) return; gStop(); gHc = 0; zoneOff(); if (gOpenNow) grid.mems.set(grid.tab, ui.vgrid.scrollTop); ui.vgrid.hidden = true; if (ui.vgbg) ui.vgbg.hidden = true; if (ui.vgup) ui.vgup.classList.remove("on"); ui.vgrid.classList.remove("peek"); gput(0); ui.root.classList.remove("vgon"); grid.closing = false; gOpenNow = false; gClose.reset(); gMore.reset(); wake(); };
+  const closeGrid = () => {
+    if (!gridOpen()) return false;
+    grid.closing = true;
+    gTween(gH(), snapMs(), hideGridBox);
+    return true;
+  };
+  const toggleGrid = () => (gridOpen() ? closeGrid() : openGrid());
+  const gLock = { killed: false, prevAx: 0, last: 0, dir: 0 };
+  const gOpen = pullEngine({ lockRef: gLock, strict: true, K: () => pullK("grid"), dir: +1, size: gH, ready: () => !gOpenNow && !grid.closing, busy: gBusy, scrolls: false,
+    show: (px) => { const box = ui.vgrid && !ui.vgrid.hidden ? ui.vgrid : showGridBox(); box.classList.add("peek"); gput(gH() - px); },
+    act: () => { if (ui.vgrid) ui.vgrid.classList.remove("peek"); gTween(0, snapMs(), settleOpen, easeOut); },
+    back: () => gTween(gH(), pullK("grid").spring, hideGridBox, easeOut) });
+  const gClose = pullEngine({ lockRef: gLock, K: () => pullK("grid"), dir: -1, size: gH, ready: () => gOpenNow && !grid.closing && ui.vgrid.scrollTop <= 0, busy: gBusy, scrolls: true,
+    show: (px) => gput(px),
+    act: () => { grid.closing = true; gTween(gH(), snapMs(), hideGridBox, easeOut); },
+    back: () => gTween(0, pullK("grid").spring, null, easeOut),
+    bump: (px, outMs, backMs) => { if (anims.has("gb")) return; px /= G_TRAVEL; tween("gb", 0, px, outMs, gput, () => tween("gb", px, 0, backMs, gput), easeOut); } });
+  // a scroll down over the video itself (not over YTV's list or bars) pulls it up, in and out of full screen
+  // (in full screen YouTube's own grid used to open this way: YTV's has the list you're on)
+  const overVideo = (path) => {
+    if (!ui || !onWatchTv() || ui.root.classList.contains("show-guide") || ui.root.classList.contains("show-start")) return false;
+    if (path && path.some((n) => n.classList && (n.classList.contains("panel") || n.classList.contains("guide") || n.classList.contains("explore") || n.classList.contains("pop") || n.classList.contains("setwrap") || n.classList.contains("twchatov") || n.classList.contains("top") || n.classList.contains("bar") || n.classList.contains("ytp-chrome-bottom") || n.classList.contains("vgrid")))) return false;
+    return !path || path.some((n) => n.id === "movie_player" || n === ui.host);
+  };
+  const videoWheel = (dy, path) => {
+    if (!cfg || !cfg.tv.gridOn || !pullK("grid") || (gOpenNow && !gOpen.active()) || grid.closing || !overVideo(path)) return false;
+    return gOpen.wheel(dy, performance.now());
+  };
+  window.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (videoWheel(wheelDy(e), e.composedPath())) { e.preventDefault(); e.stopImmediatePropagation(); }
+  }, { capture: true, passive: false });
+  state.gridWheel = (w) => { videoWheel(w.dy, null); }; // (from over a Twitch stream)
+
+  // ---- "more": pull past the end of a list (the list panel, or the ∨ grid) for the next videos. The list lifts only a
+  // little (a slim strip with a thin ring that fills as you get there); the pull itself counts in full.
+  const STRIP = 52;
+  const lift = (px) => STRIP * (1 - Math.exp(-px / STRIP));
+  const makeStrip = (host, cls) => {
+    const s0 = el("div", "lpull" + (cls ? " " + cls : ""));
+    const ns = "http://www.w3.org/2000/svg", ring = document.createElementNS(ns, "svg");
+    ring.setAttribute("class", "ring"); ring.setAttribute("viewBox", "0 0 18 18"); ring.setAttribute("aria-hidden", "true");
+    for (const c of ["bg", "fg"]) { const n = document.createElementNS(ns, "circle"); n.setAttribute("class", c); n.setAttribute("cx", "9"); n.setAttribute("cy", "9"); n.setAttribute("r", "7"); ring.append(n); }
+    s0.append(ring, el("span", null, "Pull for more")); host.append(s0); return s0;
+  };
+  // one list's "more" pull: scroller (scrolls), content (what lifts), strip host, can (is there more to load?), load
+  const moreFor = (get) => {
+    let y = 0, loading = false, strip = null;
+    const st = () => { const g = get(); if (!g) return null; if (!strip || !strip.isConnected || strip.parentNode !== g.host) strip = makeStrip(g.host, g.cls); return strip; };
+    const put = (v, ready, prog) => {
+      const g = get(); if (!g) return;
+      // the strip sits in the middle of the space between the last video and the bottom (measured before moving anything)
+      let extra = 0;
+      const last = g.last(), z = (cfg ? cfg.tv.uiScale : 100) / 100;
+      if (last && v > 0.3) extra = Math.max(0, (g.scroller.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom) / z - y);
+      y = v;
+      const c = g.content(); if (c) { c.style.transform = v > 0.3 ? `translate3d(0,${-v}px,0)` : ""; c.style.willChange = v > 0.3 ? "transform" : ""; } // (its own layer while it moves)
+      const s1 = st(); if (!s1) return;
+      s1.style.height = v + extra + "px"; s1.style.opacity = String(Math.min(1, v / 24));
+      g.host.classList.toggle("pulling", v > 0.3); // (the ↑ to the top steps aside meanwhile)
+      if (prog !== undefined) s1.querySelector(".fg").style.strokeDashoffset = String(44 * (1 - Math.min(1, prog)));
+      if (ready !== undefined && !loading) { s1.classList.toggle("ready", ready); s1.lastChild.textContent = ready ? "Let go for more" : "Pull for more"; }
+    };
+    const eng = pullEngine({ K: () => pullK("list"), dir: +1, size: () => { const g = get(); return g ? g.scroller.clientHeight : 400; },
+      ready: () => { const g = get(); if (!g) return false; const sc = g.scroller; return sc.scrollTop + sc.clientHeight >= sc.scrollHeight - 6 && g.can(); },
+      busy: () => loading, scrolls: true, scrollWhileBusy: true,
+      show: (px, ready, prog) => { stopTween("m"); put(lift(px), ready, prog); },
+      act: async () => {
+        const g = get(); if (!g) return;
+        loading = true; const s1 = st(); s1.classList.remove("ready"); s1.classList.add("busy"); s1.lastChild.textContent = "Loading";
+        tween("m", y, STRIP * 0.8, pullK("list").snap, (v) => put(v)); busy(+1);
+        let n = 0; try { n = await g.load(); } catch {}
+        busy(-1); stopTween("m");
+        const keep = y; put(0); s1.classList.remove("busy");
+        if (n) { g.redraw(); g.scroller.scrollTop += keep; } // (no jump: the new videos take the place of the pull)
+        else toast("Nothing new for now");
+        loading = false; s1.lastChild.textContent = "Pull for more"; s1.querySelector(".fg").style.strokeDashoffset = "44";
+      },
+      back: () => tween("m", y, 0, pullK("list").spring, (v) => put(v, false)),
+      bump: (px, outMs, backMs) => { if (anims.has("mb")) return; px = Math.min(px, STRIP * 0.45); const c = () => get() && get().content(); const set = (v) => { const n = c(); if (n) n.style.transform = v > 0.3 ? `translateY(${-v}px)` : ""; }; tween("mb", 0, px, outMs, set, () => tween("mb", px, 0, backMs, set), easeOut); } });
+    return eng;
+  };
+  // the list panel
+  const listMore = moreFor(() => {
+    if (!ui) return null;
+    const box = ui.pbody.querySelector(":scope > .lbox"), b = box && box.querySelector(":scope > .more");
+    return { scroller: ui.pbody, host: ui.pbody.parentNode, content: () => ui.pbody.querySelector(":scope > .lbox"), last: () => { const r = ui.pbody.querySelectorAll(":scope > .lbox > .list > .sw:not(.gone)"); return r[r.length - 1] || null; },
+      can: () => !!(box && box.dataset.more === "1" && !(b && b.classList.contains("go"))), load: () => loadMoreTab(), redraw: () => { if (panelRaf) { cancelAnimationFrame(panelRaf); panelRaf = 0; } try { renderPanel(false); } catch (err) { logErr("list", err); } } };
+  });
+  // the ∨ grid
+  const gMore = moreFor(() => {
+    if (!ui || !ui.vgrid) return null;
+    return { scroller: ui.vgrid, host: ui.root, cls: "vgpull", content: () => ui.vgrid.querySelector(".vgl"), last: () => { const r = ui.vgrid.querySelectorAll(".vgl > .vgt"); return r[r.length - 1] || null; },
+      can: () => canPull(tabKind(grid.tab)), load: () => loadMoreTab(grid.tab), redraw: () => drawGrid() };
+  });
+  // the comments (Info and Comments sit in the same place as the list)
+  const comMore = moreFor(() => {
+    if (!ui || state.panel !== "comments" || !comPull || !current() || comPull.id !== current().id) return null;
+    const box = ui.pbody.querySelector(":scope > .coms"); if (!box) return null;
+    return { scroller: ui.pbody, host: ui.pbody.parentNode, content: () => ui.pbody.querySelector(":scope > .coms"), last: () => { const r = ui.pbody.querySelectorAll(":scope > .coms > .com"); return r[r.length - 1] || null; },
+      can: () => comPull.can(), load: () => comPull.load(), redraw: () => {} };
+  });
+  const listWheel = (e) => {
+    if (!pullK("list") || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if ((state.panel === "comments" ? comMore : listMore).wheel(wheelDy(e), performance.now())) { e.preventDefault(); e.stopImmediatePropagation(); }
+  };
+
   // ---------------------------------------------------------------- Watch Later
   const wlRemoveCurrent = async () => {
     const v = current();
@@ -4979,7 +5789,8 @@
     if (isCur) items.push(item("fwd", "Next video", () => nextVideo()));
     if (api ? can(api, "add") : !inFeed(v.id)) items.push(item("plus", `Add to ${nameOf(FEED_ID)}`, () => (api ? fire(api, "add") : (addToFeed(v), toast(`Added to ${nameOf(FEED_ID)}`)))));
     items.push(item("clock", inWl(v) ? "Take off Watch Later" : "Save to Watch Later", () => toggleWl(v, el("button"))));
-    items.push(item("search", "Explore from this video", () => openExplore(v)));
+    if (!v.tw && (goodName(v.channel) || v.creator)) items.push(item("user", `More from ${whoOf(v) || "this creator"}`, () => showInfoFor(v, api))); // Info: their Latest and Popular
+    items.push(item("search", "Search from this video", () => openExplore(v)));
     if (goodName(v.channel) || v.creator) items.push(item("eye-off", `Hide ${whoOf(v) || "this creator"} on this channel`, () => hideCreator(v)));
     if (api && api.canRm() && !isCur) items.push(item("trash-2", "Remove from the list", () => fire(api, "rm")));
     if (!api) items.push(item("link", "Copy link (at this moment)", async () => {
@@ -5339,7 +6150,11 @@
     state.colId = col.id;
     clearUndo();
     if (follow) state.panel = "src:" + col.id;
-    if (pendingFirst) delete state.mem[col.id];
+    if (pendingFirst) { // a video of its own first: the rest of the list you left there (with what you put up next yourself) carries on after it
+      const m0 = state.mem[col.id];
+      if (m0 && !col.twitch && !col.feed && Date.now() - m0.at < MEM_MS && m0.queue.length > m0.pos && !(pendingLineup && pendingLineup.id === col.id)) pendingLineup = { id: col.id, items: m0.queue.slice(m0.pos) };
+      delete state.mem[col.id];
+    }
     const m = state.mem[col.id];
     if (m && Date.now() - m.at < MEM_MS && m.queue.length) { // flip back: same video, same moment
       ++state.tuneToken;
@@ -5416,6 +6231,14 @@
   // , and . walk through the list's tabs (only looking); with Shift they switch channel and play it
   // , and . walk through the list's tabs (only looking); with Shift they go there and play its first video
   const stepTab = (d, play = false) => {
+    if (gridOpen()) { // the ∨ menu is open: its tabs
+      const ids = [...ui.ptabs.children].filter((b) => b._id && !b.classList.contains("add")).map((b) => b._id);
+      if (ids.length < 2) return;
+      const i = Math.max(0, ids.indexOf(grid.tab)), id = ids[(i + d + ids.length) % ids.length];
+      selectGridTab(id);
+      if (play) playFirstInGrid(id);
+      return;
+    }
     if (!state.panel || !isListTab(state.panel)) { showPanel(playingTab()); if (!play) return; }
     const tabsNow = [...ui.ptabs.querySelectorAll(".tab:not(.add)")];
     if (tabsNow.length < 2) return;
@@ -5425,6 +6248,14 @@
     closeChanMenu(); b.click(); b.blur();
     b.scrollIntoView({ block: "nearest", inline: "nearest" });
     if (play) playFirstInTab(state.panel);
+  };
+  const playFirstInGrid = async (tab) => {
+    for (let k = 0; k < 40; k++) { // (its list may still be loading)
+      if (!gridOpen() || grid.tab !== tab) return;
+      const t = [...ui.vgrid.querySelectorAll(".vgl > .vgt")].find((x) => !x.classList.contains("vdone") && x._api && !(x._api.v.off));
+      if (t) { closeGrid(); t._api.open(); return; }
+      await new Promise((r) => setTimeout(r, 100));
+    }
   };
   const playFirstInTab = async (tab) => {
     for (let k = 0; k < 40; k++) { // its list may still be loading
@@ -5477,18 +6308,19 @@
   const ACTIONS = {
     chUp: () => stepTab(+1), chDown: () => stepTab(-1), next: () => nextVideo(), prev: () => prevVideo(),
     list: () => toggleList(), info: () => togglePanel("info"), comments: () => commentsOrChat(), explore: () => exploreKey(),
-    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(),
+    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(),
   };
   // E: on the Twitch tab (or with a stream on and no panel open) it finds streamers; anywhere else it explores YouTube
   const exploreKey = () => {
     const twTab = "src:" + TWITCH_ID, onStream = !!(current() && current().tw) && !state.panel;
     if (cfg.tv.twitch.enabled && (state.panel === twTab || onStream)) {
-      if (state.panel !== twTab) { showPanel(twTab); return setTimeout(() => openTwBrowse(), 0); }
-      return toggleTwBrowse();
+      if (state.panel !== twTab) { showPanel(twTab); return setTimeout(() => openTwSearch(), 0); } // (E on Twitch: find streamers; Shift+E: what's live in a game)
+      return toggleTwSearch();
     }
     return ui.explore.hidden ? openExplore() : closeExplore();
   };
   const escape = () => {
+    if (closeGrid()) return;
     if (clearPicks()) return;
     if (closeSettings() || closeFilter() || closeTwSearch()) return;
     if (ui.chmenu.classList.contains("on")) closeChanMenu();
@@ -5507,9 +6339,9 @@
     if (e.shiftKey && (e.code === "BracketLeft" || e.code === "BracketRight")) return () => historyStep(e.code === "BracketLeft" ? -1 : +1); // back / forward through everything you watched
     if (e.shiftKey) { // Shift + the tab keys: switch channel and play (Shift+, types "<", so look at the key itself too)
       const base = e.code === "Comma" ? "," : e.code === "Period" ? "." : e.code === "BracketLeft" ? "[" : e.code === "BracketRight" ? "]" : e.code && e.code.startsWith("Key") ? e.code.slice(3).toLowerCase() : e.code && e.code.startsWith("Digit") ? e.code.slice(5) : k;
-      if (keyOf("explore") && base === keyOf("explore")) return () => { // Shift+E: search YouTube; on the Twitch tab, find streamers by name
+      if (keyOf("explore") && base === keyOf("explore")) return () => { // Shift+E: search YouTube; on the Twitch tab, what’s live in a game
         const twTab = "src:" + TWITCH_ID;
-        if (cfg.tv.twitch.enabled && (state.panel === twTab || (current() && current().tw && !state.panel))) { if (state.panel !== twTab) { showPanel(twTab); return setTimeout(() => openTwSearch(), 0); } return toggleTwSearch(); }
+        if (cfg.tv.twitch.enabled && (state.panel === twTab || (current() && current().tw && !state.panel))) { if (state.panel !== twTab) { showPanel(twTab); return setTimeout(() => openTwBrowse(), 0); } return toggleTwBrowse(); }
         return openSearch();
       }; // Shift+E: search YouTube for videos
       if (keyOf("chUp") && base === keyOf("chUp")) return () => stepTab(+1, true);
@@ -5542,6 +6374,7 @@
     if (!ui || (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || "") || t.isContentEditable))) return;
     if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === "z") { e.preventDefault(); e.stopImmediatePropagation(); undoLast(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (gridOpen() && (e.key === "Delete" || e.key === "Backspace" || ((e.code === "KeyA" || e.code === "KeyD") && !e.repeat))) { if (gridKey(e.code === "KeyA" ? "add" : "rm", e.shiftKey)) { e.preventDefault(); e.stopImmediatePropagation(); } return; } // the grid is open: its tile, never a row behind it
     if ((e.key === "Delete" || e.key === "Backspace") && deleteHovered()) { e.preventDefault(); e.stopImmediatePropagation(); return; }
     if ((e.code === "KeyA" || e.code === "KeyD") && !e.repeat && swipeHovered(e.code === "KeyA" ? "add" : "rm", e.shiftKey)) { e.preventDefault(); e.stopImmediatePropagation(); return; } // A / D: swipe the hovered row
     const twFn = ui.root.classList.contains("on-twitch") && !e.shiftKey ? twKey(e) : null; // pause, mute and volume for a Twitch stream
@@ -5867,7 +6700,9 @@
   };
   const btnPrefs = () => cfg ? { on: cfg.enabled, s: cfg.tv.sidebarButton, h: cfg.tv.headerButton } : lsGet("ytv:btns", { on: true, s: true, h: true });
   let watchButtons = () => {};
-  const syncButtons = () => {
+  // (the player bridge clicks Skip / Jump ahead when this is on: it reads it from <html>)
+  const syncSkip = () => { if (cfg && cfg.tv.autoSkip) document.documentElement.setAttribute("data-ytv-skip", "1"); else document.documentElement.removeAttribute("data-ytv-skip"); };
+  const syncButtons = () => { syncSkip();
     const pr = btnPrefs(), on = pr.on;
     const wantSide = on && pr.s;
     const full = document.querySelector("ytd-guide-renderer #sections");

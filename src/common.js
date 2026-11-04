@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.30.1";
+  SW.VERSION = "1.37.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -36,7 +36,7 @@
   /** YTV keyboard actions and their default keys. Escape (close / turn off) is always Escape. */
   SW.TV_ACTIONS = [
     ["chUp", "Next tab (with Shift: go there and play its first video)", "."], ["chDown", "Previous tab (with Shift: go there and play its first video)", ","], ["next", "Next video", "]"], ["prev", "Previous video", "["],
-    ["list", "Open / close the list", "u"], ["info", "Info (description, stream details)", "i"], ["comments", "Comments (on a stream: its chat)", "o"], ["toggle", "Turn YTV on / off", "`"], ["explore", "Explore topic (on the Twitch tab: what’s live in a game; Shift: find streamers)", "e"], ["back", "Leave a topic, back to the channel", "b"], ["overview", "Channel overview", "g"], ["history", "History (everything you watched)", "h"], ["sorting", "Sorting on / off (off: the list stays exactly as it is)", "s"], ["autohide", "Switch when the list hides (always / full screen / never)", ""], ["fullscreen", "Full screen", "f"],
+    ["list", "Open / close the list", "u"], ["info", "Info (description, stream details)", "i"], ["comments", "Comments (on a stream: its chat)", "o"], ["toggle", "Turn YTV on / off", "`"], ["explore", "Search (YouTube, a topic or a creator; on the Twitch tab: find streamers; Shift: what’s live in a game)", "e"], ["back", "Leave a topic, back to the channel", "b"], ["overview", "Channel overview", "g"], ["history", "History (everything you watched)", "h"], ["grid", "The open list as a grid of videos (also: scroll down on the video)", "v"], ["sorting", "Sorting on / off (off: the list stays exactly as it is)", "s"], ["autohide", "Switch when the list hides (always / full screen / never)", ""], ["fullscreen", "Full screen", "f"],
   ];
   /** Keys YouTube's player uses (left alone so they keep working); F is allowed because full screen is the same action. */
   // (, and . step frames in YouTube only while paused; YTV uses them for channels)
@@ -154,7 +154,9 @@
           watched: tri(f.watched, "yes", "no"), watchedPct: clampInt(f.watchedPct, 1, 100, 80),
           subbed: tri(f.subbed, "yes", "no"),
           orderBy: ["none", "uploaded", "length", "watched"].includes(f.orderBy) ? f.orderBy : "none", orderDir: f.orderDir === "asc" ? "asc" : "desc",
+          off: f.off === true, // switched off with the funnel: everything stays set, nothing is applied
         }; })(),
+      filterClick: tv.filterClick === "menu" ? "menu" : "toggle", // the funnel: a click switches the filter off and on (Shift-click: its menu), or the other way round
       skipMusic: typeof tv.skipMusic === "boolean" ? tv.skipMusic : true,
       spreadCreators: tv.spreadCreators !== false, // never the same creator twice in a row (when there's anything else)
       sinkWatched: tv.sinkWatched !== false, // what you mostly watched already (also on youtube.com) goes to the end
@@ -172,6 +174,15 @@
       swipeAxis: ["strict", "normal", "loose"].includes(tv.swipeAxis) ? tv.swipeAxis : "strict",
       swipeV: 2,
       swipeHoldMs: clampInt(tv.swipeHoldMs, 0, 3000, 280),
+      gridScroll: tv.gridScroll === "light" ? "easy" : ["off", "easy", "normal", "firm"].includes(tv.gridScroll) ? tv.gridScroll : "normal", // a scroll on the video pulls the ∨ grid up (and at its top, away): how easily
+      gridOn: tv.gridOn !== false, // the ∨ menu (the open list as a grid over the video): V, the ∨, a scroll on the video
+      gridTabs: tv.gridTabs !== false, // the list's tabs at the top of the ∨ menu
+      listOn: tv.listOn !== false, // the list menu on the right (off: its tabs live in the ∨ menu, and U opens that)
+      gridSnapMs: tv.prefsV >= 9 ? clampInt(tv.gridSnapMs, 0, 800, 220) : 220, // how quickly the ∨ grid snaps open / closed (a touch slower since 1.32.2)
+      gridPullPct: tv.prefsV >= 9 ? clampInt(tv.gridPullPct, 10, 90, 10) : 10, // how far (of the screen) a pull has to bring the ∨ grid before it snaps
+      gridTopZone: tv.prefsV >= 9 ? clampInt(tv.gridTopZone, 0, 40, 4) : 4, // the ∨ grid closes when the pointer rests at the top this much of the screen (0: off)
+      listPullPx: clampInt(tv.listPullPx, 60, 600, 240), // how far to pull past the end of a list for more
+      listPull: ["off", "easy", "normal", "firm"].includes(tv.listPull) ? tv.listPull : "normal", // pull past the end of a list for more videos (off: they load as you near the end) // a scroll on the video opens the ∨ grid (and at its top closes it): how deliberate it has to be
       fsGridCols: clampInt(tv.fsGridCols, 2, 8, 3), // YouTube's own grid of videos in full screen: per row (3 is YouTube's)
       swipeNextFirst: tv.swipeNextFirst === true, // swapped: a plain swipe (and A) plays next, with Shift it goes to your Feed
       swipeMove: true, // (a video on your Feed is in no other list, so adding always moves it there)
@@ -199,6 +210,7 @@
         return out;
       })(),
       uiScale: clampInt(tv.uiScale, 25, 400, 110), // percent
+      autoSkip: tv.autoSkip !== false, // click YouTube's own Skip (ads) and Jump ahead (Premium) buttons as soon as they show
       videoQuality: ["premium", "hd1080", "hd720", "auto"].includes(tv.videoQuality) ? tv.videoQuality : "premium", // premium: 1080p Premium (higher bitrate) where it plays, else 1080p
       hbSize: clampInt(tv.hbSize, 8, 120, 20), // the explore / Watch Later buttons on a picture
       hbExplore: typeof tv.hbExplore === "boolean" ? tv.hbExplore : true,
@@ -276,7 +288,7 @@
           tabHeight: clampInt(l.tabHeight, 12, 400, 50), tabPad: clampInt(l.tabPad, 0, 400, 12), tabWidth: clampInt(l.tabWidth, 30, 2000, 150), tabScale: clampInt(l.tabScale, 25, 400, 120),
         };
       })(),
-      prefsV: 7,
+      prefsV: 9,
       motion: typeof tv.motion === "boolean" ? tv.motion : true,
       motionSystem: tv.motionSystem === true, // also switch animations off when the computer asks for reduced motion
       subs: (() => { const sb = isObj(tv.subs) ? tv.subs : {}; return { enabled: typeof sb.enabled === "boolean" ? sb.enabled : true, skipSeen: sb.skipSeen === true }; })(),

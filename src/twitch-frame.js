@@ -1,7 +1,7 @@
 /*
  * YTV — inside Twitch's player, only when YTV shows it on YouTube (Twitch Live).
  * Starts the stream right away (pressing Twitch's own Play or "start watching" button when it asks), with sound and in
- * source quality; keeps a live stream from being paused; leaves Twitch's own volume and quality controls (and any
+ * source quality; keeps a live stream from pausing by itself; leaves Twitch's own play/pause, volume and quality controls (and any
  * hover overlays) working; and passes your keys, mouse movement and double-clicks on to YTV. It reads and sends
  * nothing else, and does nothing on Twitch anywhere else.
  */
@@ -15,20 +15,18 @@
   let warm = params.get("ytvwarm") === "1"; // loaded ahead (when you point at a stream): it already plays, muted and out of sight, until YTV says go
   // Twitch's player: sound on, at full volume. (It remembers "muted" for every next stream, so whenever YTV mutes a stream
   // loaded ahead, this is put back: the next one still starts with sound.)
-  const soundPref = () => { try { localStorage.setItem("video-muted", JSON.stringify({ default: false })); localStorage.setItem("volume", "1"); } catch {} };
+  const soundPref = () => { try { localStorage.setItem("video-muted", JSON.stringify({ default: false })); } catch {} }; // (the volume is yours: Twitch's slider)
   soundPref();
   const say = (m) => { try { window.parent.postMessage({ ytvTw: m }, PARENT); } catch {} };
   const video = () => document.querySelector("video");
   // a live stream has no pause; YTV's full screen is the one that counts (it keeps YTV's own UI)
   const style = document.createElement("style");
-  style.textContent = (live ? '[data-a-target="player-play-pause-button"]{display:none!important}' : "") +
+  style.textContent = "" + // (Twitch's own play/pause and volume, bottom left, stay)
     '[data-a-target="player-fullscreen-button"],[data-a-target="player-theatre-mode-button"],button[aria-label^="Theatre"],' +
     // Follow, Subscribe and Gift a Sub (and Twitch's logo link) on the player: not needed here
     '[data-a-target*="follow-button"],[data-a-target*="subscribe-button"],[data-a-target*="gift"],[data-test-selector*="follow-button"],[data-test-selector*="subscribe-button"],[data-test-selector*="gift"],[data-a-target="player-twitch-logo-button"],[data-a-target="player-stream-info-social-panel"],.ytv-hide{display:none!important}' +
     // Twitch's own top bar (picture, title, game: YTV's top bar shows those) and its big Play button and blurred
     // preview while starting (YTV presses Play itself) stay out of sight
-    // the volume always stays at full (YouTube's own volume is the one you set): its slider isn't needed, mute stays
-    '[data-a-target="player-volume-slider"],.volume-slider__slider-container{display:none!important}' +
     '.video-player__overlay .top-bar,[data-a-target="player-overlay-preview-background"]{display:none!important}[data-a-target="player-overlay-play-button"]{opacity:0!important}' +
     // while YTV picks the quality for you, Twitch's settings menu stays out of sight
     'html.ytv-q [data-a-target="player-settings-menu"],html.ytv-q [role="menu"]{opacity:0!important;pointer-events:none!important}';
@@ -62,6 +60,7 @@
       else { lastTry = performance.now(); v.play().catch((e) => { if (e && e.name === "NotAllowedError") noSound(); }); }
     }
     if (!v.paused && v.readyState > 2) {
+      if (!v.muted) unmuted = true; // playing with sound: from now on the sound is yours (Twitch's mute stays muted)
       if (!started) { started = true; say({ playing: true, muted: v.muted }); setTimeout(pickQuality, 600); }
       return;
     }
@@ -98,7 +97,6 @@
   const begin = () => { obs.observe(document.documentElement, { childList: true, subtree: true }); for (const ev of ["playing", "loadeddata", "pause", "canplay"]) document.addEventListener(ev, onMedia, true); kick(); };
   if (document.documentElement) begin(); else document.addEventListener("readystatechange", begin, { once: true });
   setInterval(() => { if (warm || !started || (video() && video().muted && !unmuted)) kick(); }, 150);
-  setInterval(() => { const v = video(); if (v && !warm && v.volume < 1) v.volume = 1; }, 500); // always at full volume
   say({ hello: true, warm }); // (if YTV already wants this one playing, it answers "go")
   // a click on the picture would pause a live stream: not here. Double-click: YTV's full screen.
   // A click on the picture itself (not Twitch's buttons) is passed to YTV too: it closes YTV's open list, as on YouTube.
@@ -108,12 +106,33 @@
     if (live && pic) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   window.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopImmediatePropagation(); say({ dbl: true }); }, true);
-  let lastMove = 0;
-  window.addEventListener("mousemove", () => { const t = performance.now(); if (t - lastMove > 150) { lastMove = t; say({ move: true }); } }, true);
+  // a scroll down over the stream opens YTV's grid of videos (as over a YouTube video)
+  // (every step of it: YTV pulls the grid up with resistance, and a fast flick bounces back)
+  window.addEventListener("wheel", (e) => {
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    say({ wheel: Math.max(-400, Math.min(400, Math.round(e.deltaY * (e.deltaMode === 1 ? 16 : 1)))) });
+  }, { capture: true, passive: true });
+  // Twitch's own mute button (and its volume): yours, YTV never turns the sound back on after it
+  window.addEventListener("click", (e) => { if (e.target && e.target.closest && e.target.closest('[data-a-target="player-mute-unmute-button"], [data-a-target="player-volume-slider"], .volume-slider__slider-container')) unmuted = true; }, true);
+  window.addEventListener("pointerdown", (e) => { if (e.target && e.target.closest && e.target.closest('[data-a-target="player-mute-unmute-button"], [data-a-target="player-volume-slider"], .volume-slider__slider-container')) unmuted = true; }, true);
+  // Twitch's own Play/Pause button: a pause there stays (as with Space); its Play plays again
+  window.addEventListener("click", (e) => {
+    if (!(e.target && e.target.closest && e.target.closest('[data-a-target="player-play-pause-button"]'))) return;
+    const v = video(); held = !!(v && !v.paused); say({ paused: held });
+  }, true);
+  // only a real move of the mouse wakes YTV's UI: Chrome also sends "moves" when the page changes under a still
+  // pointer (Twitch's player changes all the time), and those would keep popping it up, also in full screen
+  let lastMove = 0, mx = -1, my = -1;
+  window.addEventListener("mousemove", (e) => {
+    if (e.screenX === mx && e.screenY === my) return;
+    mx = e.screenX; my = e.screenY;
+    const t = performance.now(); if (t - lastMove > 150) { lastMove = t; say({ move: true }); }
+  }, true);
   // keys pressed while the player has the focus belong to YTV (its shortcuts work everywhere, also over the stream)
   window.addEventListener("keydown", (e) => {
     const t = e.target;
     if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || "") || t.isContentEditable)) return;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === "z") { e.preventDefault(); e.stopImmediatePropagation(); say({ key: "z", code: "KeyZ", shift: false, ctrl: !!e.ctrlKey, meta: !!e.metaKey, alt: false }); return; } // Cmd/Ctrl+Z: YTV's undo
     if (e.ctrlKey || e.metaKey || e.altKey) return; // the browser's own shortcuts stay the browser's
     if (e.key.length !== 1 && !/^(Escape|Arrow\w+|Delete|Backspace|Page\w+|F\d+)$/.test(e.key)) return;
     e.preventDefault(); e.stopImmediatePropagation();
@@ -125,7 +144,8 @@
     if (c.cmd === "go") { if (warm) { warm = false; unmuted = false; soundTries = 0; started = false; soundPref(); kick(); } say({ going: true }); return; }
     if (!v) return;
     if (c.cmd === "mute") { v.muted = !!c.on; unmuted = true; }
-    else if (c.cmd === "volume") { v.volume = 1; } // (always full)
+    else if (c.cmd === "mutetoggle") { v.muted = !v.muted; unmuted = true; say({ muted: v.muted }); } // (M: from however it is now, also after Twitch's own button)
+    else if (c.cmd === "toggle") { if (v.paused) { held = false; v.play().catch(() => {}); } else { held = true; v.pause(); } say({ paused: held, said: true }); }
     else if (c.cmd === "pause") { held = true; v.pause(); }
     else if (c.cmd === "play") { held = false; v.play().catch(() => {}); }
   });

@@ -45,6 +45,35 @@
       if (c.cmd === "pause" && typeof p.pauseVideo === "function") p.pauseVideo();
     } catch {}
   });
+  // A reload: YTV's content script put where to carry on from on <html> (data-ytv-seek="id:seconds"). The moment the
+  // video element knows its length (before anything plays), it starts there: no jump in picture or sound later.
+  const earlySeek = (e) => {
+    const v = e.target, m = /^([\w-]{11}):(\d{1,6})$/.exec(document.documentElement.getAttribute("data-ytv-seek") || "");
+    if (!m || !v || v.tagName !== "VIDEO" || !tvOn()) return;
+    const p = tvPlayer(); if (!p || !p.contains(v)) return;
+    let id = ""; try { id = ((p.getVideoData && p.getVideoData()) || {}).video_id || ""; } catch {}
+    if (id && id !== m[1]) return;
+    document.documentElement.removeAttribute("data-ytv-seek");
+    const at = Number(m[2]);
+    if (!(at > 0) || (v.duration && at >= v.duration - 5)) return;
+    try { if (Math.abs(v.currentTime - at) > 2) v.currentTime = at; } catch {}
+    try { applyQuality(p, id); } catch {} // (the quality too, before it plays: no switch half a second in)
+  };
+  document.addEventListener("loadedmetadata", earlySeek, true);
+  document.addEventListener("playing", earlySeek, true);
+  setTimeout(() => document.documentElement.removeAttribute("data-ytv-seek"), 20000); // (only for this page load)
+  // Skip automatically (Settings → Playing): YouTube's own Skip button on an ad, and Premium's Jump ahead, clicked as
+  // soon as they show. Only buttons inside the player, only when they're visible.
+  const SKIP_SEL = ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button, [class*='jump-ahead'] button, button[class*='jump-ahead'], [class*='skip-ad'] button";
+  const SKIP_TXT = /^(skip|skip ads?|jump ahead|overslaan|advertentie overslaan|advertenties overslaan|vooruitspringen)$/i;
+  let skipAt = 0;
+  const autoSkip = (p) => {
+    if (!document.documentElement.hasAttribute("data-ytv-skip") || performance.now() - skipAt < 800) return;
+    const seen = (b) => b && b.offsetParent !== null && !b.disabled && getComputedStyle(b).visibility !== "hidden";
+    let b = [...p.querySelectorAll(SKIP_SEL)].find(seen);
+    if (!b) b = [...p.querySelectorAll("button")].find((x) => !x.closest(".ytp-chrome-bottom") && seen(x) && SKIP_TXT.test(String(x.getAttribute("aria-label") || x.textContent || "").trim()));
+    if (b) { skipAt = performance.now(); b.click(); }
+  };
   let endedFor = "", errorFor = "", playingFor = "", tick = 0;
   // Video quality, once per video as soon as it plays: "premium" is 1080p Premium (YouTube's higher-bitrate 1080p,
   // playable with YouTube Premium) where the video has it, else 1080p; a video without 1080p plays in the best it has.
@@ -88,8 +117,9 @@
       } catch {}
       emit("playing", { id, title: vd.title || "", author: vd.author || "", desc, channelId, keywords, publishDate, category });
     }
-    if (s === 1 && !isAd && id && qDoneFor !== id) { try { applyQuality(p, id); } catch { qDoneFor = id; } }
+    if ((s === 1 || s === 3 || s === 5 || s === -1) && !isAd && id && qDoneFor !== id) { try { applyQuality(p, id); } catch { qDoneFor = id; } } // (as early as it can: before it plays, if YouTube already knows the qualities)
     if (s === 1 && !isAd && id && ++tick % 3 === 0) emit("time", { id, t: Math.floor(t), d: Math.floor(d) }); // ~every second, so a channel can resume where you left it
+    autoSkip(p);
     const nearEnd = !isAd && d > 5 && t >= d - 0.8;
     if ((s === 0 || nearEnd) && id && endedFor !== id) { endedFor = id; emit("ended", { id }); }
   }, 400);
