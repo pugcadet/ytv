@@ -781,7 +781,8 @@
     .pop .ml{flex:1}
     .pop .msep{height:1px;margin:5px 4px;background:rgba(255,255,255,.12)}
     .pop .ph{padding:4px 10px 6px;color:#8d97ab;font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
-    .pop .mk{color:#7d8699;font-size:11.5px;font-weight:600}
+    .pop .mk{flex:none;margin-left:auto;padding-left:12px;color:#7d8699;font-size:11.5px;font-weight:600;white-space:nowrap}
+    .pop .mi .ml{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .acts .moreb[aria-pressed="true"]{background:rgba(255,255,255,.18)}
     .phead .sortb[aria-pressed="true"]{color:#fff}
     .phead .twsb.open,.phead .histb[aria-pressed="true"]{color:#fff;background:color-mix(in srgb,var(--pnl) 70%,#5a6680)}
@@ -1550,8 +1551,8 @@
     const comB = iconBtn("comment", "Comments", () => commentsOrChat(), "ab");
     // back and forward through everything you watched (Shift+[ and Shift+]): small, at the start
     // three buttons stay; everything else is in the ⋯ menu (addB, wlRemove, wlClear only keep their state for it)
-    const moreB = iconBtn("more", "More: forward, explore, creator, Watch Later…", (e) => openMoreMenu(e.currentTarget), "ab moreb");
-    acts.append(iconBtn("back", "Back to what you watched before (Shift+[)", () => historyStep(-1), "ab"), el("span", "asep"), infoB, comB, moreB); // (the channel overview is G)
+    const moreB = iconBtn("more", "More: back, forward, search, settings…", (e) => openMoreMenu(e.currentTarget), "ab moreb");
+    acts.append(infoB, comB, moreB); // (Back and Forward are in the ⋯ menu) // (the channel overview is G)
     top.append(now, stay, acts);
     // controls (above YouTube's own player bar)
     const bar = el("div", "bar");
@@ -5014,6 +5015,16 @@
   // Twitch quality, from the top bar: the stream starts again in the one you pick (and every stream after it)
   const TW_QUALITIES = [["chunked", "Source (best)"], ["1080p60", "1080p60"], ["720p60", "720p60"], ["720p30", "720p"], ["480p30", "480p"], ["360p30", "360p"], ["auto", "Auto"]];
   // The ⋯ in the top bar: everything that isn't back, info or comments, with its key where it has one.
+  const placePop = (anchor, alignRight = true) => {
+    const pop = ui.pop, z = (cfg ? cfg.tv.uiScale : 100) / 100;
+    pop.style.left = "0px"; pop.style.top = "0px"; pop.hidden = false;
+    const r = anchor.getBoundingClientRect(), host = ui.root.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight, W = host.width / z, H = host.height / z;
+    const want = alignRight ? (r.right - host.left) / z - pw : (r.left - host.left) / z;
+    pop.style.left = `${Math.max(8, Math.min(want, W - pw - 8))}px`;
+    const below = (r.bottom - host.top) / z + 6;
+    pop.style.top = `${Math.max(8, below + ph > H - 8 ? (r.top - host.top) / z - ph - 6 : below)}px`;
+  };
   const openMoreMenu = (anchor) => {
     if (!ui.pop.hidden) return closePop();
     const v = current(), tw = !!(v && v.tw) || ui.root.classList.contains("on-twitch");
@@ -5035,9 +5046,7 @@
     if (tw) items.push(item("gear", "Stream quality", "", (a) => openQualityMenu(a)));
     items.push(item("gear", "Settings", k("settings"), () => openSettings("")));
     ui.pop.replaceChildren(...items);
-    const r = anchor.getBoundingClientRect(), host = ui.root.getBoundingClientRect(), z = cfg.tv.uiScale / 100;
-    ui.pop.style.left = `${Math.max(8, Math.min((r.right - host.left) / z - 260, host.width / z - 270))}px`; ui.pop.style.top = `${(r.bottom - host.top) / z + 6}px`;
-    ui.pop.hidden = false; anchor.setAttribute("aria-pressed", "true"); wake();
+    placePop(anchor, true); anchor.setAttribute("aria-pressed", "true"); wake();
   };
   const openQualityMenu = (anchor) => {
     if (!ui.pop.hidden) return closePop();
@@ -5053,9 +5062,7 @@
       return b;
     });
     pop.replaceChildren(el("div", "ph", "Stream quality"), ...items);
-    const r = anchor.getBoundingClientRect(), host = ui.root.getBoundingClientRect();
-    pop.style.left = `${Math.max(8, Math.min(r.left - host.left, host.width - 240))}px`; pop.style.top = `${r.bottom - host.top + 6}px`;
-    pop.hidden = false; wake();
+    placePop(anchor, true); wake();
   };
   const openCreatorMenu = (anchor) => {
     if (!ui.pop.hidden) return closePop(); // click the button again to close
@@ -5089,9 +5096,7 @@
       pop.replaceChildren(el("div", "ph", `${whoOf(v) || who} — on which channels?`), ...items, row);
     };
     draw();
-    const r = anchor.getBoundingClientRect(), host = ui.root.getBoundingClientRect();
-    pop.style.left = `${Math.max(8, r.left - host.left)}px`; pop.style.top = `${r.bottom - host.top + 6}px`;
-    pop.hidden = false; wake();
+    placePop(anchor, true); wake();
     const first = pop.querySelector("button"); first && first.focus();
   };
   const closePop = () => { if (ui) { ui.pop.hidden = true; const m = ui.root.querySelector(".moreb"); if (m) m.setAttribute("aria-pressed", "false"); wake(); } };
