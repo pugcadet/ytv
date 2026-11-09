@@ -966,7 +966,7 @@
     .thumb{position:relative;flex:none;width:min(var(--tw),55%);aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:#111}
     .thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .3s ease}
     /* while a picture loads: a soft sweep over its placeholder (only with animations on), then it fades in */
-    .motion .sw .thumb:has(> img:not(.ok):not(.bad):not([loading=lazy]:not([src])))::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%) 0 0/250% 100%;animation:tshim 1.3s ease-in-out 4;pointer-events:none}
+    .motion .sw .thumb.ld::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%) 0 0/250% 100%;animation:tshim 1.3s ease-in-out 4;pointer-events:none}
     @keyframes tshim{from{background-position:120% 0}to{background-position:-120% 0}}
     .thumb img.ok{opacity:1}
     .thumb .pg{position:absolute;left:0;bottom:0;height:3px;background:#f03}
@@ -1098,8 +1098,8 @@
     .pop .row{display:flex;gap:6px;margin-top:6px}
     .pop input,.explore input{flex:1;min-height:38px;padding:0 10px;border-radius:10px;border:1px solid color-mix(in srgb,var(--pnl) 55%,#8a96ad);background:#0e121b;color:#fff;font:inherit}
     .scrim{position:absolute;inset:0;z-index:7;display:none;background:transparent}
-    .tv:has(.explore:not([hidden])) .scrim,.tv:has(.pop:not([hidden])) .scrim{display:block}
-    .tv:has(.explore:not([hidden])) .scrim{background:rgba(0,0,0,.22);backdrop-filter:blur(calc(8px * var(--bk,1)));animation:scrimin .2s ease both} /* the video softly blurred behind explore and search */
+    .tv.popon .scrim,.tv.expon .scrim{display:block} /* (classes, not :has() on the whole overlay: that made every change anywhere in it re-check all styles) */
+    .tv.expon .scrim{background:rgba(0,0,0,.22);backdrop-filter:blur(calc(8px * var(--bk,1)));animation:scrimin .2s ease both} /* the video softly blurred behind explore and search */
     @keyframes scrimin{from{opacity:0}}
     .explore .ideas button.picked{background:var(--acc);border-color:var(--acc);color:#fff}
     .explore{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:8;width:min(520px,92vw);padding:20px;border-radius:16px;background:var(--pnl);border:1px solid color-mix(in srgb,var(--pnl) 55%,#8a96ad);box-shadow:0 16px 40px rgba(0,0,0,.5)}
@@ -1144,7 +1144,7 @@
     .edgeon:not(.show-panel) .edge{display:block}
     .edgeglow{position:absolute;top:0;right:0;bottom:0;width:var(--edgew,12px);z-index:6;display:none;pointer-events:none;opacity:0;transition:opacity .25s ease;background:linear-gradient(270deg,color-mix(in srgb,var(--acc) 30%,transparent),transparent)}
     .edgeon:not(.show-panel) .edgeglow{display:block}
-    .tv:has(> .edge:hover) > .edgeglow{opacity:1}
+    .edge:hover + .edgeglow{opacity:1}
     /* the channel overview takes the panel's look: see-through and blurred */
     /* the overview: your panel colour, darker and more blurred than the list so the cards stand out */
     .guide{background:color-mix(in srgb,color-mix(in srgb,var(--pnl) 70%,#000) min(100%,calc(var(--palpha,80%) + 45%)),transparent);backdrop-filter:blur(calc(max(28px,var(--pblur,16px) * 2.5) * var(--bk,1))) saturate(1.1);scrollbar-width:none}
@@ -1641,6 +1641,9 @@
     ui = { hideB, host, root, curtain, tTitle, tSub, nT, nC, nowbar, totop, pickbar, stay, stayTxt, stayBtn, prevB, addB, wlRemove, wlClear, pbody, ptabs, tabInd, chmenu, clearB, refB, filtB, sortB, fdot, fstrip, fpop, histPB, twsB, twpop, setFrame, bar, infoB, comB, msg, guide, explore, pop, toast: toastEl };
     applyTheme();
     watchControls();
+    // the scrim behind a menu or Explore follows them (see .popon / .expon)
+    const mo = new MutationObserver(() => { if (!ui) return; ui.root.classList.toggle("popon", !ui.pop.hidden); ui.root.classList.toggle("expon", !ui.explore.hidden); });
+    mo.observe(pop, { attributes: true, attributeFilter: ["hidden"] }); mo.observe(explore, { attributes: true, attributeFilter: ["hidden"] });
   };
   const applyTheme = () => {
     if (!ui || !cfg) return;
@@ -1777,7 +1780,7 @@
     // the right edge: point at it and the list slides out; leave the list and it goes again after a moment
     // the strip you point at only covers the middle (not the top bar's buttons, not YouTube's controls), but its glow
     // runs the full height of the screen edge, so it looks like one edge
-    const edge = el("div", "edge"), edgeGlow = el("div", "edgeglow"); ui.root.append(edgeGlow, edge);
+    const edge = el("div", "edge"), edgeGlow = el("div", "edgeglow"); ui.root.append(edge, edgeGlow);
     let edgeT = 0, leaveT = 0;
     // (not from the top bar's buttons above it, nor YouTube's player controls below it: only the strip in between)
     const bandTop = () => { const acts = ui.root.querySelector(".top .acts"), ab = acts ? acts.getBoundingClientRect().bottom : 0; return Math.max(ab + 8, 70); };
@@ -1852,14 +1855,14 @@
   const thumbOf = (v, o = {}) => {
     const box = el("div", "thumb");
     const img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
-    img.addEventListener("error", () => { img.style.visibility = "hidden"; img.classList.add("bad"); }); // never show a broken-image icon
-    img.addEventListener("load", () => img.classList.add("ok"));
+    img.addEventListener("error", () => { img.style.visibility = "hidden"; img.classList.add("bad"); if (img.parentNode) img.parentNode.classList.remove("ld"); }); // never show a broken-image icon
+    img.addEventListener("load", () => { img.classList.add("ok"); if (img.parentNode) img.parentNode.classList.remove("ld"); });
     if (v.tw) { // a Twitch stream: its live preview with a LIVE pill and how many watch; someone offline: their picture
       if (v.thumb) img.src = v.thumb;
       if (!v.off && v.viewers) { const tv0 = el("span", "twv"); tv0.title = `${v.viewers.toLocaleString()} watching`; tv0.append(icon("eye"), document.createTextNode(Intl.NumberFormat(undefined, { notation: "compact" }).format(v.viewers))); box.append(tv0); } // how many watch, with an eye (no LIVE pill: everything up top is live)
     }
     else img.src = `https://i.ytimg.com/vi/${v.id}/mqdefault.jpg`;
-    if (img.complete && img.naturalWidth) img.classList.add("ok");
+    if (img.complete && img.naturalWidth) img.classList.add("ok"); else if (img.getAttribute("src")) box.classList.add("ld"); // (loading: a soft shimmer)
     box.append(img);
     if (o.info) box.append(iconBtn("info", "About this stream, and past broadcasts", o.info, "hb exb")); // Twitch
     if (o.wl && cfg.tv.hbWl) {
@@ -4585,6 +4588,7 @@
       showNow();
       return;
     }
+    state.loadAt = Date.now(); state.loadId = v.id;
     cmd({ cmd: "load", id: v.id, start, q: cfg ? cfg.tv.videoQuality : "premium" });
     ui.curtain.style.display = "none";
     clearTimeout(state.startTimer);
@@ -5220,7 +5224,7 @@
   const selectGridTab = (id) => {
     if (!ui || !ui.vgrid || id === grid.tab) return;
     grid.mems.set(grid.tab, ui.vgrid.scrollTop);
-    grid.tab = id;
+    grid.tab = id; grid.fills = 0;
     lastListTab = id; // (the list panel opens on it next time)
     grid.animAll = true; drawGrid(); syncGridTabs();
     ui.vgrid.scrollTop = grid.mems.get(id) || 0;
@@ -5342,6 +5346,8 @@
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
       t.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.4,0,.2,1)" });
     }
+
+    if (!grid.busy && grid.dryTab !== tab) setTimeout(gridFill, 120); // (plenty ready ahead, by itself)
   };
   // a tile swiped away (or A / D): it fades where it is, then the others glide into its place
   const leaveTile = (w) => {
@@ -5351,13 +5357,23 @@
     if (!motionOn()) return done();
     t.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "scale(.9)" }], { duration: Math.max(140, Math.round(cfg.tv.swipeFadeMs * 0.6)), easing: "ease", fill: "forwards" }).onfinish = done;
   };
-  const gridMore = async () => {
-    if (grid.busy || !gridOpen()) return;
-    const kind = tabKind(grid.tab); if (!canPull(kind)) return;
-    const box = ui.vgrid; if (box.scrollHeight - box.scrollTop - box.clientHeight > box.clientHeight * 0.8) return;
+  // The ∨ grid keeps a good few screens of videos ready by itself: with 5 or 6 a row, one page from YouTube is only a
+  // few rows, so it keeps loading (in the background, a few pages at most per go) until there are plenty to scroll.
+  let gFillGo = 0;
+  const gridFill = async () => {
+    if (grid.busy || !gridShown()) return;
+    const tab = grid.tab, kind = tabKind(tab); if (!canPull(kind) || grid.dryTab === tab) return;
+    const want = (cfg.tv.fsGridCols || 3) * 8, go = ++gFillGo;
     grid.busy = true;
-    try { await loadMoreTab(grid.tab); } catch {} finally { grid.busy = false; }
-    drawGrid();
+    try {
+      for (let k = 0; k < 4 && gFillGo === go && gridShown() && grid.tab === tab; k++) {
+        if (ui.vgrid.querySelectorAll(".vgl > .vgt:not(.vdone)").length >= want) break;
+        if ((grid.fills = (grid.fills || 0) + 1) > 10) { grid.dryTab = tab; break; } // (at most 10 pages by itself per opening: then a pull at the end)
+        const n = await loadMoreTab(tab).catch(() => 0);
+        if (!n) { grid.dryTab = tab; break; } // (YouTube has no more right now: no asking again until it's opened again)
+        drawGrid();
+      }
+    } finally { grid.busy = false; }
   };
   // ---- pulling: the ∨ grid open and closed, and "more" at the end of a list. The same swipe everywhere (tuned in the
   // Pull Lab): while you scroll it just follows you; it acts when you let go (fast enough, far enough, or enough of it
@@ -5625,7 +5641,7 @@
   const snapMs = () => (cfg ? cfg.tv.gridSnapMs : 240);
   const openGrid = () => {
     if (!ui || !cfg || !cfg.tv.gridOn || gridOpen()) return;
-    const box = showGridBox(); box.classList.remove("peek");
+    const box = showGridBox(); box.classList.remove("peek"); grid.dryTab = ""; grid.fills = 0;
     gput(gH()); gTween(0, snapMs(), settleOpen);
   };
   const hideGridBox = () => { if (!ui || !ui.vgrid) return; gStop(); gHc = 0; zoneOff(); if (gOpenNow) grid.mems.set(grid.tab, ui.vgrid.scrollTop); ui.vgrid.hidden = true; if (ui.vgbg) ui.vgbg.hidden = true; if (ui.vgup) ui.vgup.classList.remove("on"); ui.vgrid.classList.remove("peek"); gput(0); ui.root.classList.remove("vgon"); grid.closing = false; gOpenNow = false; gClose.reset(); gMore.reset(); wake(); };
@@ -5722,7 +5738,7 @@
   const gMore = moreFor(() => {
     if (!ui || !ui.vgrid) return null;
     return { scroller: ui.vgrid, host: ui.root, cls: "vgpull", content: () => ui.vgrid.querySelector(".vgl"), last: () => { const r = ui.vgrid.querySelectorAll(".vgl > .vgt"); return r[r.length - 1] || null; },
-      can: () => canPull(tabKind(grid.tab)), load: () => loadMoreTab(grid.tab), redraw: () => drawGrid() };
+      can: () => canPull(tabKind(grid.tab)), load: async () => { let n = 0; const tab = grid.tab, want = (cfg.tv.fsGridCols || 3) * 4; for (let k = 0; k < 3 && n < want; k++) { const m = await loadMoreTab(tab).catch(() => 0); n += m || 0; if (!m) break; } return n; }, redraw: () => drawGrid() };
   });
   // the comments (Info and Comments sit in the same place as the list)
   const comMore = moreFor(() => {
@@ -6331,7 +6347,15 @@
     repairPlayer();
     wake();
   };
-  const onVisible = () => { if (ui && document.visibilityState === "visible") repairPlayer(); };
+  // back after a while (the lid was closed, another tab…): the player reports what it plays again, so YTV can follow it
+  let hiddenAt = 0;
+  const onVisible = () => {
+    if (!ui) return;
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    repairPlayer();
+    if (hiddenAt && Date.now() - hiddenAt > 30000) { state.loadAt = 0; cmd({ cmd: "announce", q: cfg ? cfg.tv.videoQuality : "premium" }); showNow(); }
+    hiddenAt = 0;
+  };
 
   // ---------------------------------------------------------------- keys
   // Keys come from your settings (YTV settings → Keyboard shortcuts), or can be turned off.
@@ -6417,6 +6441,16 @@
   };
 
   // ---------------------------------------------------------------- player events (main-world.js)
+  const adoptPlaying = (d) => {
+    const i = state.queue.findIndex((x) => x.id === d.id);
+    if (i >= 0) { if (i !== state.pos) state.history.push(state.pos); state.pos = i; }
+    else {
+      const x = { id: d.id, title: String(d.title || "").slice(0, 200), channel: String(d.author || "").slice(0, 100), creator: /^UC[\w-]{20,24}$/.test(d.channelId || "") ? "channel/" + d.channelId : "", len: "", age: "", progress: 0, watched: false };
+      state.history.push(state.pos); state.queue.splice(state.pos + 1, 0, x); state.pos += 1;
+    }
+    state.loadAt = Date.now(); state.loadId = d.id; state.lastEvt = "playing";
+    saveSession(); showNow(); refreshList();
+  };
   document.addEventListener("ytv-evt", (e) => { try { onPlayerEvt(e); } catch (err) { logErr("player event", err); } });
   const onPlayerEvt = (e) => {
     if (!ui || !onWatchTv()) return;
@@ -6424,6 +6458,9 @@
     const v = current();
     // a stream is on: YouTube's own player (e.g. the page's video after a reload) stays paused and has no say
     if (ui.root.classList.contains("on-twitch") || (v && v.tw)) { if (d.evt === "playing" || d.evt === "time") cmd({ cmd: "pause" }); return; }
+    // YouTube is playing something else than YTV thinks (after the computer slept, YouTube's player may have reloaded
+    // or moved on by itself): YTV follows what really plays, so the title and the list are right again
+    if ((d.evt === "playing" || d.evt === "time") && v && ID_RE.test(d.id || "") && d.id !== v.id && Date.now() - (state.loadAt || 0) > 6000) { adoptPlaying(d); return; }
     if (d.evt === "time" && v && d.id === v.id && Number.isFinite(d.t)) {
       if (state.seekOnPlay && state.seekOnPlay.id === d.id) { const s0 = state.seekOnPlay; state.seekOnPlay = null; if (d.t < s0.at - 3) { cmd({ cmd: "seek", start: s0.at }); return; } }
       state.t = d.t;
@@ -6482,6 +6519,7 @@
     window.addEventListener("keydown", keyHandler, true);
     window.addEventListener("click", onPageClick, true);
     document.addEventListener("fullscreenchange", onFullscreenChange);
+    if (document.fullscreenElement) onFullscreenChange(); // opened while already in full screen: it shows inside it (and stays full screen)
     startTwitchWatch();
     // Home, ready before you look: its tab and its card in the overview aren't empty (one more try if YouTube sent nothing)
     setTimeout(() => {
@@ -6603,7 +6641,7 @@
     if (!ui) return;
     saveLast(true);
     syncFeed();
-    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    // (full screen stays: closing YTV leaves you watching YouTube in full screen; Esc or YouTube's own button leaves it)
     window.removeEventListener("keydown", keyHandler, true);
     window.removeEventListener("click", onPageClick, true);
     document.removeEventListener("fullscreenchange", onFullscreenChange);
