@@ -4002,6 +4002,15 @@
     const sel = m.querySelector(".cm.sel") || m.querySelector(".cm"); sel && sel.focus();
   };
   // A video in another channel's tab: play it there and carry on with that channel.
+  // What you lined up to play next (swiped, or A) comes along when you click a video in another tab: it stays next
+  // in line after that video, wherever it plays.
+  const takeNx = (exceptId) => state.queue.slice(state.pos + 1).filter((x) => x.nx && !x.tw && x.id !== exceptId && !played.has(x.id));
+  const putNx = (list, at = state.pos + 1) => {
+    if (!list || !list.length) return;
+    const ids = new Set(list.map((x) => x.id));
+    state.queue = state.queue.filter((x, i) => i <= state.pos || !ids.has(x.id));
+    state.queue.splice(Math.min(at, state.queue.length), 0, ...list.map((x) => ({ ...x, nx: 1 })));
+  };
   const stayInChannel = (c, v) => {
     if (!c) return;
     const idx = chans().findIndex((x) => x.id === c.id);
@@ -4014,6 +4023,7 @@
       state.queue.splice(state.pos + 1, 0, { ...v });
       return goTo(state.pos + 1);
     }
+    state.carryNx = c.twitch ? null : takeNx(v.id); // (a stream list can't hold YouTube videos: they stay where they were)
     pendingFirst = { v, t: v.tw ? 0 : resumeOf(v.id), similar: false }; // (where you were in it, if you watched some before)
     const seen = browse.get(c.id);
     pendingLineup = seen && seen.items.length ? { id: c.id, items: seen.items.slice() } : null;
@@ -4021,6 +4031,7 @@
   };
   // A video in your Feed while something else plays: the Feed starts with it.
   const playFeedFrom = (v) => {
+    if (state.colId !== FEED_ID) state.carryNx = takeNx(v.id);
     feedStore = [v, ...feedStore.filter((x) => x.id !== v.id)];
     writeFeed();
     delete state.mem[FEED_ID];
@@ -4031,7 +4042,8 @@
     state.pickedId = v && v.id;
     if (!state.stay) return;
     state.from = null;
-    state.base = [v, ...(state.base || []).filter((x) => x.id !== v.id)];
+    const nx = takeNx(v.id).map((x) => ({ ...x, nx: 1 })), nxIds = new Set(nx.map((x) => x.id));
+    state.base = [v, ...nx, ...(state.base || []).filter((x) => x.id !== v.id && !nxIds.has(x.id))];
     backToMix();
   };
   const renderPanel = (fresh = false) => {
@@ -4094,7 +4106,16 @@
   const pageHidden = () => { if (ui && PAGES.has(state.panel) && ui.root.classList.contains("fade")) showPanel(lastListTab && isListTab(lastListTab) ? lastListTab : playingTab()); };
   // The list key: opens the tab of what's playing (or closes the panel).
   // (with the list menu off in settings, U is the ∨ menu's key too)
-  const toggleList = () => (cfg && !cfg.tv.listOn ? (cfg.tv.gridOn ? toggleGrid() : null) : showPanel(isListTab(state.panel) ? "" : playingTab()));
+  // the list opens again on the tab you closed it on (and where you were in it), not always on what's playing
+  let listClosedOn = "";
+  const toggleList = () => {
+    if (cfg && !cfg.tv.listOn) return cfg.tv.gridOn ? toggleGrid() : null;
+    if (isListTab(state.panel)) { listClosedOn = state.panel; return showPanel(""); }
+    const t = listClosedOn;
+    const ok = !!t && (t === HIST_TAB || (t === "explore" && !!state.stay) || (t.startsWith("x:") && (state.xtabs || []).some((x) => "x:" + x.id === t)) || (t.startsWith("src:") && !!chanById(t.slice(4))));
+    const back = ok ? t : playingTab();
+    return showPanel(back);
+  };
 
   // ---------------------------------------------------------------- channel overview (guide)
   // A card per channel: what's on now and next. Drag cards to put the channels in your order (the numbers follow),
@@ -4831,11 +4852,14 @@
     if (!x || !current()) return;
     const cur = current(), first = v || x.items[0];
     if (!first) return;
+    const nx = takeNx(first.id);
     if (state.stay) parkStay(first.id);
     else { state.base = state.queue.slice(state.pos + 1).filter((y) => !played.has(y.id) && y.id !== first.id); state.from = { item: cur, t: state.t }; }
     state.xtabs = (state.xtabs || []).filter((t) => t.id !== xid);
     state.stay = { mode: "explore", query: x.query, by: x.by || "", pick: !!x.pick };
     state.queue = [...state.queue.slice(0, state.pos + 1), first, ...x.items.filter((y) => y.id !== first.id && y.id !== cur.id)];
+    putNx(nx, state.pos + 2); // (your lined-up videos stay next, after the one you clicked)
+    if (state.base) { const ids = new Set(nx.map((y) => y.id)); state.base = state.base.filter((y) => !ids.has(y.id)); }
     state.panel = "explore"; tabsSig = "";
     saveSession();
     goTo(state.pos + 1);
@@ -6174,6 +6198,7 @@
     await exploreCreator();
   };
   const tune = async (i) => {
+    let carry = state.carryNx; state.carryNx = null; // (your lined-up videos coming along: only for this switch)
     const cols = chans();
     if (!cols.length) return;
     const leaving = currentCol();
@@ -6189,6 +6214,8 @@
     if (leaving && leaving.feed) syncFeed();
     if (leaving && leaving.twitch) { delete state.mem[leaving.id]; browse.delete(leaving.id); } // who's live changes: Twitch is always looked up fresh
     else if (leaving && state.queue.length) { state.mem[leaving.id] = snapshot(); browse.delete(leaving.id); } // its tab shows the list you left
+    if (col.twitch) carry = null;
+    if (carry && carry.length && leaving && state.mem[leaving.id]) { const ids = new Set(carry.map((x) => x.id)), mm = state.mem[leaving.id]; mm.queue = mm.queue.filter((x, i) => i <= mm.pos || !ids.has(x.id)); }
     const follow = isListTab(state.panel) && (state.panel === playingTab() || state.panel === "src:" + col.id);
     let feedT = 0;
     if (col.feed) { // your Feed may have changed since: always start from it (where you were, if it's the same video)
@@ -6209,6 +6236,7 @@
       ++state.tuneToken;
       lsSet("hush:tv:last", col.id);
       state.queue = m.queue; state.pos = m.pos; state.history = m.history || []; state.stay = m.stay; state.base = m.base; state.from = m.from || null;
+      putNx(carry);
       ui.root.classList.remove("show-msg", "show-start");
       playCurrent(m.t || (current() && !current().tw ? resumeOf(current().id) : 0));
       return;
@@ -6247,6 +6275,7 @@
       }
       state.history = [];
       state.lastEvt = "";
+      if (!col.twitch) putNx(carry);
       playCurrent(pf ? pf.t : feedT || (current() && !current().tw ? resumeOf(current().id) : 0), !!(pf && pf.keep));
       if (pf && pf.similar) similarForFirst(pf.v);
     };
