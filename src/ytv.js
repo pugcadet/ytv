@@ -3490,6 +3490,7 @@
   const closeSettings = () => {
     if (!ui || !ui.setFrame || ui.setFrame.hidden) return false;
     ui.setFrame.hidden = true; ui.setFrame.replaceChildren(); ui.root.classList.remove("show-set"); wake(); // (the page goes, so it costs nothing while closed)
+    if (ui.root.classList.contains("show-guide")) showGuide(false); // closed: straight back to the video, not the overview it was opened from
     return true;
   };
 
@@ -5383,6 +5384,21 @@
   };
   // The ∨ grid keeps a good few screens of videos ready by itself: with 5 or 6 a row, one page from YouTube is only a
   // few rows, so it keeps loading (in the background, a few pages at most per go) until there are plenty to scroll.
+  // "Load more: when I near the end" (no pull): as you scroll the grid within about two screens of its end, the next
+  // videos load (a few rows' worth at a time), as in the list
+  const gridNearEnd = () => {
+    if (!ui || !ui.vgrid || grid.busy || pullK("list") || !gridShown()) return;
+    const b = ui.vgrid; if (b.scrollHeight - b.scrollTop - b.clientHeight > b.clientHeight * 2) return;
+    const tab = grid.tab; if (!canPull(tabKind(tab)) || grid.dryTab === tab) return;
+    grid.busy = true;
+    (async () => {
+      try {
+        let n = 0; const want = (cfg.tv.fsGridCols || 3) * 4;
+        for (let k = 0; k < 3 && n < want; k++) { const m = await loadMoreTab(tab).catch(() => 0); if (!m) { grid.dryTab = tab; break; } n += m; }
+        drawGrid();
+      } finally { grid.busy = false; }
+    })();
+  };
   let gFillGo = 0;
   const gridFill = async () => {
     if (grid.busy || !gridShown()) return;
@@ -5574,6 +5590,7 @@
   const gridBox = () => {
     if (ui.vgrid) return ui.vgrid;
     const box = el("div", "vgrid"); box.hidden = true; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Videos");
+    box.addEventListener("scroll", () => gridNearEnd(), { passive: true }); // (Load more: when I near the end)
     // its bar, always at the very top: the tabs (and +) in the middle, refresh and ∧ on the right
     const bar = el("div", "vgbar"), acts = el("div", "vgact");
     const x = el("button", "vgx"); x.type = "button"; x.title = "Close (V)"; x.setAttribute("aria-label", "Close"); x.append(icon("chevron")); x.firstChild.style.transform = "rotate(180deg)";
