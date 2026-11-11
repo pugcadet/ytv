@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.40.0";
+  SW.VERSION = "1.40.1";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -210,7 +210,7 @@
         return out;
       })(),
       uiScale: clampInt(tv.uiScale, 25, 400, 110), // percent
-      autoSkip: tv.autoSkip !== false, // click YouTube's own Skip (ads) and Jump ahead (Premium) buttons as soon as they show
+      autoSkip: tv.autoSkip !== false, // click YouTube's own Skip button on an ad as soon as it shows
       videoQuality: ["premium", "hd1080", "hd720", "auto"].includes(tv.videoQuality) ? tv.videoQuality : "premium", // premium: 1080p Premium (higher bitrate) where it plays, else 1080p
       hbSize: clampInt(tv.hbSize, 8, 120, 20), // the explore / Watch Later buttons on a picture
       hbWl: typeof tv.hbWl === "boolean" ? tv.hbWl : true,

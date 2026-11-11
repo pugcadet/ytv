@@ -835,7 +835,7 @@
       card("Picture", null,
         pick("Video quality", "tv.videoQuality", [["premium", "1080p Premium"], ["hd1080", "1080p"], ["hd720", "720p"], ["auto", "Auto"]],
           "1080p Premium needs YouTube Premium; otherwise it plays 1080p."),
-        toggle("Skip ads and sponsors", "Presses YouTube’s Skip and Premium’s Jump ahead for you.", "tv.autoSkip")),
+        toggle("Skip ads", "Presses YouTube’s Skip button on an ad for you.", "tv.autoSkip")),
       card("Controls", null,
         toggle("Buttons above the player bar", "Previous, Next, list, Info and Comments.", "tv.showBar")));
   };

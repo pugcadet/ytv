@@ -28,7 +28,7 @@ YTV used to be Hush TV, inside Hush for YouTube. It's now its own extension; Hus
 - **Settings** open where you left off (the page and how far down it); Esc closes them.
 - **Channels in a search:** the channels that match show at the top of the results tab; click one for its page in Info (their Latest and Popular videos).
 - **Twitch, someone offline:** click them (in the list, the ∨ menu or Find streamers) for their page in Info: past broadcasts, and an Add to Twitch button that turns into a small bin once they're on your list.
-- **Skip automatically (Settings → Playing, on by default):** YouTube's own Skip button on ads and Premium's Jump ahead are clicked the moment they show.
+- **Skip ads (Settings → Playing, on by default):** YouTube's own Skip button on an ad is clicked the moment it shows.
 - **Reloading the page:** the video carries on where you were from the very first frame (no jump in picture or sound a moment later), in the quality you picked.
 - **More from … (right-click any video):** Info for that video with its creator's Latest and Popular videos, and a Play now button.
 - **Info (I):** the description (a long one starts folded to a few lines: Show more, which opens and folds smoothly), with the creator, date, length, the channel's subscriber count and the video's views, each with its small icon.

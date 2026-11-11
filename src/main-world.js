@@ -62,10 +62,10 @@
   document.addEventListener("loadedmetadata", earlySeek, true);
   document.addEventListener("playing", earlySeek, true);
   setTimeout(() => document.documentElement.removeAttribute("data-ytv-seek"), 20000); // (only for this page load)
-  // Skip automatically (Settings → Playing): YouTube's own Skip button on an ad, and Premium's Jump ahead, clicked as
-  // soon as they show. Only buttons inside the player, only when they're visible.
-  const SKIP_SEL = ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button, [class*='jump-ahead'] button, button[class*='jump-ahead'], [class*='skip-ad'] button";
-  const SKIP_TXT = /^(skip|skip ads?|jump ahead|overslaan|advertentie overslaan|advertenties overslaan|vooruitspringen)$/i;
+  // Skip automatically (Settings → Playing): YouTube's own Skip button on an ad, clicked as
+  // soon as it shows. Only buttons inside the player, only when they're visible.
+  const SKIP_SEL = ".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button, [class*='skip-ad'] button";
+  const SKIP_TXT = /^(skip|skip ads?|overslaan|advertentie overslaan|advertenties overslaan)$/i;
   let skipAt = 0;
   const autoSkip = (p) => {
     if (!document.documentElement.hasAttribute("data-ytv-skip") || performance.now() - skipAt < 800) return;

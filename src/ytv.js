@@ -1712,7 +1712,7 @@
     await writeCfg();
   };
   // Show and hide together with YouTube's own player controls (they hide after a moment of no mouse movement).
-  // In full screen YouTube sometimes puts its controls up by itself (a new video, buffering, a "mouse move" from the
+  // YouTube sometimes puts its controls up by itself (a new video, buffering, a "mouse move" from the
   // system that didn't move anything). YTV only counts what you really do: a mouse that moved, a key, a click, a scroll.
   let controlsObs = null;
   const IDLE_MS = 2800;
@@ -1745,9 +1745,9 @@
       const onTw = ui.root.classList.contains("on-twitch");
       placeVg(mp);
       let ytHidden = onTw ? Date.now() - (state.twIdleAt || 0) > 3000 : mp ? mp.classList.contains("ytp-autohide") : false;
-      // full screen and YouTube shows its controls though nothing happened: treat them as hidden (and keep them hidden)
+      // YouTube shows its controls though nothing happened (full screen or not): treat them as hidden (and keep them hidden)
       let still = false;
-      if (!ytHidden && !onTw && mp && document.fullscreenElement && !mp.classList.contains("paused-mode") && !mp.classList.contains("ad-showing")) {
+      if (!ytHidden && !onTw && mp && !mp.classList.contains("paused-mode") && !mp.classList.contains("ad-showing")) {
         const left = IDLE_MS - (performance.now() - actAt);
         if (left <= 0) { ytHidden = true; still = true; }
         else { clearTimeout(stillT); stillT = setTimeout(sync, left + 60); }
@@ -6845,7 +6845,7 @@
   };
   const btnPrefs = () => cfg ? { on: cfg.enabled, s: cfg.tv.sidebarButton, h: cfg.tv.headerButton } : lsGet("ytv:btns", { on: true, s: true, h: true });
   let watchButtons = () => {};
-  // (the player bridge clicks Skip / Jump ahead when this is on: it reads it from <html>)
+  // (the player bridge clicks Skip on an ad when this is on: it reads it from <html>)
   const syncSkip = () => { if (cfg && cfg.tv.autoSkip) document.documentElement.setAttribute("data-ytv-skip", "1"); else document.documentElement.removeAttribute("data-ytv-skip"); };
   const syncButtons = () => { syncSkip();
     const pr = btnPrefs(), on = pr.on;
