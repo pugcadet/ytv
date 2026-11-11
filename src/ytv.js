@@ -158,7 +158,7 @@
   window.addEventListener("pagehide", flushResume);
   document.addEventListener("visibilitychange", () => { if (document.hidden) flushResume(); });
   const removed = new Set(); // taken out of the queue by hand this session
-  const usable = (col, v) => v && isItem(v.id) && ((col.feed && v.f) || (!skipped.has(v.id) && !isBlocked(col, v) &&
+  const usable = (col, v) => v && isItem(v.id) && (!!v.tw === !!col.twitch || col.feed || col.cont) && ((col.feed && v.f) || (!skipped.has(v.id) && !isBlocked(col, v) &&
     !(col.skipSeen && (v.watched || seen.has(v.id) || progressOf(v) >= fullPct())) && !tooOld(col, v) &&
     !(cfg && cfg.tv.skipMusic && !col.watchLater && !col.homeFeed && !col.watchedChip && !col.cont && musicLike(v)) && !removed.has(v.id) && // (Home shows what YouTube shows)
     (col.feed || !inFeed(v.id)))); // what's on your Feed plays there, not again on another channel
@@ -166,14 +166,24 @@
   const shuffled = (arr) => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
   const whoKey = (v) => creatorKey(v && (v.creator || v.channel));
   /** Never the same creator twice in a row, as long as there's anyone else: otherwise the list keeps its order (YouTube's). */
-  const spread = (arr) => {
-    if (!cfg || !cfg.tv.spreadCreators || arr.length < 3) return arr;
-    const rest = arr.slice(), out = [];
+  const spread = (arr, before = []) => {
+    if (!cfg || !cfg.tv.spreadCreators || arr.length < 2) return arr;
+    const rest = arr.slice(), out = [], recent = before.slice(-6).map(whoKey);
+    const kinds = new Set(arr.map(whoKey).filter(Boolean)).size;
+    const gap = Math.max(1, Math.min(4, kinds - 1)); // this many others before the same creator comes again (as far as there are others)
+    const LOOK = 40; // (only from a little further down: the order stays close to YouTube's)
     while (rest.length) {
-      const last = out.length ? whoKey(out[out.length - 1]) : "";
-      let i = last ? rest.findIndex((v) => !whoKey(v) || whoKey(v) !== last) : 0;
-      if (i < 0 || i > 8) i = 0; // (only from a little further down: the order stays YouTube's)
-      out.push(rest.splice(i, 1)[0]);
+      const tail = recent.slice(-gap);
+      // someone with a big share of what's left goes every other one, evenly, instead of all together at the end
+      const cnt = new Map(); let top = "", topN = 0;
+      for (const v of rest) { const w = whoKey(v); if (!w) continue; const c = (cnt.get(w) || 0) + 1; cnt.set(w, c); if (c > topN) { topN = c; top = w; } }
+      const heavy = top && topN * (gap + 1) > rest.length && recent[recent.length - 1] !== top ? rest.findIndex((v) => whoKey(v) === top) : -1;
+      let i = heavy >= 0 ? heavy : rest.findIndex((v, k) => k < LOOK && (!whoKey(v) || !tail.includes(whoKey(v))));
+      if (i < 0) { // everyone near was just on: the one who was on longest ago
+        let far = -1; i = 0;
+        for (let k = 0; k < Math.min(LOOK, rest.length); k++) { const at = recent.lastIndexOf(whoKey(rest[k])), d = at < 0 ? 1e9 : recent.length - at; if (d > far) { far = d; i = k; } }
+      }
+      const v = rest.splice(i, 1)[0]; out.push(v); recent.push(whoKey(v));
     }
     return out;
   };
@@ -185,7 +195,7 @@
     return old.length ? [...fresh, ...old] : arr;
   };
   /** A channel's own mix of videos (not Home, Feed, Watch Later…): watched ones last, creators mixed up. */
-  const tidy = (col, arr) => (col && !col.homeFeed && !col.feed && !col.watchLater && !col.watchedChip && !col.cont && !col.subs && !col.twitch ? spread(sinkWatched(arr)) : arr);
+  const tidy = (col, arr, before = []) => (col && !col.homeFeed && !col.feed && !col.watchLater && !col.watchedChip && !col.cont && !col.subs && !col.twitch ? spread(sinkWatched(arr), before) : arr);
   const cacheKey = (col) => "tvcache:" + col.id + ":" + col.maxAge + ":" + SW.stableStringify([col.subjects, col.channels, col.home]).length;
 
   /** Build a channel's lineup. Calls onFirst as soon as the first source has videos. */
@@ -297,10 +307,12 @@
   const PULL_MORE = 40; // how many a pull past the end of a list (or the ∨ menu) asks for
   const moreLineup = async (col, want = 12, have = new Set()) => {
     let p = pagers.get(col.id);
-    if (!p || Date.now() - p.at > 2 * 3600 * 1000) { p = { srcs: pagedSources(col).map((src) => ({ src, more: null, title: "", started: false })), at: Date.now() }; pagers.set(col.id, p); }
+    if (!p || Date.now() - p.at > 2 * 3600 * 1000) { p = { srcs: pagedSources(col).map((src) => ({ src, more: null, title: "", started: false })), held: [], at: Date.now() }; pagers.set(col.id, p); }
     const named = (s, list) => s.src.creator ? list.map((v) => ({ ...v, channel: (v.channel && !SW.yt.isStat(v.channel) ? v.channel : "") || s.title || (s.src.creator.startsWith("@") ? s.src.creator : ""), creator: v.creator || s.src.creator })) : list;
     const out = [], seen = new Set();
     const take = (list) => { for (const v of list) if (!seen.has(v.id) && !have.has(v.id) && usable(col, v) && !played.has(v.id)) { seen.add(v.id); out.push(v); } };
+    if (col.twitch) return twitchLive(); // live streams: just look again
+    take((p.held || []).splice(0)); // (kept back last time: one creator had too many at once)
     for (let round = 0; round < (want > 20 ? 7 : 4) && out.length < want; round++) { // (a pull for more asks for a good batch: more pages)
       const live = p.srcs.filter((s) => !s.started || s.more);
       if (!live.length) break;
@@ -312,13 +324,20 @@
       const mixed = []; for (let i = 0; pages.some((l) => i < l.length); i++) for (const l of pages) if (i < l.length) mixed.push(l[i]);
       take(col.shuffle ? shuffled(mixed) : mixed);
     }
-    if (col.twitch) return (await twitchLive()).filter((v) => !seen.has(v.id)); // live streams: just look again
     if (out.length < want && !col.feed && !col.watchLater && !col.watchedChip && !col.cont) { // every source is at its end: related videos keep it going
       const pool = [...(browse.get(col.id) || { items: [] }).items, ...state.queue].filter((v) => v && ID_RE.test(v.id));
       for (let i = 0; i < 3 && out.length < want && pool.length; i++) {
         const v = pool[Math.floor(Math.random() * pool.length)];
         try { take(await similarTo(v.id)); } catch {}
       }
+    }
+    // one creator never takes over a batch: at most a quarter each (when there are others); the rest waits for the next batch
+    const kinds = new Set(out.map(whoKey).filter(Boolean)).size;
+    if (cfg.tv.spreadCreators && kinds >= 3 && !col.homeFeed && !col.subs && !col.feed && !col.watchLater && !col.watchedChip && !col.cont) {
+      const max = Math.max(3, Math.ceil(out.length / 4)), n = new Map(), keep = [];
+      for (const v of out) { const w = whoKey(v), c = (n.get(w) || 0) + 1; n.set(w, c); if (w && c > max) p.held.push(v); else keep.push(v); }
+      if (p.held.length > 200) p.held.splice(0, p.held.length - 200);
+      return tidy(col, keep);
     }
     return tidy(col, out);
   };
@@ -2720,7 +2739,7 @@
         try { got = await moreLineup(c, PULL_MORE, have); } catch {}
         let add = got.filter((x) => !have.has(x.id));
         if (!add.length) add = await moreFallback(c, e.items[e.items.length - 1], have);
-        add = [...new Map(add.map((x) => [x.id, x])).values()];
+        add = tidy(c, [...new Map(add.map((x) => [x.id, x])).values()], e.items.slice(-6));
         e.items.push(...add); return add.length;
       }
       try { got = await buildLineup(c, () => {}, () => {}, mode !== "open"); } catch {}
@@ -4721,7 +4740,7 @@
   // When YouTube has no next page to give (or only things you've seen): a fresh look at the channel's sources, then
   // videos like what's on. "Load more" always brings something.
   const moreFallback = async (col, v, have = new Set()) => {
-    if (!col || col.watchLater || col.watchedChip || col.cont) return []; // Watch Later is your list and nothing else: it ends where it ends
+    if (!col || col.watchLater || col.watchedChip || col.cont || col.twitch) return []; // (Twitch: who's live is all there is) Watch Later is your list and nothing else: it ends where it ends
     const fresh = (list) => list.filter((x) => x && usable(col, x) && !played.has(x.id) && !have.has(x.id));
     let got = [];
     try { got = fresh(await buildLineup(col, () => {}, () => {}, true)); } catch {}
@@ -4751,7 +4770,7 @@
       else more = await moreLineup(col, want, new Set(state.queue.map((q) => q.id))); // the next pages: a channel never runs dry
       let fresh = more.filter((v) => usable(col, v) && !played.has(v.id) && !state.queue.some((q) => q.id === v.id)).slice(0, Math.max(40, want));
       if (!fresh.length && !state.stay) { fresh = (await moreFallback(col, state.queue[state.queue.length - 1], new Set(state.queue.map((q) => q.id)))).slice(0, 40); }
-      if (fresh.length) { state.queue.push(...fresh); saveSession(); refreshList(); }
+      if (fresh.length) { if (!state.stay) fresh = tidy(col, fresh, state.queue.slice(-6)); state.queue.push(...fresh); saveSession(); refreshList(); }
       return fresh.length;
     })().finally(() => { topping = null; });
     return topping;
@@ -5854,7 +5873,7 @@
     const topicW = new Set((col.subjects || []).flatMap(words)), mine = new Set((col.channels || []).map(creatorKey));
     const fits = (x) => mine.has(creatorKey(x.creator)) || mine.has(creatorKey(x.channel)) || words(x.title).some((w) => topicW.has(w));
     const have = new Set(state.queue.map((x) => x.id));
-    const pick = rel.filter((x) => x && !have.has(x.id) && !played.has(x.id) && usable(col, x) && fits(x) && progressOf(x) < 50).slice(0, 2);
+    const pick = rel.filter((x) => x && !have.has(x.id) && !played.has(x.id) && usable(col, x) && fits(x) && progressOf(x) < 50 && whoKey(x) !== whoKey(v)).filter((x, i, a) => a.findIndex((y) => whoKey(y) === whoKey(x)) === i).slice(0, 2);
     if (!pick.length || currentCol() !== col) return;
     const hist = idsOfHistory();
     pick.forEach((x, k) => state.queue.splice(Math.min(state.queue.length, state.pos + 2 + k * 2), 0, { ...x, rel: 1 }));
@@ -6316,9 +6335,18 @@
     if (!started) return start(items);
     if (state.stay || col.feed) return; // already on a topic path (or your own Feed): leave that list alone
     // the rest of the lineup arrived: it joins the end, and what you already see never moves
-    const have = new Set(state.queue.map((v) => v.id)), add = items.filter((v) => !have.has(v.id));
-    if (!add.length) return;
-    state.queue.push(...add);
+    // (the first source started it alone; from a few further down the whole mix takes over, so it isn't one creator in a row)
+    const keepTo = Math.min(state.queue.length, state.pos + 4);
+    const head = state.queue.slice(0, keepTo), later = state.queue.slice(keepTo);
+    const pinned = later.map((x, k) => [k, x]).filter(([, x]) => x.nx || x.bk || x.f || x.rel);
+    const fixed = new Set([...head, ...pinned.map(([, x]) => x)].map((v) => v.id));
+    const pool = [...items, ...later].filter((v, i, a) => !fixed.has(v.id) && !played.has(v.id) && a.findIndex((y) => y.id === v.id) === i);
+    if (!pool.length) return;
+    const rest = tidy(col, pool, head);
+    for (const [k, x] of pinned) rest.splice(Math.min(k, rest.length), 0, x);
+    const hist = idsOfHistory();
+    state.queue = [...head, ...rest];
+    fixHistory(hist);
     saveSession();
     refreshList();
   };
