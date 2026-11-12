@@ -2776,6 +2776,7 @@
     const rest = col && col.watchLater ? fresh : fresh.slice(0, 120);
     for (const [d, x] of mine) rest.splice(Math.min(d, rest.length), 0, x);
     state.queue = [...state.queue.slice(0, state.pos + 1), ...rest];
+    liveAt = Date.now();
     saveSession(); schedulePanel();
     return fresh.length;
   };
@@ -4396,10 +4397,28 @@
   // (the channels you left are remembered, the last 8 of them: the session is saved often, so it stays small)
   const trimMem = () => { const ks = Object.keys(state.mem); if (ks.length > 8) for (const k of ks.sort((a, b) => (state.mem[a].at || 0) - (state.mem[b].at || 0)).slice(0, ks.length - 8)) delete state.mem[k]; };
   const saveSession = () => { syncFeed(); trimMem(); writeSession({ colId: state.colId || "", queue: state.queue.slice(0, 150), pos: state.pos, history: state.history.slice(-50),
-    stay: state.stay, base: state.base ? state.base.slice(0, 120) : null, from: state.from, t: state.t, mem: state.mem,
+    stay: state.stay, base: state.base ? state.base.slice(0, 120) : null, from: state.from, t: state.t, mem: state.mem, liveAt,
     xtabs: (state.xtabs || []).map((x) => ({ ...x, items: x.items.slice(0, 40) })) }); };
   // Each channel remembers its lineup, the video that was on and where you were in it.
-  const MEM_MS = 4 * 3600 * 1000;
+  // Lists older than this are loaded again when you come back (what you lined up yourself stays).
+  const STALE_MS = 2 * 3600 * 1000;
+  const MEM_MS = STALE_MS;
+  let liveAt = Date.now(), autoBusy = false; // (when the list that's playing was last built)
+  const autoRefresh = async () => {
+    if (!ui || autoBusy || !cfg) return;
+    const now = Date.now(); let dropped = false;
+    for (const [id, e] of browse) if (!e.busy && e.at && now - e.at > STALE_MS) { browse.delete(id); dropped = true; } // the other tabs load again when you look at them
+    if (dropped) schedulePanel();
+    const col = currentCol();
+    if (!col || !state.queue.length || now - liveAt < (col.twitch ? 5 * 60000 : STALE_MS)) return;
+    autoBusy = true;
+    try {
+      const tab = playingTab();
+      await refreshTab(tab); // (keeps the video that's on and what you put up next)
+      liveAt = Date.now();
+      if (ui) { if (state.panel === tab) ui.pbody.scrollTop = 0; if (ui.vgrid && !ui.vgrid.hidden && grid.tab === tab) { ui.vgrid.scrollTop = 0; drawGrid(); } }
+    } catch {} finally { autoBusy = false; }
+  };
   const snapshot = () => ({ queue: state.queue.slice(Math.max(0, state.pos - 10), state.pos + 50), pos: Math.min(state.pos, 10),
     history: [], stay: state.stay, base: state.base ? state.base.slice(0, 60) : null, from: state.from, t: state.t, at: Date.now() });
 
@@ -6268,6 +6287,12 @@
       delete state.mem[col.id];
     }
     const m = state.mem[col.id];
+    if (m && !(Date.now() - m.at < MEM_MS) && !col.twitch) { // left too long ago: a fresh list, but what you lined up there stays
+      const mine = m.queue.filter((x, k) => k > m.pos && x && x.nx), ids = new Set((carry || []).map((x) => x.id));
+      if (mine.length) carry = [...(carry || []), ...mine.filter((x) => !ids.has(x.id))];
+      delete state.mem[col.id];
+    }
+    liveAt = m && Date.now() - m.at < MEM_MS ? m.at : Date.now();
     if (m && Date.now() - m.at < MEM_MS && m.queue.length) { // flip back: same video, same moment
       ++state.tuneToken;
       lsSet("hush:tv:last", col.id);
@@ -6429,6 +6454,7 @@
     repairPlayer();
     if (hiddenAt && Date.now() - hiddenAt > 30000) { state.loadAt = 0; cmd({ cmd: "announce", q: cfg ? cfg.tv.videoQuality : "premium" }); showNow(); }
     hiddenAt = 0;
+    autoRefresh();
   };
 
   // ---------------------------------------------------------------- keys
@@ -6633,13 +6659,13 @@
         const c = cols[li], next = (Array.isArray(lp.next) ? lp.next : []).filter((x) => x && typeof x.id === "string" && (c.feed || !inFeed(x.id)));
         if (!lp.v.tw && !lp.done) pendingFirst = { v: lp.v, t: resumeOf(lp.v.id) || lp.t || 0, similar: false };
         else if (lp.v.tw && c.twitch) pendingFirst = { v: lp.v, t: 0, similar: false };
-        if (next.length && !c.twitch && !c.feed) pendingLineup = { id: c.id, items: next };
+        if (next.length && !c.twitch && !c.feed && Date.now() - (lp.at || 0) < STALE_MS) pendingLineup = { id: c.id, items: next }; // (longer ago: a fresh list)
       }
       if (i < 0) i = cols.findIndex((c) => c.id === lsGet("hush:tv:last", ""));
     }
     if (i >= 0 && cols[i].twitch && pendingFirst && !pendingFirst.v.tw) i = cols.findIndex((c) => !c.feed && !c.twitch); // a YouTube video plays in a YouTube channel
     if (i < 0 && pendingFirst && cols.length) i = Math.max(0, cols.findIndex((c) => !c.feed));
-    if (i >= 0) tune(i);
+    if (i >= 0) { tune(i); autoRefresh(); } // (reopened after a long while: the lists load again)
     if (i >= 0 && colId === "last") { // and the panel as you left it (the list, History, Info…)
       const lpn = lsGet("ytv:lastpanel", "");
       if (typeof lpn === "string" && lpn && lpn !== "comments") showPanel(lpn === "cont" ? CONT_TAB : lpn.startsWith("src:") && !chanById(lpn.slice(4)) ? playingTab() : lpn);
@@ -6687,6 +6713,8 @@
     state.xtabs = (Array.isArray(sess.xtabs) ? sess.xtabs : []).filter((x) => x && /^[\w]{1,12}$/.test(x.id) && typeof x.query === "string" && Array.isArray(x.items))
       .slice(0, 6).map((x) => ({ id: x.id, query: x.query.slice(0, 80), by: typeof x.by === "string" ? x.by.slice(0, 80) : "", items: x.items.filter((v) => v && ID_RE.test(v.id)) }));
     state.t = 0;
+    liveAt = Number(sess.liveAt) || Date.now();
+    setTimeout(autoRefresh, 4000);
     if (videoParam() && current() && current().id !== videoParam()) {
       const i = state.queue.findIndex((v) => v.id === videoParam());
       if (i >= 0) state.pos = i;
