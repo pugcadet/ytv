@@ -583,6 +583,23 @@
     button:disabled{opacity:.45;cursor:default}
     button.acc{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
     .curtain{position:absolute;inset:0;z-index:1;background:#000;display:grid;place-items:center}
+    /* someone you follow went live: a card at the top; click it to watch */
+    .lives{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:8;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+    .show-panel .lives{left:calc((100% - var(--pw)) / 2)}
+    .livec{display:flex;align-items:center;gap:10px;min-height:52px;box-sizing:border-box;padding:6px 8px 6px 6px;border-radius:999px;background:var(--pnl);color:#fff;cursor:pointer;pointer-events:auto;box-shadow:0 6px 24px rgba(0,0,0,.45);animation:livein .4s cubic-bezier(.2,.8,.2,1);transition:opacity .25s ease,transform .25s ease,background .15s}
+    .livec:hover{background:color-mix(in srgb,var(--acc) 30%,var(--pnl))}
+    .livec.out{opacity:0;transform:translateY(-8px)}
+    .livec .lav{flex:none;width:40px;height:40px;border-radius:50%;background:#111 center/cover no-repeat;box-shadow:0 0 0 2px var(--acc)}
+    .livec .ltx{display:flex;flex-direction:column;gap:1px;min-width:0;max-width:260px}
+    .livec .ln{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .livec .lg{font-size:12px;color:#b3b8c2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .livec .lw{flex:none;padding:7px 12px;border-radius:999px;background:var(--acc);font-size:12.5px;font-weight:700}
+    .livec .lx{flex:none;width:28px;height:28px;min-height:0;padding:0;border:0;border-radius:50%;background:none;color:#b3b8c2;font-size:18px;line-height:1;cursor:pointer}
+    .livec .lx:hover{background:rgba(255,255,255,.12);color:#fff}
+    @keyframes livein{from{opacity:0;transform:translateY(-14px)}}
+    /* between two videos: the next one's picture, soft, until it plays (no black screen) */
+    .poster{position:absolute;inset:-4%;z-index:1;background:#000 center/cover no-repeat;filter:blur(14px) brightness(.72);opacity:0;transition:opacity .3s ease;pointer-events:none}
+    .poster.on{opacity:1;transition-duration:.18s}
     .noise{position:absolute;inset:0;opacity:.16;background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);animation:roll .35s steps(6) infinite}
     @keyframes roll{to{background-position:0 9px}}
     @media (prefers-reduced-motion:reduce){.noise{animation:none}}
@@ -4611,7 +4628,7 @@
     const items = await twitchLive(true);
     if (!ui) return;
     const ids = new Set(items.filter((v) => !v.off).map((v) => v.id));
-    if (twKnown && cfg.tv.twitch.alerts.length) { const fresh = items.filter((v) => !v.off && !twKnown.has(v.id) && cfg.tv.twitch.alerts.includes(v.login)); if (fresh.length) toast(fresh.length === 1 ? `${fresh[0].channel} is live on Twitch` : `${fresh.map((v) => v.channel).slice(0, 3).join(", ")} went live on Twitch`); }
+    if (twKnown && cfg.tv.twitch.alerts.length) { const fresh = items.filter((v) => !v.off && !twKnown.has(v.id) && cfg.tv.twitch.alerts.includes(v.login)); for (const v of fresh.slice(0, 3)) liveCard(v); }
     twKnown = ids;
     const col = currentCol();
     if (col && col.twitch && !state.stay && items.length) { // refresh the list, keeping what's playing where it is
@@ -4721,6 +4738,44 @@
     fixHistory(hist);
     browse.delete(TWITCH_ID); saveSession(); schedulePanel();
   };
+  // Someone you asked to hear about went live: a card at the top. Click it and you're watching.
+  const liveCard = (v) => {
+    if (!ui || !v) return;
+    if (!ui.lives) { ui.lives = el("div", "lives"); ui.root.append(ui.lives); }
+    if ([...ui.lives.children].some((c) => c.dataset.id === v.id)) return;
+    while (ui.lives.children.length >= 3) ui.lives.firstChild.remove();
+    const c = el("div", "livec"); c.dataset.id = v.id; c.tabIndex = 0; c.setAttribute("role", "button"); c.title = `Watch ${v.channel}`;
+    const av = el("span", "lav"); if (/^https:\/\/static-cdn\.jtvnw\.net\//.test(v.avatar || "")) av.style.backgroundImage = `url(${v.avatar})`;
+    const tx = el("span", "ltx"); tx.append(el("span", "ln", `${v.channel} is live`), el("span", "lg", v.game || "Twitch"));
+    const x = el("button", "lx", "×"); x.type = "button"; x.title = "Dismiss"; x.setAttribute("aria-label", "Dismiss");
+    const gone = () => { c.classList.add("out"); setTimeout(() => c.remove(), 260); };
+    x.addEventListener("click", (e) => { e.stopPropagation(); gone(); });
+    const go = () => {
+      gone();
+      const col = currentCol();
+      if (col && col.twitch && state.queue.length) { // already on Twitch: switch stream
+        let i = state.queue.findIndex((q) => q.id === v.id);
+        if (i < 0) { state.queue.splice(state.pos + 1, 0, v); i = state.pos + 1; }
+        return goTo(i);
+      }
+      startOnTwitch(v);
+    };
+    c.addEventListener("click", go);
+    c.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); go(); } });
+    c.append(av, tx, el("span", "lw", "Watch"), x);
+    ui.lives.append(c);
+    setTimeout(() => { if (c.isConnected && !c.matches(":hover")) gone(); else if (c.isConnected) setTimeout(gone, 6000); }, 15000);
+  };
+  // Between two videos the next one's picture fades in, and fades out into the video when it plays.
+  const showPoster = (v) => {
+    if (!ui || !v || v.tw || !ID_RE.test(v.id) || !motionOn()) return hidePoster();
+    if (!ui.poster) { ui.poster = el("div", "poster"); ui.curtain.after(ui.poster); }
+    ui.poster.style.backgroundImage = `url(https://i.ytimg.com/vi/${v.id}/hqdefault.jpg)`;
+    ui.poster.dataset.id = v.id;
+    void ui.poster.offsetWidth; ui.poster.classList.add("on");
+    clearTimeout(state.posterT); state.posterT = setTimeout(hidePoster, 7000); // (never stays if the video doesn't start)
+  };
+  const hidePoster = () => { clearTimeout(state.posterT); if (ui && ui.poster) ui.poster.classList.remove("on"); };
   const goTo = (i, { pushHistory = true } = {}) => {
     if (ui && ui.upn) ui.upn.classList.remove("on");
     if (i < 0 || i >= state.queue.length) return;
@@ -4731,6 +4786,7 @@
     if (state.queue[i]) delete state.queue[i].bk;
     state.lastEvt = "";
     dropDropIns(); // (can shift the list: from here on it's state.pos, not i)
+    if (was && state.queue[state.pos] && was.id !== state.queue[state.pos].id) showPoster(state.queue[state.pos]);
     playCurrent(resumeOf(state.queue[state.pos].id)); // carries on where you left it
   };
   // Picking a video in Up next plays it now without passing over the ones before it: it moves to
@@ -6624,6 +6680,7 @@
     if (d.evt === "time" && v && d.id === v.id && Number.isFinite(d.t)) {
       if (state.seekOnPlay && state.seekOnPlay.id === d.id) { const s0 = state.seekOnPlay; state.seekOnPlay = null; if (d.t < s0.at - 3) { cmd({ cmd: "seek", start: s0.at }); return; } }
       state.t = d.t;
+      if (ui.poster && ui.poster.classList.contains("on")) hidePoster();
       if (d.t >= 10 && !comments.has(v.id)) fetchComments(v);
       if (!played.has(v.id) && (d.t >= WATCHED_SECONDS || (Number(d.d) > 0 && d.t / d.d >= WATCHED_FRACTION))) { countWatched(v.id); refreshList(); }
       if (state.lastEvt !== "playing") { state.lastEvt = "playing"; ui.root.classList.remove("show-start"); ui.curtain.style.display = "none"; } // it's playing, whatever the overlay thought
@@ -6637,6 +6694,7 @@
     }
     if (d.evt === "playing") {
       state.lastEvt = "playing";
+      if (v && d.id === v.id) hidePoster();
       // YouTube labels a video's category on its page: skip music there too (lists don't say).
       const col0 = currentCol();
       if (cfg.tv.skipMusic && d.category === "Music" && v && d.id === v.id && col0 && !col0.watchLater && !col0.homeFeed && !col0.watchedChip && !v.f) {
