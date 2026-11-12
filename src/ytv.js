@@ -989,6 +989,24 @@
     @keyframes tshim{from{background-position:120% 0}to{background-position:-120% 0}}
     .thumb img.ok{opacity:1}
     .thumb .pg{position:absolute;left:0;bottom:0;height:3px;background:#f03}
+    /* what's playing: three small bars that move while it plays */
+    .eq{position:absolute;left:6px;bottom:8px;z-index:2;display:flex;align-items:flex-end;gap:2px;width:13px;height:11px;padding:3px 4px;border-radius:5px;background:rgba(0,0,0,.62);pointer-events:none}
+    .eq i{flex:1;height:100%;border-radius:1px;background:#fff;transform-origin:bottom;transform:scaleY(.55);animation:eqa .9s ease-in-out infinite paused}
+    .eq i:nth-child(2){animation-name:eqb;animation-duration:.7s} .eq i:nth-child(3){animation-name:eqc;animation-duration:1.1s}
+    .isplaying:not(.fade) .eq i,.isplaying.vgon .eq i{animation-play-state:running}
+    .eq.still i{animation:none}
+    @keyframes eqa{0%,100%{transform:scaleY(.3)}50%{transform:scaleY(1)}}
+    @keyframes eqb{0%,100%{transform:scaleY(.9)}50%{transform:scaleY(.35)}}
+    @keyframes eqc{0%,100%{transform:scaleY(.5)}40%{transform:scaleY(1)}80%{transform:scaleY(.25)}}
+    /* the last seconds of a video: what comes next, small, bottom right */
+    .upn{position:absolute;right:24px;bottom:96px;z-index:4;display:flex;align-items:center;gap:10px;width:268px;box-sizing:border-box;padding:8px;border-radius:12px;background:var(--pnl);color:#fff;opacity:0;transform:translateY(10px);transition:opacity .3s ease,transform .35s cubic-bezier(.2,.8,.2,1);pointer-events:none}
+    .upn.on{opacity:1;transform:none}
+    .show-panel .upn{right:calc(var(--pw) + 24px)}
+    .vgon .upn,.show-guide .upn,.show-start .upn,.on-twitch .upn{opacity:0}
+    .upn .uth{flex:none;width:96px;aspect-ratio:16/9;border-radius:7px;background:#111 center/cover no-repeat}
+    .upn .utx{display:flex;flex-direction:column;gap:3px;min-width:0}
+    .upn .ul{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#b3b8c2}
+    .upn .ut{font-size:13px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .thumb .pgt{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.35)}
     /* explore and Watch Later: only while the pointer is on the picture */
     .thumb .hb{position:absolute;top:4px;width:var(--hb,22px);height:var(--hb,22px);min-height:0;padding:0;border-radius:calc(var(--hb,22px) * .28);border:0;background:rgba(0,0,0,.72);color:#fff;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .14s,background .14s}
@@ -2418,12 +2436,46 @@
     const tv0 = row.querySelector(".thumb > .twv");
     if (tv0 && v.viewers) { const t = Intl.NumberFormat(undefined, { notation: "compact" }).format(v.viewers); if (tv0.lastChild && tv0.lastChild.textContent !== t) { tv0.lastChild.textContent = t; tv0.title = `${v.viewers.toLocaleString()} watching`; } }
   };
+  // What's playing shows it: small moving bars on its picture, and its red line follows the video.
+  const setEq = (box, on) => {
+    if (!box) return;
+    let q = box.querySelector(":scope > .eq");
+    if (on && !q) { q = el("span", "eq"); q.append(el("i"), el("i"), el("i")); box.append(q); }
+    else if (!on && q) q.remove();
+    if (on && q) q.classList.toggle("still", !motionOn());
+  };
+  const liveProgress = (v, pct) => {
+    if (!ui || !v || !(pct > 0)) return;
+    const th = ui.pbody.querySelector(".item.cur .thumb");
+    if (th && th.closest(".sw") && th.closest(".sw").dataset.id === v.id) { let b = th.querySelector(".pg"); if (!b) { b = el("div", "pg"); th.append(el("div", "pgt"), b); } b.style.width = `${Math.max(3, Math.min(100, pct))}%`; }
+    const t = gridShown() ? grid.tiles.get(v.id) : null, sl = t && t.classList.contains("vnow") ? t.querySelector(".vgs") : null;
+    if (sl) { let b = sl.querySelector(".vgpg"); if (!b) { b = el("span", "vgpg"); sl.append(b); } b.style.width = `${Math.min(100, pct)}%`; }
+  };
+  // The last 10 seconds: a small card with what comes next.
+  const upNext = (left, dur) => {
+    if (!ui) return;
+    const nv = dur >= 60 && left <= 10 && left > 0 ? state.queue[nextIndex()] : null;
+    if (!nv || nv.tw) { if (ui.upn) ui.upn.classList.remove("on"); return; }
+    if (!ui.upn) { const u = el("div", "upn"), tx = el("div", "utx"); tx.append(el("span", "ul", "Up next"), el("span", "ut")); u.append(el("div", "uth"), tx); ui.root.append(u); ui.upn = u; }
+    if (ui.upn.dataset.id !== nv.id) { ui.upn.dataset.id = nv.id; ui.upn.querySelector(".ut").textContent = nv.title || ""; ui.upn.querySelector(".uth").style.backgroundImage = ID_RE.test(nv.id) ? `url(https://i.ytimg.com/vi/${nv.id}/mqdefault.jpg)` : ""; }
+    ui.upn.classList.add("on");
+  };
+  // A key you press shows on its button, briefly.
+  const echoKey = (e) => {
+    if (!ui || !cfg || !cfg.tv.keysOn || e.shiftKey || !motionOn()) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const b = k === keyOf("info") ? ui.infoB : k === keyOf("comments") ? ui.comB : k === keyOf("grid") ? ui.root._vgB : k === keyOf("settings") ? ui.root.querySelector(".moreb") : null;
+    if (!b || !b.animate) return;
+    const acc = getComputedStyle(ui.root).getPropertyValue("--acc").trim() || "#f22a2a";
+    try { b.animate([{ transform: "scale(1)" }, { transform: "scale(1.18)", backgroundColor: acc, offset: 0.35 }, { transform: "scale(1)" }], { duration: 260, easing: "ease-out" }); } catch {}
+  };
   const updateRow = (api) => {
     const { row, v, kind } = api;
     const i = kind === "live" ? (qIdx ? (qIdx.has(v.id) ? qIdx.get(v.id) : -1) : state.queue.findIndex((x) => x.id === v.id)) : -1;
     const cur = kind === "live" ? i === state.pos : kind === "hist" && !!current() && current().id === v.id;
     row.classList.toggle("cur", cur);
     api.wrap.classList.toggle("curw", cur);
+    if (cur || row.querySelector(".thumb > .eq")) setEq(row.querySelector(".thumb"), cur && !v.tw);
     if (v.tw) twFreshen(row, v);
     row.classList.toggle("done", kind === "live" && !cur && !v.tw && (sortOff() ? !!v.w : i < state.pos || played.has(v.id))); // everything above what's playing is behind you (sorting off: what's above the Watched bar)
     setLines(api);
@@ -4670,6 +4722,7 @@
     browse.delete(TWITCH_ID); saveSession(); schedulePanel();
   };
   const goTo = (i, { pushHistory = true } = {}) => {
+    if (ui && ui.upn) ui.upn.classList.remove("on");
     if (i < 0 || i >= state.queue.length) return;
     const was = current();
     if (was && state.t > 0 && state.lastEvt) { resumeT = 0; saveResume(was.id, state.t, state.dur || 0); } // remember exactly where you left it
@@ -5350,10 +5403,14 @@
     if (!L || L.loading) { if (!list.querySelector(".vgload")) list.replaceChildren(el("div", "vgend vgload", "Loading…")); return; }
     const cur = current();
     // (opened, or another tab picked: every video comes in, also ones kept from last time, e.g. the list that's playing)
+    if (grid.animAll || grid.keepTab !== tab || !grid.keep) { grid.keep = new Set(); grid.keepTab = tab; } // (opened, or another tab)
     const all = !!grid.animAll && motionOn() && !state.quiet; grid.animAll = false;
     // (what you've already watched isn't shown here: only what's playing and what's still to come)
     const qi = L.kind === "live" ? new Map(state.queue.map((v, i) => [v, i])) : null;
-    const items = qi ? L.items.filter((v) => { if (cur && v.id === cur.id) return true; if (v.tw) return true; const i = qi.has(v) ? qi.get(v) : -1; return !(i >= 0 && i < state.pos) && !v.w && !played.has(v.id); }) : L.items;
+    const items = qi ? L.items.filter((v) => { if (cur && v.id === cur.id) return true; if (v.tw) return true; if (grid.keep.has(v.id)) return true; // (picking a video here doesn't make the ones before it jump away: they dim, and are gone the next time you open the menu)
+      const i = qi.has(v) ? qi.get(v) : -1; return !(i >= 0 && i < state.pos) && !v.w && !played.has(v.id); }) : L.items;
+    for (const v of items) grid.keep.add(v.id);
+    if (grid.keep.size > 600) grid.keep = new Set(items.map((v) => v.id));
     const want = []; let fresh = 0;
     for (const v of items) {
       let t = grid.tiles.get(v.id);
@@ -5363,6 +5420,7 @@
       else if (all && !t._leaving) t.animate([{ opacity: 0, transform: "translateY(12px) scale(.985)" }, { opacity: 1, transform: "none" }], { duration: 340, delay: Math.min(fresh++, 14) * 22, easing: "cubic-bezier(.4,0,.2,1)", fill: "backwards" }); // (the same come-in as a new one)
       const i = qi && qi.has(v) ? qi.get(v) : -1, now = !!(cur && cur.id === v.id && (L.kind === "live" || L.kind === "hist"));
       t.classList.toggle("vnow", now);
+      if (now || t.querySelector(".vgs > .eq")) setEq(t.querySelector(".vgs"), now && !v.tw);
       t.classList.toggle("vdone", L.kind === "live" && !now && !v.tw && (sortOff() ? !!v.w : i >= 0 && i < state.pos));
       let badge = t.querySelector(".vgn"); if (now && !badge) t.querySelector(".vgs").append(el("span", "vgn", "PLAYING")); else if (!now && badge) badge.remove();
       want.push(t);
@@ -5407,7 +5465,9 @@
       const r0 = glide.get(t); if (!r0) continue;
       const r1 = t.getBoundingClientRect(), dx = r0.left - r1.left, dy = r0.top - r1.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-      t.animate([{ transform: `translate(${dx}px,${dy}px)` }, { transform: "none" }], { duration: 280, easing: "cubic-bezier(.4,0,.2,1)" });
+      // (within its row a tile slides; one that changes row fades in at its new place, instead of flying across the others)
+      if (Math.abs(dy) < 1) t.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], { duration: 320, easing: "cubic-bezier(.22,1,.36,1)" });
+      else t.animate([{ opacity: 0, transform: `translateX(${dx > 0 ? 28 : -28}px)` }, { opacity: 1, transform: "none" }], { duration: 300, easing: "cubic-bezier(.22,1,.36,1)" });
     }
 
     if (!grid.busy && grid.dryTab !== tab) setTimeout(gridFill, 120); // (plenty ready ahead, by itself)
@@ -6537,7 +6597,7 @@
     const twFn = ui.root.classList.contains("on-twitch") && !e.shiftKey ? twKey(e) : null; // pause, mute and volume for a Twitch stream
     if (twFn && !(e.key === " " && t && t.closest && t.closest("button"))) { e.preventDefault(); e.stopImmediatePropagation(); poke(); twFn(); return; }
     const fn = actionFor(e);
-    if (fn) { e.preventDefault(); e.stopImmediatePropagation(); poke(); fn(); }
+    if (fn) { e.preventDefault(); e.stopImmediatePropagation(); poke(); fn(); echoKey(e); }
   };
 
   // ---------------------------------------------------------------- player events (main-world.js)
@@ -6569,6 +6629,8 @@
       if (state.lastEvt !== "playing") { state.lastEvt = "playing"; ui.root.classList.remove("show-start"); ui.curtain.style.display = "none"; } // it's playing, whatever the overlay thought
       if (Number(d.d) > 0) saveProgress(v.id, (d.t / d.d) * 100);
       state.dur = Number(d.d) || 0;
+      ui.root.classList.add("isplaying"); clearTimeout(state.playT); state.playT = setTimeout(() => ui && ui.root.classList.remove("isplaying"), 2600); // (paused: the bars stand still)
+      if (state.dur > 0) { liveProgress(v, (d.t / state.dur) * 100); upNext(state.dur - d.t, state.dur); }
       saveResume(v.id, d.t, state.dur);
       saveLast();
       return;
