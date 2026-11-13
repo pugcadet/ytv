@@ -653,9 +653,9 @@
     .chn{padding:0 2px 2px;font-size:13px;font-weight:500;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .chc.on .chn{font-weight:700}
     .ypb.chon .pbtip{opacity:0!important}
     /* play / pause: a soft mark in the middle */
-    .ppi{position:absolute;left:50%;top:50%;z-index:3;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.42);backdrop-filter:blur(6px);color:#fff;opacity:0;transform:translate(-50%,-50%) scale(.82);pointer-events:none;will-change:transform,opacity}
+    .ppi{position:absolute;left:50%;top:50%;z-index:3;display:grid;place-items:center;color:#fff;opacity:0;transform:translate(-50%,-50%) scale(.82);pointer-events:none;will-change:transform,opacity;filter:drop-shadow(0 2px 14px rgba(0,0,0,.55)) drop-shadow(0 0 2px rgba(0,0,0,.35))}
     .show-panel .ppi{left:calc((100% - var(--pw)) / 2)}
-    .ppi svg{width:30px;height:30px;fill:currentColor;stroke:none}
+    .ppi svg{width:68px;height:68px;fill:currentColor;stroke:none}
     /* the play bar as one floating pill in the middle (Settings → Playing → Play bar style) */
     .pbpill .pbg.r{display:none}
     .pbpill .pbg.l{left:50%;transform:translateX(-50%);bottom:26px}
@@ -2262,8 +2262,9 @@
     if (state.t > 0 && state.lastEvt) saveResume(it.id, state.t, state.dur || 0);
     const hist = idsOfHistory();
     state.queue.splice(pos, 1);
-    let t = pos; while (state.queue[t] && state.queue[t].nx) t++;
-    if (t === pos) t = pos + 1;
+    let t = pos;
+    if (onFeed() && !state.stay) t = state.queue.length; // (your Feed: all of it is your queue)
+    else { while (state.queue[t] && state.queue[t].nx) t++; if (t === pos) t = pos + 1; }
     const again = { ...it, nx: 1 }; delete again.w; delete again.bk;
     state.queue.splice(Math.min(t, state.queue.length), 0, again);
     fixHistory(hist); played.delete(it.id); removed.delete(it.id);
@@ -2637,7 +2638,7 @@
   const echoKey = (e) => {
     if (!ui || !cfg || !cfg.tv.keysOn || e.shiftKey || !motionOn()) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-    const b = k === keyOf("info") ? ui.root.querySelector(".top .now") : k === keyOf("comments") ? ui.comB : k === keyOf("grid") ? ui.root._vgB : k === keyOf("settings") ? ui.root.querySelector(".moreb") : null;
+    const b = k === keyOf("info") || k === keyOf("comments") ? null : k === keyOf("grid") ? ui.root._vgB : k === keyOf("settings") ? ui.root.querySelector(".moreb") : null;
     if (!b || !b.animate) return;
     const acc = getComputedStyle(ui.root).getPropertyValue("--acc").trim() || "#f22a2a";
     try { b.animate([{ transform: "scale(1)" }, { transform: "scale(1.18)", backgroundColor: acc, offset: 0.35 }, { transform: "scale(1)" }], { duration: 260, easing: "ease-out" }); } catch {}
@@ -3068,7 +3069,7 @@
   // Plays next: with Shift, or (swapped in settings) without it. Swapped while something can't be queued (a stream
   // is on): the plus simply adds to your Feed.
   const nextMode = () => (cfg && cfg.tv.swipeNextFirst ? !shiftDown && !!current() && !current().tw : shiftDown);
-  const can = (api, act) => (act === "rm" ? api.canRm() : nextMode() ? canPlayNext(api.v) : api.canAdd());
+  const can = (api, act) => (act === "rm" ? api.canRm() : isCurRow(api) ? api.canAdd() : nextMode() ? canPlayNext(api.v) : api.canAdd()); // (what's playing: always "back in line", whichever way adding goes)
   const isFeedRow = (api) => !!(api.feedRow && api.feedRow());
   const NO_GIVE = 34;
   const onRowScroll = (e) => {
@@ -3206,13 +3207,13 @@
       api.rm();
       return leave(w);
     }
+    if (isCurRow(api)) { if (api.canAdd() && api.add() !== false) rowMark(api, "ok"); else sayNo(api, "add"); return home(); } // (what's playing: back in line, after what you lined up; the next one plays)
     if (nextMode()) { // Shift: plays next in the list that's on now; the row stays where it is
       if (playNext(api.v)) rowMark(api, "next");
       else sayNo(api, "add");
       return home();
     }
     if (!api.canAdd()) { sayNo(api, "add"); return home(); }
-    if (isCurRow(api)) { if (api.add() !== false) rowMark(api, "ok"); else sayNo(api, "add"); return home(); } // (what's playing: back in line, after what you lined up)
     if (cfg.tv.swipeMove && !isFeedRow(api) && !api.keepOnAdd && api.canRm()) { // to the Feed, and out of this list (one Cmd+Z undoes both)
       const n0 = undoStack.length;
       if (api.add() === false) return home();
@@ -3238,7 +3239,7 @@
     const hit = e.target && e.target.closest && e.target.closest(".sw");
     // (only a push that's really sideways makes a row yours: a trackpad's up/down scroll always wobbles a pixel or two
     // sideways, and a row the list then moves under the pointer, e.g. as more videos load, must not slide open)
-    if (hit && dx !== 0 && (Math.abs(dx) * 2.5 >= Math.abs(dy) || Math.abs(hit.scrollLeft - (hit._R || 0)) > 3)) hit._user = performance.now();
+    if (hit && dx !== 0 && (Math.abs(dx) * 2.5 >= Math.abs(dy) || Math.abs(hit.scrollLeft - (hit._R || 0)) > 3)) { hit._user = performance.now(); swipeRow = hit; }
     shiftDown = e.shiftKey;
     if (wg.no && hit !== wg.no) wg.no = null; // onto another row: that's a new push there
     const gap = e.timeStamp - wg.last; wg.last = e.timeStamp;
@@ -3587,7 +3588,7 @@
   // closes, the video keeps playing. Opened from the screen edge, a click on the video pauses it as always.
   // (YouTube's own controls still work as always)
   let eatVid = 0;
-  const eatVidEv = (e) => { if (!eatVid) return; e.stopPropagation(); e.preventDefault(); if (e.type === "click") eatVid = 0; };
+  const eatVidEv = (e) => { if (!eatVid) return; e.stopImmediatePropagation(); e.preventDefault(); if (e.type === "click") eatVid = 0; };
   window.addEventListener("pointerdown", (e) => {
     eatVid = 0;
     if (!ui || !state.panel || state.edgeOpened || e.button !== 0 || ui.root.classList.contains("fade") || !ui.root.classList.contains("show-panel")) return;
@@ -3599,6 +3600,24 @@
     setTimeout(() => { eatVid = 0; }, 800);
   }, true);
   for (const t of ["mousedown", "mouseup", "pointerup", "click", "dblclick"]) window.addEventListener(t, eatVidEv, true);
+  const clickVideo = (path) => !!ui && onWatchTv() && !ui.root.classList.contains("on-twitch") && !ui.root.classList.contains("show-guide") && !ui.root.classList.contains("show-start")
+    && path.some((n) => n.classList && (n.classList.contains("html5-video-container") || n.classList.contains("ytp-player-content") || n.tagName === "VIDEO"))
+    && !path.some((n) => n === ui.host || (n.classList && (n.classList.contains("ytp-chrome-bottom") || n.classList.contains("ytp-chrome-top") || n.classList.contains("ytp-ce-element") || n.classList.contains("ytp-ad-module") || n.tagName === "BUTTON" || n.tagName === "A")))
+    && !document.querySelector("#movie_player.ad-showing");
+  // a click on the video: play / pause the moment you press (as quick as Space), not when you let go
+  let vidDown = 0;
+  window.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.pointerType === "touch" || eatVid || !clickVideo(e.composedPath())) return;
+    vidDown = performance.now();
+    const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" });
+  }, true);
+  window.addEventListener("click", (e) => {
+    if (e.button !== 0 || eatVid || !clickVideo(e.composedPath())) return;
+    e.stopImmediatePropagation(); e.preventDefault();
+    if (performance.now() - vidDown < 1500) { vidDown = 0; return; } // (done when you pressed)
+    const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" });
+  }, true);
+  window.addEventListener("dblclick", (e) => { if (!clickVideo(e.composedPath())) return; e.stopImmediatePropagation(); e.preventDefault(); toggleFullscreen(); }, true);
   // right-click on the video that's playing: the same menu as in the list (Shift + right-click: YouTube's own menu).
   // Not on Twitch (its player is Twitch's own page, and has no such menu here).
   window.addEventListener("contextmenu", (e) => {
@@ -4371,11 +4390,16 @@
   };
   // Lists redraw at most once per frame, however many changes come in.
   let panelRaf = 0;
+  // (a row or tile you're swiping right now is never redrawn under your fingers: moving it would drop your swipe.
+  // The redraw waits until it has settled)
+  let swipeRow = null, panelWait = 0;
+  const midSwipe = () => !!(swipeRow && swipeRow.isConnected && performance.now() - (swipeRow._user || 0) < 400 && Math.abs(swipeRow.scrollLeft - (swipeRow._R || 0)) > 2 && !busyRows.has(swipeRow));
   const schedulePanel = () => {
     if (!ui || panelRaf) return;
     panelRaf = requestAnimationFrame(() => {
       panelRaf = 0;
       if (!ui) return;
+      if (midSwipe()) { clearTimeout(panelWait); panelWait = setTimeout(schedulePanel, 140); return; }
       try { if (isListTab(state.panel)) renderPanel(false); else renderTabs(); } catch (err) { logErr("list", err); }
       try { if (gridShown()) drawGrid(); } catch (err) { logErr("grid", err); } // (the grid shows the same list) // (one bad row never breaks the list for good)
       });
@@ -5171,7 +5195,7 @@
     if (!ui.ppi) { ui.ppi = el("div", "ppi"); ui.root.append(ui.ppi); }
     ui.ppi.replaceChildren(icon(paused ? "pause" : "play"));
     for (const a of ui.ppi.getAnimations()) a.cancel();
-    ui.ppi.animate([{ opacity: 0, transform: "translate(-50%,-50%) scale(.82)" }, { opacity: 1, transform: "translate(-50%,-50%) scale(1)", offset: 0.28 }, { opacity: 1, transform: "translate(-50%,-50%) scale(1)", offset: 0.55 }, { opacity: 0, transform: "translate(-50%,-50%) scale(1.12)" }], { duration: 560, easing: "cubic-bezier(.2,.8,.2,1)" });
+    ui.ppi.animate([{ opacity: 0, transform: "translate(-50%,-50%) scale(.8)" }, { opacity: .95, transform: "translate(-50%,-50%) scale(1)", offset: 0.25 }, { opacity: .95, transform: "translate(-50%,-50%) scale(1.04)", offset: 0.55 }, { opacity: 0, transform: "translate(-50%,-50%) scale(1.3)" }], { duration: 620, easing: "cubic-bezier(.2,.8,.2,1)" });
   };
   const syncOwnBar = () => {
     const on = ownBarOn() && !!ui;
@@ -6438,14 +6462,29 @@
   };
   // Two fingers sideways on the video: the next video (to the left) or the previous one (to the right). Once per swipe.
   const side = { acc: 0, last: 0, fired: false };
+  // (what's under the pointer right now: after a video changes, the browser can keep sending a wheel to what was there
+  // before, which isn't on the page any more)
+  const pathAt = (e) => {
+    const p = e.composedPath(); if (p.length && p[0].isConnected) return p;
+    let n = document.elementFromPoint(e.clientX, e.clientY);
+    if (n && ui && n === ui.host) n = ui.root.getRootNode().elementFromPoint(e.clientX, e.clientY) || n;
+    const out = []; while (n) { out.push(n); n = n.parentNode instanceof ShadowRoot ? n.parentNode.host : n.parentElement; }
+    out.push(document, window); return out;
+  };
   const sideSwipe = (e) => {
-    if (!ui || !cfg || !cfg.tv.swipeNav || gridOpen() || !overVideo(e.composedPath())) return false;
-    if (e.composedPath().some((n) => n.classList && (n.classList.contains("ypb") || n.classList.contains("top") || n.classList.contains("bar")))) return false; // (not over YTV's own controls)
-    const now = performance.now();
-    if (now - side.last > 220) { side.acc = 0; side.fired = false; } // a new swipe (the glide after one doesn't count again)
-    side.last = now;
+    if (!ui || !cfg || !cfg.tv.swipeNav || gridOpen()) return false;
+    const path = pathAt(e);
+    if (!overVideo(path)) return false;
+    if (path.some((n) => n.classList && (n.classList.contains("ypb") || n.classList.contains("top") || n.classList.contains("bar")))) return false; // (not over YTV's own controls)
+    const now = performance.now(), dx = e.deltaX * (e.deltaMode === 1 ? 16 : 1), ax = Math.abs(dx);
+    if (now - side.last > 220) { side.acc = 0; side.fired = false; side.low = 0; } // a new swipe (the glide after one doesn't count again)
+    else if (side.fired) { // still coasting from the last one: it only dies down. A push that grows again (or the other way) is a new swipe
+      if (!side.low || ax < side.low) side.low = ax;
+      if (Math.sign(dx) !== side.dir || (side.low && ax > Math.max(6, side.low * 2.5))) { side.acc = 0; side.fired = false; side.low = 0; }
+    }
+    side.last = now; side.dir = Math.sign(dx);
     if (!side.fired) {
-      side.acc += e.deltaX * (e.deltaMode === 1 ? 16 : 1);
+      side.acc += dx;
       const next = side.acc > 0, p = Math.min(1, Math.abs(side.acc) / SIDE_PX);
       sideHint(next, p);
       if (p >= 1) { side.fired = true; sideHint(next, 1, true); poke(); if (next) nextVideo(); else prevVideo(); }
@@ -7275,7 +7314,7 @@
     const twFn = ui.root.classList.contains("on-twitch") && !e.shiftKey ? twKey(e) : null; // pause, mute and volume for a Twitch stream
     if (twFn && !(e.key === " " && t && t.closest && t.closest("button"))) { e.preventDefault(); e.stopImmediatePropagation(); poke(); twFn(); return; }
     const fn = actionFor(e);
-    if (fn) { e.preventDefault(); e.stopImmediatePropagation(); poke(); fn(); echoKey(e); }
+    if (fn) { e.preventDefault(); e.stopImmediatePropagation(); poke(); fn(); echoKey(e); } // (no pulse for I and O)
   };
 
   // ---------------------------------------------------------------- player events (main-world.js)
