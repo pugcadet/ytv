@@ -14,6 +14,12 @@
   const tvOn = () => document.documentElement.hasAttribute("data-ytv") && location.pathname === "/watch";
   const emit = (evt, extra = {}) => document.dispatchEvent(new CustomEvent("ytv-evt", { detail: JSON.stringify({ evt, ...extra }) }));
   const tvPlayer = () => document.getElementById("movie_player");
+  // (what last started the video, for when a paused video starts again by itself: YTV asks, and keeps the answer)
+  let lastPlayBy = "";
+  try {
+    const orig = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function (...a) { try { if (this.closest && this.closest("#movie_player")) lastPlayBy = String(new Error().stack || "").split("\n").slice(2, 9).join("\n"); } catch {} return orig.apply(this, a); };
+  } catch {}
   document.addEventListener("ytv-cmd", (e) => {
     if (!tvOn()) return;
     let c; try { c = JSON.parse(e.detail); } catch { return; }
@@ -53,6 +59,7 @@
       }
       if (c.cmd === "play" && typeof p.playVideo === "function") p.playVideo();
       if (c.cmd === "pause" && typeof p.pauseVideo === "function") p.pauseVideo();
+      if (c.cmd === "whyplay") emit("whyplay", { by: lastPlayBy.slice(0, 1500) });
     } catch {}
   });
   // A reload: YTV's content script put where to carry on from on <html> (data-ytv-seek="id:seconds"). The moment the
@@ -79,6 +86,9 @@
   let skipAt = 0;
   const autoSkip = (p) => {
     if (!document.documentElement.hasAttribute("data-ytv-skip") || performance.now() - skipAt < 800) return;
+    // only while an ad is on: any other "Skip" / "Overslaan" button (another extension's, YouTube's own overlays while
+    // paused) is never pressed, so a paused video stays paused
+    if (!p.classList.contains("ad-showing") && !p.classList.contains("ad-interrupting")) return;
     const seen = (b) => b && b.offsetParent !== null && !b.disabled && getComputedStyle(b).visibility !== "hidden";
     let b = [...p.querySelectorAll(SKIP_SEL)].find(seen);
     if (!b) b = [...p.querySelectorAll("button")].find((x) => !x.closest(".ytp-chrome-bottom") && seen(x) && SKIP_TXT.test(String(x.getAttribute("aria-label") || x.textContent || "").trim()));

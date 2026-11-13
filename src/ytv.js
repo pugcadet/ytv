@@ -3617,17 +3617,22 @@
     if (e.button !== 0 || e.pointerType === "touch" || eatVid || !clickVideo(e.composedPath())) return;
     e.stopImmediatePropagation(); // (YouTube's own press, which could play it again a moment later, never sees it)
     vidDown = performance.now();
-    const v = vidEl(); if (v) { pauseHold = v.paused ? 0 : performance.now() + 4000; cmd({ cmd: v.paused ? "play" : "pause" }); }
+    const v = vidEl(); if (v) { pauseHold = v.paused ? 0 : performance.now() + 12000; cmd({ cmd: v.paused ? "play" : "pause" }); }
   }, true);
   // (YouTube can start a video again on its own a moment after a click paused it: for a few seconds, that's undone,
   // unless you asked for it: a key, a button, anything you click)
   let pauseHold = 0;
   window.addEventListener("keydown", () => { pauseHold = 0; }, true);
   window.addEventListener("pointerdown", (e) => { if (!clickVideo(e.composedPath())) pauseHold = 0; }, true);
-  document.addEventListener("play", (e) => {
+  let heldN = 0;
+  const holdPaused = (e) => {
     if (!pauseHold || performance.now() > pauseHold || !e.target || e.target.tagName !== "VIDEO" || !e.target.closest("#movie_player")) return;
-    cmd({ cmd: "pause" });
-  }, true);
+    if (document.querySelector("#movie_player.ad-showing")) return;
+    e.target.pause(); cmd({ cmd: "pause" });
+    if (++heldN <= 3) cmd({ cmd: "whyplay" }); // (what started it: kept in YTV's error log, to find the cause)
+  };
+  document.addEventListener("play", holdPaused, true);
+  document.addEventListener("playing", holdPaused, true);
   for (const t of ["mousedown", "pointerup", "mouseup"]) window.addEventListener(t, (e) => { if (vidDown && performance.now() - vidDown < 1500 && e.button === 0 && clickVideo(e.composedPath())) e.stopImmediatePropagation(); }, true);
   window.addEventListener("click", (e) => {
     if (e.button !== 0 || eatVid || !clickVideo(e.composedPath())) return;
@@ -7377,6 +7382,7 @@
       return;
     }
     if (d.evt === "qlist") return pbQualityMenu(d);
+    if (d.evt === "whyplay") { logErr("unpaused", d.by || "(not by a play() call)"); console.warn("[YTV] a paused video was started again by:\n" + (d.by || "(not by a play() call)")); return; }
     if (d.evt === "playing") {
       state.lastEvt = "playing";
       if (v && d.id === v.id) { hidePoster(); pbMeta(d.id, d.desc, d.sb); pbSync(true); if (!ownerNow(v.id)) setTimeout(() => { if (current() && current().id === v.id) ownerInfo(v.id).catch(() => {}); }, 1500); }
