@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.47.0";
+  SW.VERSION = "1.48.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -211,6 +211,7 @@
       })(),
       uiScale: clampInt(tv.uiScale, 25, 400, 110), // percent
       swipeNav: tv.swipeNav !== false, // two fingers sideways on the video: next / previous
+      barStyle: ["pill", "line"].includes(tv.barStyle) ? tv.barStyle : "corners", // YTV's play bar: buttons in the corners, or one pill in the middle
       ownBar: tv.ownBar !== false, // YTV's own play bar instead of YouTube's (off: YouTube's bar is back)
       autoSkip: tv.autoSkip !== false, // click YouTube's own Skip button on an ad as soon as it shows
       videoQuality: ["premium", "hd1080", "hd720", "auto"].includes(tv.videoQuality) ? tv.videoQuality : "premium", // premium: 1080p Premium (higher bitrate) where it plays, else 1080p

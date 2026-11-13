@@ -839,6 +839,7 @@
       card("Controls", null,
         toggle("Swipe for next and previous", "Two fingers sideways on the video: left for the next video, right for the previous one.", "tv.swipeNav"),
         toggle("YTV play bar", "YTV’s own bar for play, volume, time, quality and full screen. Off: YouTube’s own bar is back.", "tv.ownBar"),
+        pick("Play bar style", "tv.barStyle", [["corners", "Corners"], ["pill", "Floating pill"], ["line", "Line only"]], "Corners: play and volume left, quality and full screen right. Floating pill: everything in one pill in the middle. Line only: just the line and the time; the rest is on the keys and the ⋯ menu."),
         toggle("Buttons above the player bar", "Previous, Next, list, Info and Comments.", "tv.showBar")));
   };
   const renderGrid = () => {

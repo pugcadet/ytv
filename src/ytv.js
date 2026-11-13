@@ -623,6 +623,28 @@
     .desc .dts,.desc .dts:hover,.desc .dts:focus-visible{display:inline;min-height:0;padding:0;border:0;border-radius:0;background:none;outline:0;color:#8fbcff;font:inherit;cursor:pointer;transition:color .15s}
     .desc .dts:hover,.desc .dts:focus-visible{color:#c4dcff}
     .vgi{opacity:0;transition:opacity .22s ease} .vgi.in{opacity:1}
+    /* dragging a tile to another place in the ∨ menu */
+    .vgghost{position:absolute;z-index:20;margin:0;pointer-events:none;opacity:.96;border-radius:12px;filter:drop-shadow(0 14px 30px rgba(0,0,0,.6));will-change:transform}
+    .vgt.vslot{opacity:.22}
+    .vgt.vdrop-b{box-shadow:-6px 0 0 -2px var(--acc)} .vgt.vdrop-a{box-shadow:6px 0 0 -2px var(--acc)}
+    /* the play bar as one floating pill in the middle (Settings → Playing → Play bar style) */
+    .pbpill .pbg.r{display:none}
+    .pbpill .pbg.l{left:50%;transform:translateX(-50%);bottom:26px}
+    .pbpill .pbl{left:-24px;right:-24px;bottom:0;height:18px}
+    .pbpill.show-panel .pbl{right:-24px}
+    .pbpill .pbt{top:auto;bottom:0;height:5px;border-radius:0;transform-origin:bottom}
+    .pbpill .pbh{top:auto;bottom:-5px}
+    .pbpill .pbtip{bottom:92px}
+    .pbpill .pbprev,.pbpill .pbgrid{display:grid} .pbprev,.pbgrid{display:none}
+    .pbpill.ownbar .vgbtn{display:none}
+    /* the play bar as just the line, with the time played and the time left at its ends (Settings → Playing → Play bar style) */
+    .pbte{display:none;position:absolute;bottom:20px;padding:5px 10px;border-radius:9px;background:color-mix(in srgb,var(--pnl) 88%,transparent);font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;pointer-events:none}
+    .pbte.a{left:0} .pbte.b{right:0}
+    .pbthin .pbg{display:none} .pbthin .pbte{display:block}
+    .pbthin .pbl{left:72px;right:72px;bottom:21px}
+    .pbthin.ownbar .vgbtn{bottom:3px!important}
+    .pbthin.ownbar .bar{bottom:72px}
+    .pbpill.ownbar .bar{bottom:96px}
     .cards.still .card{animation:none!important}
     .motion .cards.still .card.fresh{animation:cnew .55s cubic-bezier(.2,.8,.2,1) both!important}
     @keyframes cnew{0%{opacity:0;transform:scale(.86)}60%{opacity:1;transform:scale(1.03)}100%{transform:none}}
@@ -1506,6 +1528,7 @@
     else if (kind === "eye") { add("path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" }); add("circle", { cx: 12, cy: 12, r: 3 }); }
     else if (kind === "pause") add("path", { d: "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" });
     else if (kind === "skip") add("path", { d: "M5 5v14l10-7zM17 5h2.4v14H17z" });
+    else if (kind === "skip-back") add("path", { d: "M19 5v14L9 12zM4.6 5H7v14H4.6z" });
     else if (kind === "vol") { add("path", { d: "M4 9v6h4l5 4V5L8 9z" }); add("path", { d: "M16.5 8.5a5 5 0 0 1 0 7" }); }
     else if (kind === "vol-off") { add("path", { d: "M4 9v6h4l5 4V5L8 9z" }); add("path", { d: "M16 9.5l5 5M21 9.5l-5 5" }); }
     else if (kind === "fs") add("path", { d: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" });
@@ -4531,6 +4554,21 @@
   const STALE_MS = 2 * 3600 * 1000;
   const MEM_MS = STALE_MS;
   let liveAt = Date.now(), autoBusy = false; // (when the list that's playing was last built)
+  let prewarmT = 0;
+  const prewarmTabs = () => {
+    clearTimeout(prewarmT);
+    prewarmT = setTimeout(async () => {
+      if (!ui || !cfg || document.hidden) return;
+      const main = mainChan(), ids = [...new Set([...(main ? [main.id] : []), ...pinned()])].filter((id) => id !== state.colId);
+      for (const id of ids.slice(0, 6)) {
+        const c = chanById(id);
+        if (!ui || document.hidden) return;
+        if (!c || c.feed || c.twitch || browse.has(c.id) || (state.mem[c.id] && state.mem[c.id].queue.length)) continue;
+        try { await loadBrowse(c, "open"); } catch {}
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }, 4000);
+  };
   const autoRefresh = async () => {
     if (!ui || autoBusy || !cfg) return;
     const now = Date.now(); let dropped = false;
@@ -4857,6 +4895,8 @@
     const txt = fmtT(t), d = fmtT(dur);
     if (pb.timeA.textContent !== txt) pb.timeA.textContent = txt;
     if (pb.timeB.textContent !== " / " + d) pb.timeB.textContent = " / " + d;
+    if (pb.ta && pb.ta.textContent !== txt) pb.ta.textContent = txt;
+    const left = "-" + fmtT(Math.max(0, dur - t)); if (pb.tb && pb.tb.textContent !== left) pb.tb.textContent = left;
     const paused = v.paused;
     if (pb.playB._p !== paused) { pb.playB._p = paused; pb.playB.replaceChildren(icon(paused ? "play" : "pause")); pb.playB.title = paused ? "Play" : "Pause"; pb.playB.setAttribute("aria-label", pb.playB.title); }
     const quiet = v.muted || v.volume === 0;
@@ -4898,7 +4938,14 @@
     const time = el("span", "pbtime"), timeA = el("span", null, "0:00"), timeB = el("i", null, " / 0:00"); time.append(timeA, timeB);
     const qB = btn("", "Picture quality for this video", () => { if (!ui.pop.hidden) return closePop(); pb.qAnchor = qB; cmd({ cmd: "qlist" }); }, "pbq");
     const fsB = iconBtn("fs", "Full screen", () => toggleFullscreen());
-    L.append(playB, nextB, vw, time); R.append(qB, fsB);
+    const ta = el("span", "pbte a", "0:00"), tb = el("span", "pbte b", "-0:00"); box.append(ta, tb); pb.ta = ta; pb.tb = tb;
+    const prevB = iconBtn("skip-back", "Previous video", () => prevVideo(), "solid pbprev");
+    const gridB = iconBtn("chevron", "Open the menu", () => toggleGrid(), "pbgrid");
+    pb.place = () => { // (corners: play group left, picture group right. Pill: everything in one group in the middle)
+      const pill = !!(cfg && cfg.tv.barStyle === "pill");
+      if (pill) L.replaceChildren(prevB, playB, nextB, time, vw, qB, fsB, gridB); else { L.replaceChildren(playB, nextB, vw, time); R.replaceChildren(qB, fsB); }
+    };
+    pb.place();
     box.append(line, L, R);
     Object.assign(pb, { el: box, line, fill, buf, handle, tip, tipT, tipC, im, playB, muteB, volF, timeA, timeB, qB });
     try { new ResizeObserver(() => { pbMeasure(); pbSync(true); }).observe(line); } catch {}
@@ -4918,7 +4965,7 @@
   const syncOwnBar = () => {
     const on = ownBarOn() && !!ui;
     if (on) document.documentElement.setAttribute("data-ytv-bar", "1"); else document.documentElement.removeAttribute("data-ytv-bar");
-    if (ui) { ui.root.classList.toggle("ownbar", on); if (on) { pbMeasure(); pbSync(true); } }
+    if (ui) { ui.root.classList.toggle("ownbar", on); ui.root.classList.toggle("pbpill", on && cfg.tv.barStyle === "pill"); ui.root.classList.toggle("pbthin", on && cfg.tv.barStyle === "line"); if (pb.place) pb.place(); if (on) { pbMeasure(); pbSync(true); } }
   };
   // (the video element tells when something changes: no polling. Its events don't bubble, so they're caught on the way down.)
   const onMedia = (e) => {
@@ -4982,6 +5029,12 @@
     ui.poster.dataset.id = v.id;
     void ui.poster.offsetWidth; ui.poster.classList.add("on");
     clearTimeout(state.posterT); state.posterT = setTimeout(hidePoster, 7000); // (never stays if the video doesn't start)
+  };
+  const warmNext = () => { // (the video itself can't be loaded ahead: YouTube's player plays one at a time. Its picture can.)
+    const nv = state.queue[nextIndex()];
+    if (!nv || nv.tw || !ID_RE.test(nv.id) || state.warmed === nv.id) return;
+    state.warmed = nv.id;
+    try { const i = new Image(); i.decoding = "async"; i.src = `https://i.ytimg.com/vi/${nv.id}/hqdefault.jpg`; state.warmImg = i; } catch {}
   };
   const hidePoster = () => { clearTimeout(state.posterT); if (ui && ui.poster) ui.poster.classList.remove("on"); dropGrow(); };
   // A video picked in the ∨ menu: its picture grows from its tile to the whole screen, and stays until the video plays.
@@ -5665,10 +5718,60 @@
     a.append(pic, el("div", "vgtt", v.title || ""), el("div", "vgm", meta));
     const go = () => { if (wrap.classList.contains("gone") || Math.abs(wrap.scrollLeft - (wrap._R || 0)) > 3) return; growFrom(a, a._api ? a._api.v : v); closeGrid(); try { const act = a._api; if (act && act.open) act.open(); } catch (err) { logErr("grid", err); } };
     a.addEventListener("click", go);
+    a.addEventListener("pointerdown", (e) => gridDrag(a, e));
     a.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); go(); } });
     return a;
   };
   const shakeTile = (a) => { if (a._api) rowMark(a._api, "no"); };
+  // Drag a tile to another place (mouse): the list's order changes with it, exactly as dragging a row in the list does.
+  const gridDrag = (a, e) => {
+    const api = a._api;
+    if (e.button !== 0 || e.pointerType === "touch" || dragging || !api || !api.drop || a.classList.contains("vnow") || a.classList.contains("voff") || a.classList.contains("vdone")) return;
+    const x0 = e.clientX, y0 = e.clientY, z = (cfg ? cfg.tv.uiScale : 100) / 100;
+    let on = false, ghost = null, lx = x0, ly = y0, raf = 0, target = null, after = false;
+    const marks = () => { if (ui && ui.vgrid) for (const n of ui.vgrid.querySelectorAll(".vdrop-b,.vdrop-a")) n.classList.remove("vdrop-b", "vdrop-a"); };
+    const frame = () => {
+      raf = 0;
+      if (!on || !ui) return;
+      const b = ui.vgrid.getBoundingClientRect(), edge = 70;
+      let auto = 0;
+      if (ly < b.top + edge) auto = -Math.ceil((b.top + edge - ly) * 0.3); else if (ly > b.bottom - edge) auto = Math.ceil((ly - (b.bottom - edge)) * 0.3);
+      if (auto) ui.vgrid.scrollTop += auto;
+      ghost.style.transform = `translate3d(${((lx - x0) / z).toFixed(1)}px,${((ly - y0) / z).toFixed(1)}px,0) scale(1.04)`;
+      const n = ui.root.getRootNode().elementFromPoint(lx, ly), over = n && n.closest ? n.closest(".vgt") : null;
+      marks(); target = null;
+      if (over && over !== a && over._api && over._api.drop && over.parentNode === a.parentNode && !over.classList.contains("vdone")) {
+        const r = over.getBoundingClientRect(); after = over.classList.contains("vnow") || lx > r.left + r.width / 2; // (nothing goes before what's playing)
+        target = over; over.classList.add(after ? "vdrop-a" : "vdrop-b");
+      }
+      if (auto) raf = requestAnimationFrame(frame);
+    };
+    const move = (ev) => {
+      lx = ev.clientX; ly = ev.clientY;
+      if (!on) {
+        if (Math.hypot(lx - x0, ly - y0) < 9) return;
+        on = dragging = true; ui.root.classList.add("dragging");
+        const r = a.getBoundingClientRect(), rr = ui.root.getBoundingClientRect();
+        ghost = a.cloneNode(true); ghost.classList.add("vgghost"); ghost.classList.remove("venter");
+        Object.assign(ghost.style, { left: (r.left - rr.left) / z + "px", top: (r.top - rr.top) / z + "px", width: r.width / z + "px" });
+        ui.root.append(ghost); a.classList.add("vslot");
+        const gs = ghost.querySelector(".sw"); if (gs && a._sw) gs.scrollLeft = a._sw.scrollLeft;
+      }
+      if (!raf) raf = requestAnimationFrame(frame);
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move, true); window.removeEventListener("pointerup", up, true); window.removeEventListener("pointercancel", up, true);
+      cancelAnimationFrame(raf); raf = 0;
+      if (!on) return;
+      dragging = false; if (ui) ui.root.classList.remove("dragging");
+      const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; // the release isn't a click
+      window.addEventListener("click", eat, true); setTimeout(() => window.removeEventListener("click", eat, true), 0);
+      a.classList.remove("vslot"); marks();
+      if (ghost) ghost.remove();
+      if (target && target._api && target._api.drop) { try { target._api.drop(api.v.id, after); } catch (err) { logErr("griddrag", err); } if (gridShown()) drawGrid(); }
+    };
+    window.addEventListener("pointermove", move, true); window.addEventListener("pointerup", up, true); window.addEventListener("pointercancel", up, true);
+  };
   // A / D (Shift+A) and Delete with the grid open: the tile under the pointer
   const gridKey = (act, shift) => {
     if (!gridOpen() || !grid.hover || !grid.hover.isConnected || !grid.hover._api || grid.hover._api.v.tw) return false;
@@ -6950,6 +7053,7 @@
       if ((ui.poster && ui.poster.classList.contains("on")) || state.growEl) hidePoster();
       if (pb.qB && QLABEL[d.q] && pb.qB.textContent !== QLABEL[d.q]) pb.qB.textContent = QLABEL[d.q];
       if (pb.forId !== v.id) pbMeta(v.id, state.desc[v.id] || "", "");
+      if (d.t >= 5) warmNext();
       if (d.t >= 10 && !comments.has(v.id)) fetchComments(v);
       if (!played.has(v.id) && (d.t >= WATCHED_SECONDS || (Number(d.d) > 0 && d.t / d.d >= WATCHED_FRACTION))) { countWatched(v.id); refreshList(); }
       if (state.lastEvt !== "playing") { state.lastEvt = "playing"; ui.root.classList.remove("show-start"); ui.curtain.style.display = "none"; } // it's playing, whatever the overlay thought
@@ -7055,7 +7159,7 @@
     }
     if (i >= 0 && cols[i].twitch && pendingFirst && !pendingFirst.v.tw) i = cols.findIndex((c) => !c.feed && !c.twitch); // a YouTube video plays in a YouTube channel
     if (i < 0 && pendingFirst && cols.length) i = Math.max(0, cols.findIndex((c) => !c.feed));
-    if (i >= 0) { tune(i); autoRefresh(); } // (reopened after a long while: the lists load again)
+    if (i >= 0) { tune(i); autoRefresh(); prewarmTabs(); } // (reopened after a long while: the lists load again)
     if (i >= 0 && colId === "last") { // and the panel as you left it (the list, History, Info…)
       const lpn = lsGet("ytv:lastpanel", "");
       if (typeof lpn === "string" && lpn && lpn !== "comments") showPanel(lpn === "cont" ? CONT_TAB : lpn.startsWith("src:") && !chanById(lpn.slice(4)) ? playingTab() : lpn);
