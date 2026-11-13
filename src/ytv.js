@@ -528,6 +528,8 @@
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-title{font-size:calc(16.5px * var(--ytv-fsgs,1))!important;line-height:1.2!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-author,html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-view-count-and-date-info{font-size:calc(14.3px * var(--ytv-fsgs,1))!important;line-height:1.3!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-duration{font-size:calc(13.2px * max(var(--ytv-fsgs,1),.8))!important}
+    /* YTV's own play bar (Settings → Playing): YouTube's bar is there but not shown (during an ad it's back) */
+    html.ytv[data-ytv-bar] #movie_player:not(.ad-showing) .ytp-chrome-bottom, html.ytv[data-ytv-bar] #movie_player:not(.ad-showing) .ytp-gradient-bottom { opacity: 0 !important; pointer-events: none !important; }
     /* YTV has its own grid (V, or a scroll down on the video): YouTube's full-screen one and its ∨ stay out of the way */
     html.ytv .ytp-fullscreen-grid, html.ytv [class*="fullscreen-grid-expand"] { display: none !important; }
     html.ytv, html.ytv body { overflow: hidden !important; background: #000 !important; margin: 0 !important; scrollbar-width: none !important; }
@@ -583,6 +585,40 @@
     button:disabled{opacity:.45;cursor:default}
     button.acc{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:700}
     .curtain{position:absolute;inset:0;z-index:1;background:#000;display:grid;place-items:center}
+    /* YTV's own play bar: the line across, play / next / volume / time on the left, quality and full screen on the right */
+    .pb{position:absolute;left:24px;right:24px;bottom:0;height:104px;z-index:4;display:none;pointer-events:none;transition:opacity .25s}
+    .ownbar .pb{display:block} .on-twitch .pb,.adon .pb,.show-guide .pb,.show-start .pb,.vgon .pb{display:none}
+    .show-panel .pb{right:calc(var(--pw) + 24px)}
+    .fade .pb{opacity:0} .fade .pb *{pointer-events:none!important}
+    .pbl{position:absolute;left:0;right:0;bottom:74px;height:22px;cursor:pointer;pointer-events:auto;touch-action:none}
+    .pbt{position:absolute;left:0;right:0;top:8px;height:6px;border-radius:3px;background:rgba(255,255,255,.28);overflow:hidden;transition:transform .15s ease;transform-origin:center}
+    .pbl:hover .pbt,.pb.drag .pbt{transform:scaleY(1.5)}
+    .pbt i{position:absolute;inset:0;transform-origin:left center;transform:scaleX(0);will-change:transform}
+    .pbb{background:rgba(255,255,255,.34)} .pbf{background:var(--acc);transition:transform .26s linear}
+    .pb.drag .pbf,.pb.jump .pbf,.pb.drag .pbh,.pb.jump .pbh{transition:none}
+    .pbc{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(0,0,0,.75)}
+    .pbh{position:absolute;left:-8px;top:3px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.5);transform:translateX(0);transition:transform .26s linear,opacity .15s;opacity:0;will-change:transform;pointer-events:none}
+    .pbl:hover .pbh,.pb.drag .pbh{opacity:1}
+    .pbtip{position:absolute;left:0;bottom:30px;display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px;border-radius:12px;background:var(--pnl);box-shadow:0 6px 24px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .12s;will-change:transform}
+    .pbl:hover .pbtip,.pb.drag .pbtip{opacity:1}
+    .pbim{border-radius:7px;background:#111 no-repeat;zoom:1.25} .pbim[hidden]{display:none}
+    .pbtt{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums} .pbcn{max-width:220px;font-size:12px;color:#b3b8c2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .pbcn:empty{display:none}
+    .pbg{position:absolute;bottom:16px;display:flex;align-items:center;gap:2px;padding:4px;border-radius:14px;background:color-mix(in srgb,var(--pnl) 88%,transparent);backdrop-filter:blur(6px);pointer-events:auto}
+    .pbg.l{left:0} .pbg.r{right:0}
+    .pbg .ib{width:40px;height:40px;min-height:0;padding:0;border:0;border-radius:10px;background:none;color:#fff;display:grid;place-items:center;cursor:pointer}
+    .pbg .ib:hover{background:rgba(255,255,255,.12)}
+    .pbg .ib svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .pbg .ib.solid svg{fill:currentColor;stroke:none}
+    .pbtime{padding:0 12px 0 8px;font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap} .pbtime i{font-style:normal;color:#b3b8c2}
+    .pbq{height:40px;min-height:0;padding:0 12px;border:0;border-radius:10px;background:none;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer} .pbq:hover{background:rgba(255,255,255,.12)} .pbq:empty{display:none}
+    .pbvol{position:relative;width:72px;height:40px;cursor:pointer;touch-action:none}
+    .pbvol::before{content:"";position:absolute;left:6px;right:10px;top:18px;height:4px;border-radius:2px;background:rgba(255,255,255,.28)}
+    .pbvol i{position:absolute;left:6px;right:10px;top:18px;height:4px;border-radius:2px;background:#fff;transform-origin:left center;transform:scaleX(1)}
+    .ownbar .vgbtn{bottom:26px!important}
+    .ownbar .bar{bottom:112px}
+    .dts{padding:0;border:0;background:none;color:color-mix(in srgb,var(--acc) 60%,#fff);font:inherit;font-weight:600;cursor:pointer;min-height:0} .dts:hover{text-decoration:underline}
+    /* a video picked in the ∨ menu: its picture grows from its tile to the whole screen */
+    .grow{position:absolute;inset:0;z-index:9;background:#000 center/cover no-repeat;transform-origin:0 0;pointer-events:none;will-change:transform,opacity}
     /* someone you follow went live: a card at the top; click it to watch */
     .lives{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:8;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
     .show-panel .lives{left:calc((100% - var(--pw)) / 2)}
@@ -600,8 +636,8 @@
     /* between two videos: the next one's picture, soft, until it plays (no black screen) */
     .poster{position:absolute;inset:-4%;z-index:1;background:#000 center/cover no-repeat;filter:blur(14px) brightness(.72);opacity:0;transition:opacity .3s ease;pointer-events:none}
     .poster.on{opacity:1;transition-duration:.18s}
-    .noise{position:absolute;inset:0;opacity:.16;background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);animation:roll .35s steps(6) infinite}
-    @keyframes roll{to{background-position:0 9px}}
+    .noise{position:absolute;inset:-9px 0 0 0;opacity:.16;background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);animation:roll .35s steps(6) infinite}
+    @keyframes roll{to{transform:translateY(9px)}}
     @media (prefers-reduced-motion:reduce){.noise{animation:none}}
     .tv:not(.motion) *{animation:none !important}
     .tuning{position:relative;text-align:center;max-width:70vw}
@@ -765,7 +801,7 @@
     .motion.show-panel .panel{animation:pin .3s cubic-bezier(.4,0,.2,1)}
     .motion .panel.closing{display:flex;animation:pout .2s ease forwards;pointer-events:none}
     @keyframes pout{to{transform:translateX(28px);opacity:0}}
-    @keyframes pin{from{transform:translateX(24px);opacity:0;backdrop-filter:blur(0px)}}
+    @keyframes pin{from{transform:translateX(24px);opacity:0}}
     .show-panel .top{right:calc(var(--pw) + var(--pgap,0px))}
     .show-panel .bar,.show-panel .toast{left:calc((100% - var(--pw)) / 2)}
     .bar[hidden]{display:none}
@@ -955,9 +991,9 @@
     .srow{display:flex;gap:10px;align-items:center;padding:6px}
     .srow .sth{flex:none;width:min(var(--tw),45%);aspect-ratio:16/9;border-radius:7px}
     .srow .stx{flex:1;height:12px;border-radius:6px;margin-right:30%}
-    .srow .sth,.srow .stx{background:linear-gradient(90deg,rgba(255,255,255,.05) 25%,rgba(255,255,255,.12) 50%,rgba(255,255,255,.05) 75%) 0 0/300% 100%}
-    .motion .srow .sth,.motion .srow .stx{animation:shim 1.3s ease-in-out infinite}
-    @keyframes shim{from{background-position:100% 0}to{background-position:0 0}}
+    .srow .sth,.srow .stx{position:relative;overflow:hidden;background:rgba(255,255,255,.06)}
+    .motion .srow .sth::after,.motion .srow .stx::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.09),transparent);transform:translateX(-100%);animation:shim 1.3s ease-in-out infinite}
+    @keyframes shim{to{transform:translateX(100%)}}
     /* rows: each is a sideways scroller [left action | video | right action] resting on the video */
     .lbox{display:flex;flex-direction:column}
     .lbox .mid{flex:1}
@@ -1002,8 +1038,8 @@
     .thumb{position:relative;flex:none;width:min(var(--tw),55%);aspect-ratio:16/9;border-radius:7px;overflow:hidden;background:#111}
     .thumb img{width:100%;height:100%;object-fit:cover;display:block;opacity:0;transition:opacity .3s ease}
     /* while a picture loads: a soft sweep over its placeholder (only with animations on), then it fades in */
-    .motion .sw .thumb.ld::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%) 0 0/250% 100%;animation:tshim 1.3s ease-in-out 4;pointer-events:none}
-    @keyframes tshim{from{background-position:120% 0}to{background-position:-120% 0}}
+    .motion .sw .thumb.ld::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%);transform:translateX(-100%);animation:tshim 1.3s ease-in-out 4;pointer-events:none}
+    @keyframes tshim{to{transform:translateX(100%)}}
     .thumb img.ok{opacity:1}
     .thumb .pg{position:absolute;left:0;bottom:0;height:3px;background:#f03}
     /* what's playing: three small bars that move while it plays */
@@ -1204,8 +1240,8 @@
     .guide{background:color-mix(in srgb,color-mix(in srgb,var(--pnl) 70%,#000) min(100%,calc(var(--palpha,80%) + 45%)),transparent);backdrop-filter:blur(calc(max(28px,var(--pblur,16px) * 2.5) * var(--bk,1))) saturate(1.1);scrollbar-width:none}
     .motion.show-guide .guide{animation:gin .26s cubic-bezier(.22,1,.36,1) both}
     .guide-out .guide{display:block;pointer-events:none;animation:gout .2s cubic-bezier(.4,0,1,1) both}
-    @keyframes gin{from{opacity:0;transform:scale(.985);backdrop-filter:blur(0) saturate(1)}}
-    @keyframes gout{to{opacity:0;transform:scale(.99);backdrop-filter:blur(0) saturate(1)}}
+    @keyframes gin{from{opacity:0;transform:scale(.985)}}
+    @keyframes gout{to{opacity:0;transform:scale(.99)}}
     /* no browser scrollbars anywhere in YTV (they show up white on some setups) */
     *{scrollbar-width:none}
     *::-webkit-scrollbar{display:none;width:0;height:0}
@@ -1453,6 +1489,10 @@
     else if (kind === "user-plus") { add("circle", { cx: 9, cy: 8, r: 4 }); add("path", { d: "M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6" }); }
     else if (kind === "eye-off") { add("path", { d: "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.7 9.7 0 0 0 4.4-1" }); add("path", { d: "M9.9 9.9a3 3 0 0 0 4.2 4.2" }); }
     else if (kind === "eye") { add("path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" }); add("circle", { cx: 12, cy: 12, r: 3 }); }
+    else if (kind === "pause") add("path", { d: "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" });
+    else if (kind === "skip") add("path", { d: "M5 5v14l10-7zM17 5h2.4v14H17z" });
+    else if (kind === "vol") { add("path", { d: "M4 9v6h4l5 4V5L8 9z" }); add("path", { d: "M16.5 8.5a5 5 0 0 1 0 7" }); }
+    else if (kind === "vol-off") { add("path", { d: "M4 9v6h4l5 4V5L8 9z" }); add("path", { d: "M16 9.5l5 5M21 9.5l-5 5" }); }
     else if (kind === "fs") add("path", { d: "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" });
     else if (kind === "feed") add("path", { d: "M4 6h16M4 12h16M4 18h10" });
     else if (kind === "home") add("path", { d: "M4 11l8-7 8 7v9h-5v-6H9v6H4z" });
@@ -1689,12 +1729,13 @@
     const vgB = el("button", "vgbtn"); vgB.type = "button"; vgB.title = "More videos (V)"; vgB.setAttribute("aria-label", "More videos"); vgB.append(icon("chevron"));
     vgB.addEventListener("click", (e) => { e.stopPropagation(); openGrid(); });
     root.append(vgB); root._vgB = vgB;
-    root.append(curtain, top, bar, panel, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
+    root.append(curtain, top, bar, buildPlayBar(), panel, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
     shadow.append(style, root);
     document.documentElement.appendChild(host);
     ui = { hideB, host, root, curtain, tTitle, tSub, nT, nC, nowbar, totop, pickbar, stay, stayTxt, stayBtn, prevB, addB, wlRemove, wlClear, pbody, ptabs, tabInd, chmenu, clearB, refB, filtB, sortB, fdot, fstrip, fpop, histPB, twsB, twpop, setFrame, bar, infoB, comB, msg, guide, explore, pop, toast: toastEl };
     applyTheme();
     watchControls();
+    syncOwnBar();
     // the scrim behind a menu or Explore follows them (see .popon / .expon)
     const mo = new MutationObserver(() => { if (!ui) return; ui.root.classList.toggle("popon", !ui.pop.hidden); ui.root.classList.toggle("expon", !ui.explore.hidden); });
     mo.observe(pop, { attributes: true, attributeFilter: ["hidden"] }); mo.observe(explore, { attributes: true, attributeFilter: ["hidden"] });
@@ -3743,7 +3784,7 @@
     }
     ownerOf(v.id).then((o) => { if (o && o.handle && !v.creator) { state.ownerHandle[v.id] = o.handle; const ks = Object.keys(state.ownerHandle); if (ks.length > 200) delete state.ownerHandle[ks[0]]; } if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.hidden = false; } });
     // a long description starts folded to a few lines, so the creator's videos below are in view
-    const body = el("div", "dtx clamp", state.desc[v.id] || "Loading description…");
+    const body = el("div", "dtx clamp"); descInto(body, state.desc[v.id] || "Loading description…", v.id);
     // (it opens and folds smoothly: its height glides)
     const moreB = btn("Show more", "Show the whole description", () => {
       const h0 = body.offsetHeight, folding = !body.classList.contains("clamp");
@@ -3762,7 +3803,7 @@
       const d = await descriptionOf(v.id);
       state.desc[v.id] = d || "This video has no description.";
       const ks = Object.keys(state.desc); if (ks.length > 60) for (const k of ks.slice(0, ks.length - 60)) delete state.desc[k]; // keep the last few only
-      if (ui && state.panel === "info" && infoVid() && infoVid().id === v.id) { body.textContent = state.desc[v.id]; fold(); }
+      if (ui && state.panel === "info" && infoVid() && infoVid().id === v.id) { descInto(body, state.desc[v.id], v.id); fold(); }
     }
   };
   // ---- under Info: the creator's own videos, Latest or Popular (as on their channel), loading more as you scroll down
@@ -4738,6 +4779,156 @@
     fixHistory(hist);
     browse.delete(TWITCH_ID); saveSession(); schedulePanel();
   };
+  // ---- YTV's own play bar (Settings → Playing). It drives YouTube's own player: nothing about playback changes,
+  // only what you see and click. Everything that moves is a transform or opacity (the compositor does it: 60 fps and up).
+  const pb = { el: null, chapters: [], sb: null, forId: "", drag: false, w: 0, dur: 0, hoverT: -1, seekAt: 0 };
+  const ownBarOn = () => !!(cfg && cfg.tv.ownBar);
+  const vidEl = () => { const mp = document.getElementById("movie_player"); return mp ? mp.querySelector("video") : null; };
+  const fmtT = (x) => { x = Math.max(0, Math.floor(x || 0)); const h = Math.floor(x / 3600), m = Math.floor((x % 3600) / 60), q = x % 60; return (h ? h + ":" + String(m).padStart(2, "0") : String(m)) + ":" + String(q).padStart(2, "0"); };
+  const QLABEL = { hd2160: "2160p", hd1440: "1440p", hd1080: "1080p", hd720: "720p", large: "480p", medium: "360p", small: "240p", tiny: "144p" };
+  // "0:00 Intro" lines in a description are its chapters (as on YouTube: at least three, the first at 0:00, in order)
+  const TS_LINE = /^\s*[\[(\-–•*]?\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\s*[\])]?\s*[-–—:|]?\s*(\S.{0,119})$/;
+  const parseChapters = (desc) => {
+    const out = [];
+    for (const line of String(desc || "").split("\n").slice(0, 400)) { const m = TS_LINE.exec(line); if (m) out.push({ t: (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]), title: m[4].trim() }); }
+    if (out.length < 3 || out[0].t !== 0) return [];
+    for (let i = 1; i < out.length; i++) if (out[i].t <= out[i - 1].t) return [];
+    return out;
+  };
+  const chapterAt = (t) => { let c = null; for (const x of pb.chapters) { if (x.t <= t) c = x; else break; } return c; };
+  // YouTube's own small preview pictures for this video (the ones over its progress bar)
+  const parseSb = (spec) => {
+    const parts = String(spec || "").split("|"), base = parts[0];
+    if (!/^https:\/\/i\d?\.ytimg\.com\/sb\//.test(base)) return null;
+    let best = null;
+    for (let i = 1; i < parts.length; i++) {
+      const f = parts[i].split("#"); if (f.length < 8) continue;
+      const L = { i: i - 1, w: +f[0], h: +f[1], count: +f[2], cols: +f[3], rows: +f[4], interval: +f[5], name: f[6], sigh: f[7] };
+      if (!(L.w > 0 && L.h > 0 && L.count > 0 && L.cols > 0 && L.rows > 0)) continue;
+      if (!best || (L.w <= 200 && L.w > best.w) || (best.w > 200 && L.w < best.w)) best = L;
+    }
+    return best ? { base, ...best } : null;
+  };
+  const sbFrame = (sb, t, dur) => {
+    const idx = Math.min(sb.count - 1, Math.max(0, sb.interval > 0 ? Math.floor((t * 1000) / sb.interval) : Math.floor((t / Math.max(1, dur)) * sb.count)));
+    const per = sb.cols * sb.rows, page = Math.floor(idx / per), k = idx % per;
+    return { url: sb.base.replace("$L", String(sb.i)).replace("$N", sb.name.replace("$M", String(page))) + "&sigh=" + encodeURIComponent(sb.sigh).replace(/%24/g, "$"), x: (k % sb.cols) * sb.w, y: Math.floor(k / sb.cols) * sb.h };
+  };
+  const pbMeta = (id, desc, sbSpec) => { // a video started: its chapters and preview pictures
+    pb.forId = id; pb.chapters = parseChapters(desc); pb.sb = parseSb(sbSpec); pb.dur = 0;
+    if (pb.el) pb.el.querySelectorAll(".pbc").forEach((n) => n.remove());
+  };
+  const pbMarks = (dur) => {
+    if (!pb.el || !(dur > 0) || pb.dur === dur) return;
+    pb.dur = dur;
+    const tr = pb.el.querySelector(".pbt"); tr.querySelectorAll(".pbc").forEach((n) => n.remove());
+    for (const c of pb.chapters.slice(1)) if (c.t < dur - 1) { const m = el("span", "pbc"); m.style.left = `${(c.t / dur) * 100}%`; tr.append(m); }
+  };
+  const pbSync = (jump = false) => {
+    if (!ui || !pb.el || !ownBarOn()) return;
+    const mp = document.getElementById("movie_player"), v = vidEl();
+    ui.root.classList.toggle("adon", !!(mp && mp.classList.contains("ad-showing")));
+    if (!v || ui.root.classList.contains("on-twitch")) return;
+    const dur = Number.isFinite(v.duration) ? v.duration : 0, t = pb.drag ? pb.hoverT : v.currentTime || 0;
+    if (dur > 0) pbMarks(dur);
+    if (jump) { pb.el.classList.add("jump"); requestAnimationFrame(() => requestAnimationFrame(() => pb.el && pb.el.classList.remove("jump"))); }
+    const f = dur > 0 ? Math.min(1, Math.max(0, t / dur)) : 0;
+    pb.fill.style.transform = `scaleX(${f})`;
+    pb.handle.style.transform = `translateX(${(f * pb.w).toFixed(1)}px)`;
+    let bf = 0; try { for (let i = 0; i < v.buffered.length; i++) if (v.buffered.start(i) <= t + 1 && v.buffered.end(i) > bf) bf = v.buffered.end(i); } catch {}
+    pb.buf.style.transform = `scaleX(${dur > 0 ? Math.min(1, bf / dur) : 0})`;
+    const txt = fmtT(t), d = fmtT(dur);
+    if (pb.timeA.textContent !== txt) pb.timeA.textContent = txt;
+    if (pb.timeB.textContent !== " / " + d) pb.timeB.textContent = " / " + d;
+    const paused = v.paused;
+    if (pb.playB._p !== paused) { pb.playB._p = paused; pb.playB.replaceChildren(icon(paused ? "play" : "pause")); pb.playB.title = paused ? "Play" : "Pause"; pb.playB.setAttribute("aria-label", pb.playB.title); }
+    const quiet = v.muted || v.volume === 0;
+    if (pb.muteB._m !== quiet) { pb.muteB._m = quiet; pb.muteB.replaceChildren(icon(quiet ? "vol-off" : "vol")); }
+    pb.volF.style.transform = `scaleX(${quiet ? 0 : Math.min(1, v.volume)})`;
+  };
+  const pbMeasure = () => { if (pb.el) { const r = pb.line.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100; pb.w = r.width / z; pb.x0 = r.left; pb.wPx = r.width; } };
+  const pbHover = (e) => {
+    const v = vidEl(), dur = v && Number.isFinite(v.duration) ? v.duration : 0; if (!dur) return;
+    if (!pb.wPx || !pb.drag) pbMeasure();
+    const f = Math.min(1, Math.max(0, (e.clientX - pb.x0) / Math.max(1, pb.wPx))), t = f * dur;
+    pb.hoverT = t;
+    const tipW = pb.tip.offsetWidth || 180, x = Math.min(pb.w - tipW, Math.max(0, f * pb.w - tipW / 2));
+    pb.tip.style.transform = `translateX(${x.toFixed(1)}px)`;
+    pb.tipT.textContent = fmtT(t);
+    const c = chapterAt(t); pb.tipC.textContent = c ? c.title : "";
+    if (pb.sb) { const fr = sbFrame(pb.sb, t, dur); if (pb.im._u !== fr.url) { pb.im._u = fr.url; pb.im.style.backgroundImage = `url("${fr.url}")`; } pb.im.style.width = pb.sb.w + "px"; pb.im.style.height = pb.sb.h + "px"; pb.im.style.backgroundPosition = `-${fr.x}px -${fr.y}px`; pb.im.hidden = false; }
+    else pb.im.hidden = true;
+    if (pb.drag) { pbSync(); const now = performance.now(); if (now - pb.seekAt > 180) { pb.seekAt = now; cmd({ cmd: "seekto", start: t, done: false }); } }
+  };
+  const buildPlayBar = () => {
+    const box = el("div", "pb"), line = el("div", "pbl"), tr = el("div", "pbt"), buf = el("i", "pbb"), fill = el("i", "pbf"), handle = el("i", "pbh");
+    const tip = el("div", "pbtip"), im = el("div", "pbim"), tipT = el("span", "pbtt"), tipC = el("span", "pbcn"); im.hidden = true;
+    tip.append(im, tipC, tipT); tr.append(buf, fill); line.append(tr, handle, tip);
+    line.addEventListener("pointermove", pbHover);
+    line.addEventListener("pointerdown", (e) => { if (e.button) return; e.preventDefault(); pb.drag = true; box.classList.add("drag"); try { line.setPointerCapture(e.pointerId); } catch {} pbMeasure(); pbHover(e); });
+    const up = (e) => { if (!pb.drag) return; pb.drag = false; box.classList.remove("drag"); try { line.releasePointerCapture(e.pointerId); } catch {} if (pb.hoverT >= 0) cmd({ cmd: "seekto", start: pb.hoverT, done: true }); setTimeout(() => pbSync(true), 60); };
+    line.addEventListener("pointerup", up); line.addEventListener("pointercancel", up);
+    const L = el("div", "pbg l"), R = el("div", "pbg r");
+    const playB = iconBtn("pause", "Pause", () => { const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" }); }, "solid");
+    const nextB = iconBtn("skip", "Next video", () => nextVideo(), "solid");
+    const muteB = iconBtn("vol", "Mute / unmute", () => cmd({ cmd: "mute" }));
+    const vol = el("div", "pbvol"), volF = el("i"); vol.append(volF); vol.title = "Volume";
+    const setVol = (e) => { const r = vol.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100, f = Math.min(1, Math.max(0, (e.clientX - r.left - 6 * z) / Math.max(1, r.width - 16 * z))); volF.style.transform = `scaleX(${f})`; cmd({ cmd: "vol", v: Math.round(f * 100) }); };
+    vol.addEventListener("pointerdown", (e) => { if (e.button) return; e.preventDefault(); vol.classList.add("drag"); try { vol.setPointerCapture(e.pointerId); } catch {} setVol(e); });
+    vol.addEventListener("pointermove", (e) => { if (vol.classList.contains("drag")) setVol(e); });
+    const volUp = (e) => { vol.classList.remove("drag"); try { vol.releasePointerCapture(e.pointerId); } catch {} };
+    vol.addEventListener("pointerup", volUp); vol.addEventListener("pointercancel", volUp);
+    const time = el("span", "pbtime"), timeA = el("span", null, "0:00"), timeB = el("i", null, " / 0:00"); time.append(timeA, timeB);
+    const qB = btn("", "Picture quality for this video", () => { if (!ui.pop.hidden) return closePop(); pb.qAnchor = qB; cmd({ cmd: "qlist" }); }, "pbq");
+    const fsB = iconBtn("fs", "Full screen", () => toggleFullscreen());
+    L.append(playB, nextB, muteB, vol, time); R.append(qB, fsB);
+    box.append(line, L, R);
+    Object.assign(pb, { el: box, line, fill, buf, handle, tip, tipT, tipC, im, playB, muteB, volF, timeA, timeB, qB });
+    try { new ResizeObserver(() => { pbMeasure(); pbSync(true); }).observe(line); } catch {}
+    return box;
+  };
+  const pbQualityMenu = (d) => { // (the answer to "which qualities does this video have?")
+    if (!ui || !pb.qAnchor || !Array.isArray(d.list) || !d.list.length) return;
+    const items = d.list.filter((q) => QLABEL[q]).map((q) => {
+      const b = btn("", QLABEL[q], () => { closePop(); cmd({ cmd: "setq", q }); pb.qB.textContent = QLABEL[q]; });
+      b.setAttribute("role", "menuitemradio"); b.setAttribute("aria-checked", String(q === d.cur));
+      b.append(el("span", "ck", q === d.cur ? "✓" : ""), el("span", null, QLABEL[q]));
+      return b;
+    });
+    ui.pop.replaceChildren(el("div", "ph", "Picture quality"), ...items);
+    placePop(pb.qAnchor, true); wake();
+  };
+  const syncOwnBar = () => {
+    const on = ownBarOn() && !!ui;
+    if (on) document.documentElement.setAttribute("data-ytv-bar", "1"); else document.documentElement.removeAttribute("data-ytv-bar");
+    if (ui) { ui.root.classList.toggle("ownbar", on); if (on) { pbMeasure(); pbSync(true); } }
+  };
+  // (the video element tells when something changes: no polling. Its events don't bubble, so they're caught on the way down.)
+  const onMedia = (e) => {
+    if (!ui || !pb.el || !ownBarOn() || !e.target || e.target.tagName !== "VIDEO") return;
+    if (e.type === "timeupdate" && (ui.root.classList.contains("fade") || document.hidden)) return; // nothing to draw while the bar isn't shown
+    pbSync(e.type === "seeked" || e.type === "loadedmetadata" || e.type === "emptied");
+  };
+  for (const t of ["timeupdate", "play", "pause", "volumechange", "progress", "durationchange", "seeked", "loadedmetadata", "emptied"]) document.addEventListener(t, onMedia, true);
+  // Times in a description ("12:34"): click one and the video goes there.
+  const TS_ANY = /(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?!\d)/g;
+  const descInto = (node, text, vid) => {
+    const cur = current(), live = !!(cur && vid && cur.id === vid && !cur.tw);
+    if (!live || !TS_ANY.test(text)) { node.textContent = text; return; }
+    TS_ANY.lastIndex = 0;
+    const out = []; let at = 0, m;
+    while ((m = TS_ANY.exec(text))) {
+      if (m.index > 0 && /[\d:]/.test(text[m.index - 1])) continue;
+      const t = (+(m[1] || 0)) * 3600 + (+m[2]) * 60 + (+m[3]);
+      if (m.index > at) out.push(document.createTextNode(text.slice(at, m.index)));
+      const b = el("button", "dts", m[0]); b.type = "button"; b.title = `Go to ${m[0]}`;
+      b.addEventListener("click", (e) => { e.stopPropagation(); const c = current(); if (c && c.id === vid) { cmd({ cmd: "seekto", start: t, done: true }); cmd({ cmd: "play" }); } });
+      out.push(b); at = m.index + m[0].length;
+      if (out.length > 600) break;
+    }
+    if (at < text.length) out.push(document.createTextNode(text.slice(at)));
+    node.replaceChildren(...out);
+  };
   // Someone you asked to hear about went live: a card at the top. Click it and you're watching.
   const liveCard = (v) => {
     if (!ui || !v) return;
@@ -4775,7 +4966,28 @@
     void ui.poster.offsetWidth; ui.poster.classList.add("on");
     clearTimeout(state.posterT); state.posterT = setTimeout(hidePoster, 7000); // (never stays if the video doesn't start)
   };
-  const hidePoster = () => { clearTimeout(state.posterT); if (ui && ui.poster) ui.poster.classList.remove("on"); };
+  const hidePoster = () => { clearTimeout(state.posterT); if (ui && ui.poster) ui.poster.classList.remove("on"); dropGrow(); };
+  // A video picked in the ∨ menu: its picture grows from its tile to the whole screen, and stays until the video plays.
+  const dropGrow = () => {
+    const g = state.growEl; if (!g) return;
+    state.growEl = null; clearTimeout(state.growT);
+    try { const an = g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, easing: "ease", fill: "forwards" }); an.onfinish = an.oncancel = () => g.remove(); } catch { g.remove(); }
+  };
+  const growFrom = (tile, v) => {
+    if (!ui || !motionOn() || !v || v.tw || !ID_RE.test(v.id)) return;
+    const cur = current(); if (cur && cur.id === v.id && !ui.root.classList.contains("on-twitch")) return;
+    const pic = tile && tile.querySelector(".vgp"); if (!pic) return;
+    const r = pic.getBoundingClientRect(), R = ui.root.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100;
+    if (!(r.width > 0 && R.width > 0)) return;
+    dropGrow();
+    const g = el("div", "grow"); g.style.backgroundImage = `url(https://i.ytimg.com/vi/${v.id}/maxresdefault.jpg),url(https://i.ytimg.com/vi/${v.id}/hqdefault.jpg)`;
+    ui.root.append(g); state.growEl = g;
+    try {
+      const an = g.animate([{ transform: `translate(${((r.left - R.left) / z).toFixed(1)}px,${((r.top - R.top) / z).toFixed(1)}px) scale(${(r.width / R.width).toFixed(4)},${(r.height / R.height).toFixed(4)})` }, { transform: "none" }], { duration: 420, easing: "cubic-bezier(.2,.8,.2,1)" });
+      an.onfinish = () => { g.style.zIndex = "1"; }; // (grown: the title and the list show over it again)
+    } catch {}
+    state.growT = setTimeout(dropGrow, 7000); // (never stays if the video doesn't start)
+  };
   const goTo = (i, { pushHistory = true } = {}) => {
     if (ui && ui.upn) ui.upn.classList.remove("on");
     if (i < 0 || i >= state.queue.length) return;
@@ -5433,7 +5645,7 @@
     a.addEventListener("mouseleave", () => { if (grid.hover === a) grid.hover = null; });
     const meta = v.tw ? [v.channel, v.game].filter(Boolean).join(" · ") : [whoOf(v), v.age].filter(Boolean).join(" · ");
     a.append(pic, el("div", "vgtt", v.title || ""), el("div", "vgm", meta));
-    const go = () => { if (wrap.classList.contains("gone") || Math.abs(wrap.scrollLeft - (wrap._R || 0)) > 3) return; closeGrid(); try { const act = a._api; if (act && act.open) act.open(); } catch (err) { logErr("grid", err); } };
+    const go = () => { if (wrap.classList.contains("gone") || Math.abs(wrap.scrollLeft - (wrap._R || 0)) > 3) return; growFrom(a, a._api ? a._api.v : v); closeGrid(); try { const act = a._api; if (act && act.open) act.open(); } catch (err) { logErr("grid", err); } };
     a.addEventListener("click", go);
     a.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); go(); } });
     return a;
@@ -6680,7 +6892,9 @@
     if (d.evt === "time" && v && d.id === v.id && Number.isFinite(d.t)) {
       if (state.seekOnPlay && state.seekOnPlay.id === d.id) { const s0 = state.seekOnPlay; state.seekOnPlay = null; if (d.t < s0.at - 3) { cmd({ cmd: "seek", start: s0.at }); return; } }
       state.t = d.t;
-      if (ui.poster && ui.poster.classList.contains("on")) hidePoster();
+      if ((ui.poster && ui.poster.classList.contains("on")) || state.growEl) hidePoster();
+      if (pb.qB && QLABEL[d.q] && pb.qB.textContent !== QLABEL[d.q]) pb.qB.textContent = QLABEL[d.q];
+      if (pb.forId !== v.id) pbMeta(v.id, state.desc[v.id] || "", "");
       if (d.t >= 10 && !comments.has(v.id)) fetchComments(v);
       if (!played.has(v.id) && (d.t >= WATCHED_SECONDS || (Number(d.d) > 0 && d.t / d.d >= WATCHED_FRACTION))) { countWatched(v.id); refreshList(); }
       if (state.lastEvt !== "playing") { state.lastEvt = "playing"; ui.root.classList.remove("show-start"); ui.curtain.style.display = "none"; } // it's playing, whatever the overlay thought
@@ -6692,9 +6906,10 @@
       saveLast();
       return;
     }
+    if (d.evt === "qlist") return pbQualityMenu(d);
     if (d.evt === "playing") {
       state.lastEvt = "playing";
-      if (v && d.id === v.id) hidePoster();
+      if (v && d.id === v.id) { hidePoster(); pbMeta(d.id, d.desc, d.sb); pbSync(true); }
       // YouTube labels a video's category on its page: skip music there too (lists don't say).
       const col0 = currentCol();
       if (cfg.tv.skipMusic && d.category === "Music" && v && d.id === v.id && col0 && !col0.watchLater && !col0.homeFeed && !col0.watchedChip && !v.f) {
@@ -6886,7 +7101,7 @@
     SW.tvActive = false;
     watchButtons(true); setTimeout(syncButtons, 0);
     document.documentElement.classList.remove("ytv", "ytv-still");
-    document.documentElement.removeAttribute("data-ytv");
+    document.documentElement.removeAttribute("data-ytv"); document.documentElement.removeAttribute("data-ytv-bar");
     document.documentElement.style.overflow = "";
     document.documentElement.style.overscrollBehaviorX = ""; if (document.body) document.body.style.overscrollBehaviorX = "";
     const st = document.getElementById("ytv-page"); st && st.remove();
@@ -6995,7 +7210,7 @@
   let watchButtons = () => {};
   // (the player bridge clicks Skip on an ad when this is on: it reads it from <html>)
   const syncSkip = () => { if (cfg && cfg.tv.autoSkip) document.documentElement.setAttribute("data-ytv-skip", "1"); else document.documentElement.removeAttribute("data-ytv-skip"); };
-  const syncButtons = () => { syncSkip();
+  const syncButtons = () => { syncSkip(); syncOwnBar();
     const pr = btnPrefs(), on = pr.on;
     const wantSide = on && pr.s;
     const full = document.querySelector("ytd-guide-renderer #sections");

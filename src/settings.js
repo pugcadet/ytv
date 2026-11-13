@@ -837,6 +837,7 @@
           "1080p Premium needs YouTube Premium; otherwise it plays 1080p."),
         toggle("Skip ads", "Presses YouTube’s Skip button on an ad for you.", "tv.autoSkip")),
       card("Controls", null,
+        toggle("YTV play bar", "YTV’s own bar for play, volume, time, quality and full screen. Off: YouTube’s own bar is back.", "tv.ownBar"),
         toggle("Buttons above the player bar", "Previous, Next, list, Info and Comments.", "tv.showBar")));
   };
   const renderGrid = () => {

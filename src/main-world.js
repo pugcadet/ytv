@@ -34,6 +34,12 @@
           watchEndpoint: { videoId: c.id, startTimeSeconds: t } } } }));
       }
       if (c.cmd === "seek" && Number(c.start) > 0 && typeof p.seekTo === "function") p.seekTo(Number(c.start), true);
+      // YTV's own play bar: seek anywhere (also to the start), volume, and the picture quality for this video
+      if (c.cmd === "seekto" && Number(c.start) >= 0 && typeof p.seekTo === "function") p.seekTo(Number(c.start), c.done !== false);
+      if (c.cmd === "vol" && Number(c.v) >= 0 && Number(c.v) <= 100 && typeof p.setVolume === "function") { p.setVolume(Math.round(Number(c.v))); if (Number(c.v) > 0 && p.isMuted && p.isMuted()) p.unMute(); }
+      if (c.cmd === "mute" && typeof p.isMuted === "function") { if (p.isMuted()) p.unMute(); else p.mute(); }
+      if (c.cmd === "qlist") emit("qlist", { cur: p.getPlaybackQuality ? p.getPlaybackQuality() : "", list: (p.getAvailableQualityLevels ? p.getAvailableQualityLevels() || [] : []).filter((l) => ORDER.includes(l)) });
+      if (c.cmd === "setq" && ORDER.includes(c.q) && typeof p.setPlaybackQualityRange === "function") { p.setPlaybackQualityRange(c.q, c.q); if (typeof p.setPlaybackQuality === "function") p.setPlaybackQuality(c.q); }
       if (c.cmd === "repaint") {
         // Give the video a fresh layer so the picture comes back. (YouTube re-measures itself on the
         // resize events YTV sends; its internal size functions are never called — without exact sizes
@@ -106,7 +112,7 @@
     if (err && err.offsetParent !== null && errorFor !== id) { errorFor = id; emit("error", { id }); return; }
     if (s === 1 && !isAd && playingFor !== id) {
       playingFor = id;
-      let desc = "", channelId = "", keywords = [], publishDate = "", category = "";
+      let desc = "", channelId = "", keywords = [], publishDate = "", category = "", sb = "";
       try {
         const pr = typeof p.getPlayerResponse === "function" ? p.getPlayerResponse() : null; const vdt = (pr && pr.videoDetails) || {};
         desc = vdt.shortDescription || ""; channelId = vdt.channelId || "";
@@ -114,11 +120,12 @@
         const mf = pr && pr.microformat && pr.microformat.playerMicroformatRenderer;
         publishDate = (mf && (mf.publishDate || mf.uploadDate)) || "";
         category = (mf && mf.category) || "";
+        sb = String((pr && pr.storyboards && pr.storyboards.playerStoryboardSpecRenderer && pr.storyboards.playerStoryboardSpecRenderer.spec) || "").slice(0, 4000); // (the small pictures YouTube shows over its progress bar)
       } catch {}
-      emit("playing", { id, title: vd.title || "", author: vd.author || "", desc, channelId, keywords, publishDate, category });
+      emit("playing", { id, title: vd.title || "", author: vd.author || "", desc, channelId, keywords, publishDate, category, sb });
     }
     if ((s === 1 || s === 3 || s === 5 || s === -1) && !isAd && id && qDoneFor !== id) { try { applyQuality(p, id); } catch { qDoneFor = id; } } // (as early as it can: before it plays, if YouTube already knows the qualities)
-    if (s === 1 && !isAd && id && ++tick % 3 === 0) emit("time", { id, t: Math.floor(t), d: Math.floor(d) }); // ~every second, so a channel can resume where you left it
+    if (s === 1 && !isAd && id && ++tick % 3 === 0) emit("time", { id, t: Math.floor(t), d: Math.floor(d), q: p.getPlaybackQuality ? p.getPlaybackQuality() : "" }); // ~every second, so a channel can resume where you left it
     autoSkip(p);
     const nearEnd = !isAd && d > 5 && t >= d - 0.8;
     if ((s === 0 || nearEnd) && id && endedFor !== id) { endedFor = id; emit("ended", { id }); }
