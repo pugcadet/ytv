@@ -619,7 +619,7 @@
     .pbg .ib{width:40px;height:40px;min-height:0;padding:0;border:0;border-radius:10px;background:none;color:#fff;display:grid;place-items:center;cursor:pointer}
     .pbg .ib:hover{background:rgba(255,255,255,.12)}
     .pbg .ib svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-    .pbg .ib.solid svg{fill:currentColor;stroke:none}
+    .pbg .ib.solid svg{fill:currentColor;stroke:currentColor;stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round}
     .pbtime{padding:0 12px 0 8px;font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap} .pbtime i{font-style:normal;color:#b3b8c2}
     .pbq{height:40px;min-height:0;padding:0 12px;border:0;border-radius:10px;background:none;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer} .pbq:hover{background:rgba(255,255,255,.12)} .pbq:empty{display:none}
     .pbvw{position:relative;display:flex}
@@ -642,6 +642,9 @@
     .haschap .chz{display:block} .pbthin .chz{bottom:64px} .pbpill .chz{bottom:86px}
     .chs{position:absolute;left:0;right:0;bottom:118px;display:flex;gap:10px;padding:4px 2px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;opacity:0;transform:translateY(14px);pointer-events:none;transition:opacity .22s ease,transform .26s cubic-bezier(.2,.8,.2,1);-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
     .chs::-webkit-scrollbar{display:none}
+    .chc:first-child{margin-left:auto} .chc:last-child{margin-right:auto}
+    .show-panel .ypb .chs,.vgon .ypb .chs{opacity:0!important;transform:translateY(14px)!important;pointer-events:none!important}
+    .show-panel .ypb .chz,.vgon .ypb .chz{display:none}
     .pbthin .chs{bottom:86px} .pbpill .chs{bottom:108px}
     .ypb.chon .chs{opacity:1;transform:none;pointer-events:auto} .fade .ypb .chs{pointer-events:none}
     .ypb.chon .chz{height:44px}
@@ -655,7 +658,7 @@
     /* play / pause: a soft mark in the middle */
     .ppi{position:absolute;left:50%;top:50%;z-index:3;display:grid;place-items:center;color:#fff;opacity:0;transform:translate(-50%,-50%) scale(.82);pointer-events:none;will-change:transform,opacity;filter:drop-shadow(0 2px 14px rgba(0,0,0,.55)) drop-shadow(0 0 2px rgba(0,0,0,.35))}
     .show-panel .ppi{left:calc((100% - var(--pw)) / 2)}
-    .ppi svg{width:68px;height:68px;fill:currentColor;stroke:none}
+    .ppi svg{width:60px;height:60px;fill:currentColor;stroke:currentColor;stroke-width:2.4;stroke-linejoin:round;stroke-linecap:round}
     /* the play bar as one floating pill in the middle (Settings → Playing → Play bar style) */
     .pbpill .pbg.r{display:none}
     .pbpill .pbg.l{left:50%;transform:translateX(-50%);bottom:26px}
@@ -2349,7 +2352,7 @@
     const idx = () => state.queue.findIndex((x) => x.id === v.id);
     if (kind === "live") return {
       feedRow: () => onFeed() && !state.stay,
-      canRm: () => idx() >= 0, // (what's playing too: the next one in the list plays, and it goes)
+      canRm: () => idx() >= 0 && idx() !== state.pos, // (what's playing stays: skip it with ] if you want the next one)
       canAdd: () => (idx() === state.pos && !v.tw ? !!state.queue[state.pos + 1] : onFeed() && !state.stay ? idx() > state.pos + 1 : !inFeed(v.id)),
       rm: () => {
         const it = state.queue[idx()], feed = onFeed() && !state.stay;
@@ -3069,7 +3072,7 @@
   // Plays next: with Shift, or (swapped in settings) without it. Swapped while something can't be queued (a stream
   // is on): the plus simply adds to your Feed.
   const nextMode = () => (cfg && cfg.tv.swipeNextFirst ? !shiftDown && !!current() && !current().tw : shiftDown);
-  const can = (api, act) => (act === "rm" ? api.canRm() : isCurRow(api) ? api.canAdd() : nextMode() ? canPlayNext(api.v) : api.canAdd()); // (what's playing: always "back in line", whichever way adding goes)
+  const can = (api, act) => (act === "rm" ? api.canRm() : isCurRow(api) ? (shiftDown ? !inFeed(api.v.id) && !!state.queue[state.pos + 1] : api.canAdd()) : nextMode() ? canPlayNext(api.v) : api.canAdd()); // (what's playing: always "back in line", whichever way adding goes)
   const isFeedRow = (api) => !!(api.feedRow && api.feedRow());
   const NO_GIVE = 34;
   const onRowScroll = (e) => {
@@ -3206,6 +3209,10 @@
       if (rc && rc.cont) { contHide.add(api.v.id); lsSet("ytv:conthide", [...contHide].slice(-500)); }
       api.rm();
       return leave(w);
+    }
+    if (isCurRow(api) && shiftDown) { // (with Shift: what's playing goes to your Feed, and the next one plays)
+      if (!inFeed(api.v.id) && state.queue[state.pos + 1] && addToFeed(api.v, { c: state.colId, i: state.pos }) !== false) { rowMark(api, "ok"); nextVideo(); } else sayNo(api, "add");
+      return home();
     }
     if (isCurRow(api)) { if (api.canAdd() && api.add() !== false) rowMark(api, "ok"); else sayNo(api, "add"); return home(); } // (what's playing: back in line, after what you lined up; the next one plays)
     if (nextMode()) { // Shift: plays next in the list that's on now; the row stays where it is
@@ -3608,9 +3615,11 @@
   let vidDown = 0;
   window.addEventListener("pointerdown", (e) => {
     if (e.button !== 0 || e.pointerType === "touch" || eatVid || !clickVideo(e.composedPath())) return;
+    e.stopImmediatePropagation(); // (YouTube's own press, which could play it again a moment later, never sees it)
     vidDown = performance.now();
     const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" });
   }, true);
+  for (const t of ["mousedown", "pointerup", "mouseup"]) window.addEventListener(t, (e) => { if (vidDown && performance.now() - vidDown < 1500 && e.button === 0 && clickVideo(e.composedPath())) e.stopImmediatePropagation(); }, true);
   window.addEventListener("click", (e) => {
     if (e.button !== 0 || eatVid || !clickVideo(e.composedPath())) return;
     e.stopImmediatePropagation(); e.preventDefault();
@@ -4405,6 +4414,7 @@
       });
   };
   const refreshList = () => schedulePanel();
+  const chs = { sticky: false, on: false, key: "", cur: -1, t: 0 }; // (the chapters strip, see further down)
   const showPanel = (which) => {
     if (!ui) return;
     which = which || "";
@@ -4416,6 +4426,7 @@
     if (cfg && !cfg.tv.listOn && isListTab(which) && which !== HIST_TAB) { if (gridShown()) selectGridTab(which); which = ""; }
     if (which && gridShown()) closeGrid(); // (one at a time: a panel on the right closes the ∨ menu) // (the list menu is off in settings: its tabs live in the ∨ menu)
     if (which.startsWith("src:")) openChan(which.slice(4)); // any channel you look at has a tab (on the right)
+    if (which && chs.on) { chs.sticky = false; showChapters(false); } // (the list opens: the chapters make way)
     if (!which && lsGet("ytv:wopen", false)) lsSet("ytv:wopen", false); // (Watched closes again with the list)
     if (!which && (state.xtabs || []).length) { state.xtabs = []; tabsSig = ""; saveSession(); } // (search results are for that one visit: the panel closed, they're gone)
     const changed = which !== state.panel;
@@ -5152,7 +5163,6 @@
     placePop(pb.qAnchor, true); wake();
   };
   // ---- Chapters: a row of pictures that rises above the line (hover just above the line, or C). Click one to go there.
-  const chs = { sticky: false, on: false, key: "", cur: -1, t: 0 };
   const chapterIndex = (t) => { let k = -1; for (let i = 0; i < pb.chapters.length; i++) { if (pb.chapters[i].t <= t + 0.25) k = i; else break; } return k; };
   const drawChapters = () => {
     if (!pb.strip) return;
@@ -6427,6 +6437,7 @@
   };
   const snapMs = () => (cfg ? cfg.tv.gridSnapMs : 240);
   const openGrid = () => {
+    if (chs.on) { chs.sticky = false; showChapters(false); }
     if (!ui || !cfg || !cfg.tv.gridOn || gridOpen()) return;
     const box = showGridBox(); box.classList.remove("peek"); grid.dryTab = ""; grid.fills = 0;
     gput(gH()); gTween(0, snapMs(), settleOpen);
