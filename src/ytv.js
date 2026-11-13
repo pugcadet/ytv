@@ -324,7 +324,7 @@
       const mixed = []; for (let i = 0; pages.some((l) => i < l.length); i++) for (const l of pages) if (i < l.length) mixed.push(l[i]);
       take(col.shuffle ? shuffled(mixed) : mixed);
     }
-    if (out.length < want && !col.feed && !col.watchLater && !col.watchedChip && !col.cont) { // every source is at its end: related videos keep it going
+    if (out.length < want && !col.feed && !col.watchLater && !col.watchedChip && !col.cont && !col.homeFeed) { // every source is at its end: related videos keep it going (not on Home: that's YouTube's Home and nothing else)
       const pool = [...(browse.get(col.id) || { items: [] }).items, ...state.queue].filter((v) => v && ID_RE.test(v.id));
       for (let i = 0; i < 3 && out.length < want && pool.length; i++) {
         const v = pool[Math.floor(Math.random() * pool.length)];
@@ -1577,7 +1577,7 @@
     else if (kind === "user-plus") { add("circle", { cx: 9, cy: 8, r: 4 }); add("path", { d: "M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6" }); }
     else if (kind === "eye-off") { add("path", { d: "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3.2 3.9M6.6 6.6A17 17 0 0 0 2 12s4 7 10 7a9.7 9.7 0 0 0 4.4-1" }); add("path", { d: "M9.9 9.9a3 3 0 0 0 4.2 4.2" }); }
     else if (kind === "eye") { add("path", { d: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" }); add("circle", { cx: 12, cy: 12, r: 3 }); }
-    else if (kind === "pause") add("path", { d: "M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" });
+    else if (kind === "pause") add("path", { d: "M6 5.5h2.8v13H6zM15.2 5.5H18v13h-2.8z" });
     else if (kind === "skip") add("path", { d: "M5 5v14l10-7zM17 5h2.4v14H17z" });
     else if (kind === "skip-back") add("path", { d: "M19 5v14L9 12zM4.6 5H7v14H4.6z" });
     else if (kind === "vol") { add("path", { d: "M4 9v6h4l5 4V5L8 9z" }); add("path", { d: "M16.5 8.5a5 5 0 0 1 0 7" }); }
@@ -3617,7 +3617,16 @@
     if (e.button !== 0 || e.pointerType === "touch" || eatVid || !clickVideo(e.composedPath())) return;
     e.stopImmediatePropagation(); // (YouTube's own press, which could play it again a moment later, never sees it)
     vidDown = performance.now();
-    const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" });
+    const v = vidEl(); if (v) { pauseHold = v.paused ? 0 : performance.now() + 4000; cmd({ cmd: v.paused ? "play" : "pause" }); }
+  }, true);
+  // (YouTube can start a video again on its own a moment after a click paused it: for a few seconds, that's undone,
+  // unless you asked for it: a key, a button, anything you click)
+  let pauseHold = 0;
+  window.addEventListener("keydown", () => { pauseHold = 0; }, true);
+  window.addEventListener("pointerdown", (e) => { if (!clickVideo(e.composedPath())) pauseHold = 0; }, true);
+  document.addEventListener("play", (e) => {
+    if (!pauseHold || performance.now() > pauseHold || !e.target || e.target.tagName !== "VIDEO" || !e.target.closest("#movie_player")) return;
+    cmd({ cmd: "pause" });
   }, true);
   for (const t of ["mousedown", "pointerup", "mouseup"]) window.addEventListener(t, (e) => { if (vidDown && performance.now() - vidDown < 1500 && e.button === 0 && clickVideo(e.composedPath())) e.stopImmediatePropagation(); }, true);
   window.addEventListener("click", (e) => {
@@ -5418,7 +5427,7 @@
     let got = [];
     try { got = fresh(await buildLineup(col, () => {}, () => {}, true)); } catch {}
     // still (almost) nothing new: videos like the last ones in the list, then like what's playing
-    for (const from of [v, current()]) {
+    for (const from of col.homeFeed ? [] : [v, current()]) { // (Home: YouTube's Home only, never "videos like this one")
       if (got.length >= 6 || !from || from.tw || !ID_RE.test(from.id)) continue;
       try { const add = fresh(await similarTo(from.id)); const ids = new Set(got.map((x) => x.id)); got.push(...add.filter((x) => !ids.has(x.id))); } catch {}
     }
