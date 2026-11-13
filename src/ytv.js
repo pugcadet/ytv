@@ -618,7 +618,7 @@
     .pbvol b{position:absolute;inset:0 0 10px 0;border-radius:12px;background:var(--pnl);box-shadow:0 6px 24px rgba(0,0,0,.5)}
     .pbvol::after{content:"";position:absolute;left:18px;width:4px;top:12px;bottom:22px;border-radius:2px;background:rgba(255,255,255,.28)}
     .pbvol i{position:absolute;z-index:1;left:18px;width:4px;top:12px;bottom:22px;border-radius:2px;background:#fff;transform-origin:50% 100%;transform:scaleY(1)}
-    .ownbar .vgbtn{bottom:26px!important}
+    .ownbar:not(.pbthin) .vgbtn{bottom:26px!important}
     .ownbar .bar{bottom:112px}
     .desc .dts,.desc .dts:hover,.desc .dts:focus-visible{display:inline;min-height:0;padding:0;border:0;border-radius:0;background:none;outline:0;color:#8fbcff;font:inherit;cursor:pointer;transition:color .15s}
     .desc .dts:hover,.desc .dts:focus-visible{color:#c4dcff}
@@ -641,12 +641,14 @@
     .pbte{display:none;position:absolute;bottom:20px;padding:5px 10px;border-radius:9px;background:color-mix(in srgb,var(--pnl) 88%,transparent);font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums;pointer-events:none}
     .pbte.a{left:0} .pbte.b{right:0}
     .pbthin .pbg{display:none} .pbthin .pbte{display:block}
-    .pbthin .pbl{left:72px;right:72px;bottom:21px}
-    .pbthin.ownbar .vgbtn{bottom:3px!important}
-    .pbthin.ownbar .bar{bottom:72px}
+    .pbthin .pbl{left:72px;right:72px;bottom:42px}
+    .pbthin .pbt{top:8px;height:4px;border-radius:2px}
+    .pbthin .pbh{top:2px}
+    .pbthin .pbte{bottom:54px;transform:translateY(50%)}
+    .pbthin.ownbar .bar{bottom:84px}
     .pbpill.ownbar .bar{bottom:96px}
     .cards.still .card{animation:none!important}
-    .motion .cards.still .card.fresh{animation:cnew .55s cubic-bezier(.2,.8,.2,1) both!important}
+    .motion .cards.still .card.fresh,.motion .guide .card.fresh{animation:cnew .55s cubic-bezier(.2,.8,.2,1) both!important}
     @keyframes cnew{0%{opacity:0;transform:scale(.86)}60%{opacity:1;transform:scale(1.03)}100%{transform:none}}
     /* a video picked in the ∨ menu: its picture grows from its tile to the whole screen */
     .grow{position:absolute;inset:0;z-index:9;background:#000 center/cover no-repeat;transform-origin:0 0;pointer-events:none;will-change:transform,opacity}
@@ -793,7 +795,7 @@
     .vgog .vgt .vgd{display:none}
     .vgog .vgt .vgtt{margin-top:6px;font-size:12.5px;-webkit-line-clamp:1}
     .vgog .vgt .vgm{font-size:11.5px}
-    .vgt.venter{animation:venter .34s cubic-bezier(.4,0,.2,1) both}
+    .vgt.venter{animation:venter .26s cubic-bezier(.4,0,.2,1) both}
     @keyframes venter{from{opacity:0;transform:translateY(12px) scale(.985)}}
     .vgt .vgp{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:#151821;transition:transform .18s ease,box-shadow .18s ease}
     /* swiping a tile sideways: the very same sideways track as a row in the list (bin and plus behind the picture) */
@@ -1768,6 +1770,7 @@
     const vgB = el("button", "vgbtn"); vgB.type = "button"; vgB.title = "More videos (V)"; vgB.setAttribute("aria-label", "More videos"); vgB.append(icon("chevron"));
     vgB.addEventListener("click", (e) => { e.stopPropagation(); openGrid(); });
     root.append(vgB); root._vgB = vgB;
+    root.addEventListener("dragstart", (e) => { if (e.target && e.target.tagName === "IMG" && e.target.closest(".sw, .vgt")) e.preventDefault(); }); // (grabbing a picture drags the row or tile, not the image)
     root.append(curtain, top, bar, buildPlayBar(), panel, start, msg, guide, scrim, explore, pop, setFrame, toastEl);
     shadow.append(style, root);
     document.documentElement.appendChild(host);
@@ -1850,6 +1853,13 @@
     const placeVg = (mp) => {
       const b = ui.root._vgB; if (!b) return;
       let y = 3;
+      const own = ui.root.classList.contains("pbthin") && !ui.root.classList.contains("on-twitch") && ui.root.querySelector(".pbl");
+      if (own) { // (YTV's line: the ∨ sits halfway between the line and the bottom of the screen)
+        const r = own.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100;
+        if (r.height > 0) { const lineBottom = (r.top + 12 * z), gap = (window.innerHeight - lineBottom) / z; y = Math.max(2, Math.round(gap / 2 - b.offsetHeight / 2)); }
+        if (y !== vgLast) { vgLast = y; b.style.bottom = y + "px"; }
+        return;
+      }
       const pb = mp && !ui.root.classList.contains("on-twitch") && mp.querySelector(".ytp-progress-bar-container");
       if (pb) { const r = pb.getBoundingClientRect(); if (r.height > 0) { const z = (cfg ? cfg.tv.uiScale : 100) / 100, gap = (window.innerHeight - r.bottom) / z; if (gap > 24 && gap < 200) y = Math.round(gap / 2 - b.offsetHeight / 2); } }
       if (y !== vgLast) { vgLast = y; b.style.bottom = y + "px"; }
@@ -4373,11 +4383,16 @@
     await writeCfg();
     return id;
   };
-  let guideToken = 0;
-  const renderGuide = (freshId = "") => {
+  let guideToken = 0, guideSig = "";
+  const GSEEN_KEY = "ytv:gseen";
+  const renderGuide = (freshId = "", still = false) => {
     const my = ++guideToken;
-    const list = el("div", "cards" + (freshId ? " still" : ""));
     const all = chans();
+    const x = lsGet(GSEEN_KEY, null), seen = Array.isArray(x) ? new Set(x) : null; // (the first time: nothing counts as new)
+    const fresh = new Set(all.filter((c) => (seen && !seen.has(c.id)) || c.id === freshId).map((c) => c.id));
+    lsSet(GSEEN_KEY, all.map((c) => c.id));
+    guideSig = all.map((c) => c.id + ":" + c.name).join("|");
+    const list = el("div", "cards" + (freshId || still ? " still" : ""));
     let dragId = null;
     const clearDrop = () => { for (const n of list.querySelectorAll(".drop-before,.drop-after")) n.classList.remove("drop-before", "drop-after"); };
     const startRename = (nm, card, c) => {
@@ -4404,7 +4419,7 @@
       const card = el("div", "card" + (c.id === state.colId ? " on" : ""));
       card.style.animationDelay = `${Math.min(i, 16) * 22}ms`;
       card.tabIndex = 0; card.setAttribute("role", "button"); card.dataset.id = c.id;
-      if (freshId && c.id === freshId) card.classList.add("fresh");
+      if (fresh.has(c.id)) { card.classList.add("fresh"); if (!freshId && !still) card.style.animationDelay = `${Math.min(i, 16) * 22 + 160}ms`; } // (new here: it pops in, after the others)
       const head = el("div", "chd"), nm = el("span", "nm", c.name);
       head.append(el("span", "n", String(c.num)), nm, ...(c.id === state.colId ? [el("span", "live", "● On now")] : []),
         iconBtn("pencil", `Rename ${c.name}`, () => startRename(nm, card, c), "ren"),
@@ -5805,7 +5820,7 @@
       let t = grid.tiles.get(v.id);
       const made = !t || t._v !== v || t._sw.classList.contains("gone");
       if (made) { t = gridTile(v, L.kind, L.c); t._v = v; grid.tiles.set(v.id, t); }
-      if (made && motionOn() && !state.quiet) { t.classList.add("venter"); t.style.animationDelay = `${Math.min(fresh++, 14) * 22}ms`; t.addEventListener("animationend", () => { t.classList.remove("venter"); t.style.animationDelay = ""; }, { once: true }); }
+      if (made && motionOn() && !state.quiet) { t.classList.add("venter"); t.style.animationDelay = `${Math.min(fresh++, 12) * 13}ms`; t.addEventListener("animationend", () => { t.classList.remove("venter"); t.style.animationDelay = ""; }, { once: true }); }
       else if (all && !t._leaving) t.animate([{ opacity: 0, transform: "translateY(12px) scale(.985)" }, { opacity: 1, transform: "none" }], { duration: 340, delay: Math.min(fresh++, 14) * 22, easing: "cubic-bezier(.4,0,.2,1)", fill: "backwards" }); // (the same come-in as a new one)
       const i = qi && qi.has(v) ? qi.get(v) : -1, now = !!(cur && cur.id === v.id && (L.kind === "live" || L.kind === "hist"));
       t.classList.toggle("vnow", now);
@@ -7510,6 +7525,7 @@
         if (state.panel && state.panel.startsWith("src:") && !chanById(state.panel.slice(4))) state.panel = playingTab();
         state.quiet = true; // a settings change redraws the rows in place, without them sliding in again
         if (isListTab(state.panel)) renderPanel(true); else renderTabs(); // rows follow your swipe settings right away
+        if (ui.root.classList.contains("show-guide") && chans().map((c) => c.id + ":" + c.name).join("|") !== guideSig) renderGuide("", true); // (a channel made or renamed elsewhere: shown here, the new one popping in)
         state.quiet = false;
       }
     }

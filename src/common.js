@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.48.0";
+  SW.VERSION = "1.49.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -211,7 +211,7 @@
       })(),
       uiScale: clampInt(tv.uiScale, 25, 400, 110), // percent
       swipeNav: tv.swipeNav !== false, // two fingers sideways on the video: next / previous
-      barStyle: ["pill", "line"].includes(tv.barStyle) ? tv.barStyle : "corners", // YTV's play bar: buttons in the corners, or one pill in the middle
+      barStyle: tv.prefsV >= 10 && ["pill", "line", "corners"].includes(tv.barStyle) ? tv.barStyle : "line", // (line only is the default, once for older settings too) // YTV's play bar: buttons in the corners, or one pill in the middle
       ownBar: tv.ownBar !== false, // YTV's own play bar instead of YouTube's (off: YouTube's bar is back)
       autoSkip: tv.autoSkip !== false, // click YouTube's own Skip button on an ad as soon as it shows
       videoQuality: ["premium", "hd1080", "hd720", "auto"].includes(tv.videoQuality) ? tv.videoQuality : "premium", // premium: 1080p Premium (higher bitrate) where it plays, else 1080p
@@ -290,7 +290,7 @@
           tabHeight: clampInt(l.tabHeight, 12, 400, 50), tabPad: 12, tabWidth: 150, tabScale: clampInt(l.tabScale, 25, 400, 120),
         };
       })(),
-      prefsV: 9,
+      prefsV: 10,
       motion: typeof tv.motion === "boolean" ? tv.motion : true,
       motionSystem: tv.motionSystem === true, // also switch animations off when the computer asks for reduced motion
       subs: (() => { const sb = isObj(tv.subs) ? tv.subs : {}; return { enabled: typeof sb.enabled === "boolean" ? sb.enabled : true, skipSeen: sb.skipSeen === true }; })(),
