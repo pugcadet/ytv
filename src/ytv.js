@@ -6502,17 +6502,29 @@
     if (!overVideo(path)) return false;
     if (path.some((n) => n.classList && (n.classList.contains("ypb") || n.classList.contains("top") || n.classList.contains("bar")))) return false; // (not over YTV's own controls)
     const now = performance.now(), dx = e.deltaX * (e.deltaMode === 1 ? 16 : 1), ax = Math.abs(dx);
-    if (now - side.last > 220) { side.acc = 0; side.fired = false; side.low = 0; } // a new swipe (the glide after one doesn't count again)
-    else if (side.fired) { // still coasting from the last one: it only dies down. A push that grows again (or the other way) is a new swipe
-      if (!side.low || ax < side.low) side.low = ax;
-      if (Math.sign(dx) !== side.dir || (side.low && ax > Math.max(6, side.low * 2.5))) { side.acc = 0; side.fired = false; side.low = 0; }
+    if (ax < 0.5) return true; // (a sideways step of nothing: changes nothing, never ends a swipe)
+    // a pause: a new swipe. But not when it's the same glide carrying on after a hiccup (the page busy switching
+    // videos can hold its steps back for a moment): those steps are as small as, or smaller than, the last ones
+    const glideOn = side.fired && now - side.firedAt < 2500 && ax <= Math.max(3, (side.lastAx || 0) * 1.3) && Math.sign(dx) === side.fireDir;
+    if (now - side.last > 220 && !glideOn) { side.acc = 0; side.fired = false; side.low = 0; }
+    else if (side.fired) {
+      // still the glide after the one that switched: it's ignored, however long it lasts. Only a clear new push counts
+      // again: well after the switch, and the push growing to at least three times where the glide had fallen (or a
+      // real push the other way). The wobble at the end of a glide never does that.
+      const since = now - side.firedAt, same = Math.sign(dx) === side.fireDir;
+      if (same) { // (only the glide's own steps count: a wobble the other way, or a zero, says nothing about it)
+        if (!side.low || ax < side.low) side.low = ax;
+        side.grow = ax > (side.prevAx || 0) + 1 ? (side.grow || 0) + 1 : 0; side.prevAx = ax;
+      }
+      // a new push: growing three steps in a row, well above where the glide had got to
+      if ((same && since > 320 && ax >= 10 && ax > side.low * 3 && side.grow >= 3) || (!same && since > 260 && ax >= 14)) { side.acc = 0; side.fired = false; side.low = 0; side.grow = 0; }
     }
-    side.last = now; side.dir = Math.sign(dx);
+    side.last = now; side.lastAx = ax;
     if (!side.fired) {
       side.acc += dx;
       const next = side.acc > 0, p = Math.min(1, Math.abs(side.acc) / SIDE_PX);
       sideHint(next, p);
-      if (p >= 1) { side.fired = true; sideHint(next, 1, true); poke(); if (next) nextVideo(); else prevVideo(); }
+      if (p >= 1) { side.fired = true; side.firedAt = now; side.fireDir = Math.sign(side.acc); side.low = 0; side.grow = 0; side.prevAx = ax; sideHint(next, 1, true); poke(); if (next) nextVideo(); else prevVideo(); }
       else { clearTimeout(side.t); side.t = setTimeout(() => { if (!side.fired) sideHint(next, 0); }, 240); } // (let go before it switched: it slides back out)
     }
     return true;
