@@ -442,6 +442,10 @@
 
   /** Description fallback when the player doesn't provide it. */
   /** The channel's subscriber count and the video's views, from its watch page (as YouTube writes them). */
+  // (what a video's owner line says, kept once known, so it's there at once the next time)
+  const ownerKnown = new Map();
+  const ownerNow = (id) => ownerKnown.get(id) || null;
+  const ownerInfo = async (id) => { const o = await ownerOf(id); if (o) { ownerKnown.set(id, o); if (ownerKnown.size > 80) ownerKnown.delete(ownerKnown.keys().next().value); } return o; };
   const ownerOf = async (id) => {
     try {
       const { data } = await watchData(id);
@@ -528,6 +532,8 @@
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-title{font-size:calc(16.5px * var(--ytv-fsgs,1))!important;line-height:1.2!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-author,html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-view-count-and-date-info{font-size:calc(14.3px * var(--ytv-fsgs,1))!important;line-height:1.3!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-duration{font-size:calc(13.2px * max(var(--ytv-fsgs,1),.8))!important}
+    /* YouTube's own play / pause mark in the middle: gone (YTV shows its own, softer) */
+    html.ytv #movie_player .ytp-bezel, html.ytv #movie_player .ytp-bezel-text-wrapper, html.ytv #movie_player > div:has(> .ytp-bezel) { display: none !important; }
     /* skipping ahead or back: YouTube's pill shows just its arrow, not the "+10 seconds" */
     html.ytv #movie_player .ytp-seek-overlay *:not(svg):not(svg *):not(:has(svg)), html.ytv #movie_player .ytp-doubletap-tooltip-label { font-size: 0 !important; line-height: 0 !important; }
     /* YTV's own play bar (Settings → Playing): YouTube's bar is there but not shown (during an ad it's back) */
@@ -598,6 +604,7 @@
     .pbl:hover .pbt,.ypb.drag .pbt{transform:scaleY(1.5)}
     .pbt i{position:absolute;inset:0;transform-origin:left center;transform:scaleX(0);will-change:transform}
     .pbb{background:rgba(255,255,255,.34)} .pbf{background:var(--acc)}
+    .ypb.glide .pbf,.ypb.glide .pbh{transition:transform .28s cubic-bezier(.2,.8,.2,1)}
     .ypb.drag .pbf,.ypb.jump .pbf,.ypb.drag .pbh,.ypb.jump .pbh{transition:none}
     .pbc{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:rgba(0,0,0,.75)}
     .pbh{position:absolute;left:-6px;top:5px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px color-mix(in srgb,var(--acc) 35%,transparent),0 1px 3px rgba(0,0,0,.5);transform:translateX(0);opacity:0;will-change:transform;pointer-events:none}
@@ -627,9 +634,28 @@
     .desc .dts:hover,.desc .dts:focus-visible{color:#c4dcff}
     .vgi{opacity:0;transition:opacity .22s ease} .vgi.in{opacity:1}
     /* dragging a tile to another place in the ∨ menu */
-    .vgghost{position:absolute;z-index:20;margin:0;pointer-events:none;opacity:.96;border-radius:10px;overflow:hidden;aspect-ratio:auto;box-shadow:0 14px 34px rgba(0,0,0,.6);will-change:transform}
+    .vgghost{position:absolute;z-index:20;margin:0;pointer-events:none;opacity:.96;border-radius:10px;background:#111 center/cover no-repeat;box-shadow:0 14px 34px rgba(0,0,0,.6);will-change:transform}
     .vgt.vslot{opacity:.22}
     .vgt.vdrop-b{box-shadow:-6px 0 0 -2px var(--acc)} .vgt.vdrop-a{box-shadow:6px 0 0 -2px var(--acc)}
+    /* chapters: a strip of pictures that rises above the line */
+    .chz{position:absolute;left:0;right:0;bottom:96px;height:26px;pointer-events:auto;display:none}
+    .haschap .chz{display:block} .pbthin .chz{bottom:64px} .pbpill .chz{bottom:86px}
+    .chs{position:absolute;left:0;right:0;bottom:118px;display:flex;gap:10px;padding:4px 2px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;opacity:0;transform:translateY(14px);pointer-events:none;transition:opacity .22s ease,transform .26s cubic-bezier(.2,.8,.2,1);-webkit-mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
+    .chs::-webkit-scrollbar{display:none}
+    .pbthin .chs{bottom:86px} .pbpill .chs{bottom:108px}
+    .ypb.chon .chs{opacity:1;transform:none;pointer-events:auto} .fade .ypb .chs{pointer-events:none}
+    .ypb.chon .chz{height:44px}
+    .chc{flex:none;display:flex;flex-direction:column;gap:6px;width:188px;min-height:0;padding:6px;border:1px solid transparent;border-radius:12px;background:color-mix(in srgb,var(--pnl) 92%,transparent);color:#fff;font:inherit;text-align:left;cursor:pointer;transition:background .15s,border-color .15s,transform .15s}
+    .chc:hover{background:color-mix(in srgb,var(--pnl) 70%,#5a6478);transform:translateY(-2px)}
+    .chc.on{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 30%,var(--pnl))}
+    .chi{position:relative;display:block;width:176px;height:99px;border-radius:8px;background:#111 no-repeat;overflow:hidden}
+    .cht{position:absolute;right:6px;bottom:6px;padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.78);font-size:11.5px;font-weight:600;font-variant-numeric:tabular-nums}
+    .chn{padding:0 2px 2px;font-size:13px;font-weight:500;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .chc.on .chn{font-weight:700}
+    .ypb.chon .pbtip{opacity:0!important}
+    /* play / pause: a soft mark in the middle */
+    .ppi{position:absolute;left:50%;top:50%;z-index:3;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:rgba(0,0,0,.42);backdrop-filter:blur(6px);color:#fff;opacity:0;transform:translate(-50%,-50%) scale(.82);pointer-events:none;will-change:transform,opacity}
+    .show-panel .ppi{left:calc((100% - var(--pw)) / 2)}
+    .ppi svg{width:30px;height:30px;fill:currentColor;stroke:none}
     /* the play bar as one floating pill in the middle (Settings → Playing → Play bar style) */
     .pbpill .pbg.r{display:none}
     .pbpill .pbg.l{left:50%;transform:translateX(-50%);bottom:26px}
@@ -691,6 +717,8 @@
     .top > *{pointer-events:auto}
     .now{flex:1;min-width:0;cursor:pointer;border-radius:10px;transition:opacity .15s,transform .15s}
     .now:hover{opacity:.9} .now:active{transform:scale(.99)}
+    .now,.now:focus,.now:focus-visible,.explore,.explore:focus,.explore input,.explore input:focus,.explore input:focus-visible,.explore textarea:focus-visible{outline:none!important}
+    .explore .sfield input:focus{border-color:color-mix(in srgb,var(--acc) 55%,var(--pnl))}
     .now .t{font-size:var(--tfs,17px);font-weight:700;color:#fff;overflow-wrap:anywhere;text-wrap:pretty;text-shadow:0 1px 3px rgba(0,0,0,.55)}
     .now .age{font-weight:400;color:rgba(255,255,255,.72)}
     .now .c{display:flex;align-items:center;gap:8px;margin-top:2px;font-size:var(--tfs2,13px);color:rgba(255,255,255,.8);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:0 1px 2px rgba(0,0,0,.5)}
@@ -736,8 +764,8 @@
     /* the ∨ grid: the open list's videos as a big grid over the video (V, scroll down on the video, or the ∨) */
     .vgrid{position:absolute;inset:0;z-index:6;pointer-events:auto;overflow-y:auto;will-change:transform;overscroll-behavior:contain;padding:0 max(28px,4vw) 48px;background:none;scrollbar-width:thin}
     /* its bar: always at the very top (also on a short list, so switching tabs never moves it), with a soft blurred fade */
-    .vgbar{position:sticky;top:0;z-index:3;margin:0 calc(-1 * max(28px,4vw)) 4px;padding:42px max(28px,4vw) 44px;background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.55) 45%,rgba(0,0,0,0))} /* (the same soft fade as at the bottom, no blur) */
-    .vgact{position:absolute;right:max(28px,4vw);top:40px;display:flex;gap:8px}
+    .vgbar{position:sticky;top:0;z-index:3;margin:0 calc(-1 * max(28px,4vw)) 4px;padding:28px max(28px,4vw) 44px;background:linear-gradient(180deg,rgba(0,0,0,.85),rgba(0,0,0,.55) 45%,rgba(0,0,0,0))} /* (the same soft fade as at the bottom, no blur) */
+    .vgact{position:absolute;right:max(28px,4vw);top:24px;display:flex;gap:8px}
     .vgref.spin svg{animation:lspin2 .8s linear infinite}
     @keyframes lspin2{to{transform:rotate(360deg)}}
     .vgref[hidden]{display:none}
@@ -747,8 +775,8 @@
     .vgrid.gmoving{pointer-events:none} .vgrid.gmoving .vgt .vgp{transition:none}
     .vgfoot{position:absolute;left:0;right:0;bottom:0;height:min(110px,14vh);z-index:6;pointer-events:none;opacity:0;background:linear-gradient(180deg,rgba(0,0,0,0),rgba(0,0,0,.55) 55%,rgba(0,0,0,.85))}
     .tv:not(.vgon) .vgfoot,.tv:not(.vgon) .vgup{display:none}
-    .totop.vgup{position:absolute;right:max(28px,4vw);bottom:28px;z-index:7;width:44px;height:44px;background:rgba(30,32,40,.85);backdrop-filter:blur(8px)}
-    .totop.vgup svg{width:20px;height:20px}
+    .totop.vgup{bottom:22px;z-index:7;width:60px;height:28px;margin-left:-30px;background:rgba(30,32,40,.85);backdrop-filter:blur(8px)}
+    .totop.vgup svg{width:19px;height:19px}
     .vgbg.gmove{backdrop-filter:none;background:linear-gradient(180deg,rgba(0,0,0,.8),rgba(0,0,0,.94) 30%,rgba(0,0,0,.97))}
     /* its tabs: the list's own tabs, as chips */
     .vgtabs{display:flex;justify-content:safe center;align-items:center;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 110px} /* (room for refresh and ∧ on the right) */
@@ -783,10 +811,6 @@
     .lpull.busy .ring{animation:lspin .8s linear infinite}
     .lpull.busy .ring .fg{stroke-dashoffset:30;stroke:#fff}
     @keyframes lspin{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
-    .vgclose{position:absolute;left:50%;top:8px;z-index:2;width:48px;height:24px;min-height:0;margin-left:-24px;padding:0;border:0;border-radius:999px;display:grid;place-items:center;background:rgba(255,255,255,.14);color:#fff;cursor:pointer;transition:background .15s,transform .15s}
-    .vgclose::before{content:"";position:absolute;inset:-10px -8px} /* (a comfortable place to click, bigger than it looks) */
-    .vgclose:hover{background:rgba(255,255,255,.26);transform:translateY(-1px)}
-    .vgclose svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transform:rotate(180deg)}
     .vgrid .vgx{margin-left:auto;width:40px;height:40px;min-height:0;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);color:#fff}
     .vgrid .vgx:hover{background:rgba(255,255,255,.2)}
     .vgrid .vgx svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
@@ -817,6 +841,8 @@
     @keyframes vgok{0%{opacity:0;transform:translate(-50%,-40%)}15%,70%{opacity:1;transform:translate(-50%,-50%)}100%{opacity:0}}
     .vgt img{width:100%;height:100%;object-fit:cover;display:block}
     .vgt:hover .vgp,.vgt:focus-visible .vgp{transform:scale(1.03);box-shadow:0 0 0 3px #fff,0 14px 34px rgba(0,0,0,.6)}
+    .dragging .vgt .vgp{transform:none!important;box-shadow:none!important}
+    .vgt{outline:none}
     .vgt.vnow .vgp{box-shadow:0 0 0 3px var(--acc)}
     .vgt .vgd{position:absolute;right:8px;bottom:8px;padding:1px 6px;border-radius:5px;background:rgba(0,0,0,.82);color:#fff;font-size:12px;font-weight:700}
     .vgt .vgn{position:absolute;left:8px;top:8px;padding:2px 8px;border-radius:999px;background:var(--acc);color:#fff;font-size:11px;font-weight:800;letter-spacing:.04em}
@@ -1023,10 +1049,11 @@
     .edgefade .pbody.fb{-webkit-mask-image:linear-gradient(0deg,transparent 0,#000 28px);mask-image:linear-gradient(0deg,transparent 0,#000 28px)}
     .edgefade .pbody.ft.fb{-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 22px,#000 calc(100% - 28px),transparent 100%);mask-image:linear-gradient(180deg,transparent 0,#000 22px,#000 calc(100% - 28px),transparent 100%)}
     /* back to the top, once you're far down */
-    .totop{position:absolute;right:12px;bottom:12px;z-index:3;width:34px;height:34px;min-height:0;padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:color-mix(in srgb,var(--pnl) 70%,#000);box-shadow:0 6px 16px rgba(0,0,0,.45);color:#fff;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .25s ease,transform .25s cubic-bezier(.4,0,.2,1),background .15s ease}
+    .totop{position:absolute;left:50%;bottom:12px;z-index:3;width:52px;height:24px;min-height:0;margin-left:-26px;padding:0;border:0;border-radius:999px;display:grid;place-items:center;background:rgba(0,0,0,.6);box-shadow:0 6px 16px rgba(0,0,0,.45);color:#fff;opacity:0;transform:translateY(8px);pointer-events:none;transition:opacity .25s ease,transform .25s cubic-bezier(.4,0,.2,1),background .15s ease}
     .totop.on{opacity:1;transform:none;pointer-events:auto}
+    .totop::before{content:"";position:absolute;inset:-10px -10px} /* (comfortable to click: bigger than it looks) */
     .totop:hover{background:var(--acc)}
-    .totop svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:rotate(180deg)}
+    .totop svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transform:rotate(180deg)}
 
     .ptitle{margin:4px 8px 8px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#aab3c4}
     .hintline{margin:6px 8px 8px;font-size:12px;color:#aab3c4}
@@ -1049,7 +1076,7 @@
     .sw.gone{pointer-events:none;overflow:hidden}
     /* the playing row stays at the top while you scroll down past it (never at the bottom) */
     /* what's playing, as a slim bar over the top of the list once its row scrolls away (scroll-linked, no layout changes) */
-    .nowbar{position:absolute;left:6px;right:6px;top:0;z-index:3;display:flex;align-items:center;gap:9px;min-height:0;height:calc(var(--rowh) * .56);padding:3px 10px 3px 5px;border:1px solid var(--acc);border-top:0;border-radius:0 0 var(--rrad,7px) var(--rrad,7px);box-sizing:border-box;background:color-mix(in srgb,var(--acc) 34%,var(--pnl));box-shadow:0 8px 18px -6px rgba(0,0,0,.6);text-align:left;opacity:0;transform:translateY(-105%);pointer-events:none;will-change:transform,opacity}
+    .nowbar{position:absolute;left:6px;right:6px;top:4px;z-index:3;display:flex;align-items:center;gap:9px;min-height:0;height:calc(var(--rowh) * .56);padding:3px 10px 3px 5px;border:1px solid var(--acc);border-radius:var(--rrad,7px);box-sizing:border-box;background:color-mix(in srgb,var(--acc) 34%,var(--pnl));box-shadow:0 8px 18px -6px rgba(0,0,0,.6);text-align:left;opacity:0;transform:translateY(-105%);pointer-events:none;will-change:transform,opacity}
     .nowbar.on{pointer-events:auto}
     .nowbar.ease{transition:opacity .28s ease,transform .3s cubic-bezier(.4,0,.2,1)}
     .nowbar:hover{background:color-mix(in srgb,var(--acc) 44%,var(--pnl))}
@@ -1144,9 +1171,9 @@
     .xtx{display:flex;flex-direction:column;min-width:0;line-height:1.2} .xtx b{font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .xtx span{font-size:11px;color:#9aa3b5}
     .chtop{display:flex;align-items:center;gap:12px;white-space:normal} .chtop h3{margin:0 0 2px}
     .desc .dtx.clamp{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,#000 60%,transparent);mask-image:linear-gradient(180deg,#000 60%,transparent)}
-    .desc .dmore{display:grid;place-items:center;width:100%;height:30px;min-height:0;margin:8px 0 0;padding:0;border:0;border-radius:10px;background:rgba(255,255,255,.07);color:#fff;cursor:pointer;transition:background .15s}
+    .desc .dmore{display:grid;place-items:center;width:100%;height:18px;min-height:0;margin:8px 0 0;padding:0;border:0;border-radius:10px;background:rgba(255,255,255,.07);color:#fff;cursor:pointer;transition:background .15s}
     .desc .dmore:hover{background:rgba(255,255,255,.14)}
-    .desc .dmore svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
+    .desc .dmore svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;transition:transform .25s cubic-bezier(.2,.8,.2,1)}
     .desc .dmore.open svg{transform:rotate(180deg)}
     .desc .dmore[hidden]{display:none}
     .desc .ipl{display:inline-flex;align-items:center;gap:7px;margin:8px 0 6px;padding:7px 14px 7px 10px;border:0;border-radius:999px;background:var(--acc);color:#fff;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap}
@@ -1154,7 +1181,7 @@
     .desc .ipl .mic svg{width:16px;height:16px;display:block}
     .desc .by{color:#aab3c4;margin-bottom:12px;white-space:normal}
     .desc .subs{margin:-8px 0 12px;min-height:1.4em;color:#aab3c4;font-size:12.5px;white-space:normal;opacity:0;transition:opacity .25s ease}
-    .desc .subs.in{opacity:1}
+    .desc .subs.in{opacity:1} .desc .subs.now{transition:none}
     .desc .subs[hidden]{display:none}
     /* the creator's videos under Info */
     .cvbox{margin:14px 0 8px;padding-top:12px;border-top:1px solid color-mix(in srgb,var(--pnl) 60%,#8a96ad)}
@@ -1707,7 +1734,7 @@
     // three buttons stay; everything else is in the ⋯ menu (addB, wlRemove, wlClear only keep their state for it)
     const moreB = iconBtn("more", "More: back, forward, search, settings…", (e) => openMoreMenu(e.currentTarget), "ab moreb");
     acts.append(comB, moreB); // (Back and Forward are in the ⋯ menu) // (the channel overview is G) // (Info: the title card itself)
-    now.title = "Info (I)"; now.setAttribute("role", "button"); now.tabIndex = -1;
+    now.title = "Info (I)";
     now.addEventListener("click", (e) => { if (e.target.closest("a, button")) return; e.stopPropagation(); togglePanel("info"); });
     top.append(now, stay, acts);
     // controls (above YouTube's own player bar)
@@ -2237,7 +2264,8 @@
     state.queue.splice(pos, 1);
     let t = pos; while (state.queue[t] && state.queue[t].nx) t++;
     if (t === pos) t = pos + 1;
-    state.queue.splice(Math.min(t, state.queue.length), 0, { ...it, nx: 1 });
+    const again = { ...it, nx: 1 }; delete again.w; delete again.bk;
+    state.queue.splice(Math.min(t, state.queue.length), 0, again);
     fixHistory(hist); played.delete(it.id); removed.delete(it.id);
     state.lastEvt = ""; state.t = 0;
     goTo(pos, { pushHistory: false });
@@ -2900,30 +2928,22 @@
     const done = () => { if (--left > 0) return; flipList(() => { lsSet(key, false); draw(); }); };
     for (const r of rows) r.animate([{ opacity: 1, transform: "none" }, { opacity: 0, transform: "translateY(-6px)" }], { duration: 140, easing: "ease-in", fill: "forwards" }).onfinish = () => { done(); r.getAnimations().forEach((a) => a.cancel()); };
   };
-  // Watched: closed, and a pull down at the very top of the list (through a little resistance) opens it. It closes again
-  // when the list closes.
-  const wpull = { acc: 0, t: 0, done: false, st: 0 };
-  const wpullBack = () => {
-    const list = ui && ui.pbody.querySelector(":scope > .lbox > .list"); wpull.acc = 0;
-    if (!list || !list.style.transform) return;
-    const from = list.style.transform; list.style.transform = "";
-    if (motionOn()) list.animate([{ transform: from }, { transform: "none" }], { duration: 260, easing: "cubic-bezier(.2,.8,.2,1)" });
-    const bar = list.querySelector(":scope > .wbar"); if (bar) bar.style.removeProperty("--pp");
-  };
-  const watchedPull = (e) => {
-    if (!ui || !cfg || !cfg.tv.watchedFold || e.deltaY >= 0 || ui.pbody.scrollTop > 0 || ui.root.classList.contains("wopen") || dragging) return;
+  // Watched: closed, and opened by pulling down at the very top of the list: the same pull as "more" at the end (it
+  // resists, shows how far you are, and slides back if you let go early). See watchedEng further down.
+  const watchedCan = () => {
+    if (!ui || !cfg || !cfg.tv.watchedFold || !isListTab(state.panel) || ui.root.classList.contains("wopen") || dragging) return null;
     const list = ui.pbody.querySelector(":scope > .lbox > .list"), bar = list && list.querySelector(":scope > .wbar");
-    if (!bar || !list.querySelector(":scope > .sw.wfold")) return; // (nothing watched here: nothing to pull open)
-    e.preventDefault();
-    const now = performance.now(); if (now - wpull.t > 260) { wpull.acc = 0; wpull.done = false; } wpull.t = now;
-    if (wpull.done) return;
-    wpull.acc += -e.deltaY * (e.deltaMode === 1 ? 16 : 1);
-    const NEED = 200, p = Math.min(1, wpull.acc / NEED);
-    list.style.transform = `translateY(${(64 * (1 - Math.exp(-wpull.acc / 140))).toFixed(1)}px)`; // (it gives, less and less)
-    bar.style.setProperty("--pp", p.toFixed(3));
-    clearTimeout(wpull.st);
-    if (p >= 1) { wpull.done = true; wpullBack(); flipList(() => { lsSet("ytv:wopen", true); drawWatched(); }, 340); return; }
-    wpull.st = setTimeout(wpullBack, 180); // (let go before it opened: it slides back)
+    return bar && list.querySelector(":scope > .sw.wfold") ? { list, bar } : null;
+  };
+  const watchedShut = () => { // scrolled down past it: it folds away again, with nothing on screen moving
+    if (!ui || !ui.root.classList.contains("wopen") || wPeek || dragging || !lsGet("ytv:wopen", false)) return;
+    const bar = ui.pbody.querySelector(":scope > .lbox > .list > .wbar"); if (!bar) return;
+    if (ui.pbody.scrollTop < bar.offsetTop + bar.offsetHeight) return;
+    ui.pbody.style.overflowAnchor = "none";
+    const t0 = bar.getBoundingClientRect().top;
+    lsSet("ytv:wopen", false); drawWatched();
+    ui.pbody.scrollTop += bar.getBoundingClientRect().top - t0;
+    ui.pbody.style.overflowAnchor = "";
   };
   // A folded row is out of the layout, and the browser forgets how far it was scrolled sideways: shown again, it would
   // rest on its swipe action (the bin or the plus) instead of the video. Put those back on the video.
@@ -3301,6 +3321,7 @@
     const b = ui.pbody, st = b.scrollTop, more = b.scrollHeight - b.clientHeight - st;
     b.classList.toggle("ft", st > 2); b.classList.toggle("fb", more > 2); // the soft fades at the edges
     ui.totop.classList.toggle("on", st > b.clientHeight * 1.5); // far down: a way back up
+    watchedShut();
     const bar = ui.nowbar, cur = ui.pbody.querySelector(".sw.curw:not(.gone):not(.still)"); // (Twitch is a plain list: no copy of what's on at the top)
     let p = 0;
     if (cur) {
@@ -3315,7 +3336,7 @@
     if (bar._p !== p) { // only when it changed
       bar._p = p;
       bar.style.opacity = String(p);
-      bar.style.transform = `translateY(${(p - 1) * 105}%)`;
+      bar.style.transform = `translateY(${(p - 1) * 115}%)`;
       bar.classList.toggle("on", p > 0.5);
     }
   };
@@ -3332,7 +3353,6 @@
     });
     ui.pbody.addEventListener("scroll", (e) => { if (e.target === ui.pbody) { markStuck(); if (!pullK("list")) autoMore(); cvScroll(); } else onRowScroll(e); }, true); // (more: by pulling past the end; with that off, as you near the end)
     ui.pbody.addEventListener("scrollend", onRowScrollEnd, true);
-    ui.pbody.addEventListener("wheel", watchedPull, { passive: false });
     let lastMove = 0;
     ui.pbody.addEventListener("pointerdown", (e) => { if (e.pointerType === "touch") { const w = e.target.closest && e.target.closest(".sw"); if (w) w._user = performance.now() + 60000; } });
     ui.pbody.addEventListener("pointerup", (e) => { if (e.pointerType === "touch") { const w = e.target.closest && e.target.closest(".sw"); if (w) w._user = performance.now(); } });
@@ -3926,7 +3946,9 @@
       const go = btn("", "Play this video", () => { const x = state.infoV, open = state.infoOpen; state.infoV = null; state.infoOpen = null; if (open) open(); else playHere(x); }, "ipl");
       const ic = el("span", "mic"); ic.append(icon("play")); go.append(ic, el("span", null, "Play now")); box.append(go);
     }
-    ownerOf(v.id).then((o) => { if (o && o.handle && !v.creator) { state.ownerHandle[v.id] = o.handle; const ks = Object.keys(state.ownerHandle); if (ks.length > 200) delete state.ownerHandle[ks[0]]; } if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.classList.add("in"); } });
+    const o0 = ownerNow(v.id);
+    if (o0) { const parts0 = [["subs", o0.subs], ["eye", o0.views]].filter(([, t]) => t); if (parts0.length) { subsLine.replaceChildren(...iconLine("subs", parts0).childNodes); subsLine.classList.add("in", "now"); } }
+    ownerInfo(v.id).then((o) => { if (o && o.handle && !v.creator) { state.ownerHandle[v.id] = o.handle; const ks = Object.keys(state.ownerHandle); if (ks.length > 200) delete state.ownerHandle[ks[0]]; } if (ui && state.panel === "info") drawCreatorVideos(v); if (!ui || !o || !subsLine.isConnected) return; const parts = [["subs", o.subs], ["eye", o.views]].filter(([, t]) => t); if (parts.length) { subsLine.replaceChildren(...iconLine("subs", parts).childNodes); subsLine.classList.add("in"); } });
     // a long description starts folded to a few lines, so the creator's videos below are in view
     const body = el("div", "dtx clamp"); descInto(body, state.desc[v.id] || "Loading description…", v.id);
     // (it opens and folds smoothly: its height glides)
@@ -5002,6 +5024,7 @@
   };
   const pbMeta = (id, desc, sbSpec) => { // a video started: its chapters and preview pictures
     pb.forId = id; pb.chapters = parseChapters(desc); pb.sb = parseSb(sbSpec); pb.dur = 0;
+    if (pb.el) { pb.el.classList.toggle("haschap", pb.chapters.length > 0); chs.sticky = false; showChapters(false); }
     if (pb.el) pb.el.querySelectorAll(".pbc").forEach((n) => n.remove());
   };
   const pbMarks = (dur) => {
@@ -5017,8 +5040,12 @@
     if (!v || ui.root.classList.contains("on-twitch")) return;
     const dur = Number.isFinite(v.duration) ? v.duration : 0, t = pb.drag ? pb.hoverT : v.currentTime || 0;
     if (dur > 0) pbMarks(dur);
-    if (jump) { pb.el.classList.add("jump"); requestAnimationFrame(() => requestAnimationFrame(() => pb.el && pb.el.classList.remove("jump"))); }
     const f = dur > 0 ? Math.min(1, Math.max(0, t / dur)) : 0;
+    // (a jump in the same video: the line and head ease over to the new place instead of snapping there)
+    if (!pb.drag && pb.lastF !== undefined && pb.lastDur === dur && Math.abs(f - pb.lastF) * dur > 1.5) { pb.el.classList.add("glide"); clearTimeout(pb.glideT); pb.glideT = setTimeout(() => pb.el && pb.el.classList.remove("glide"), 300); }
+    else if (pb.lastDur !== dur) pb.el.classList.remove("glide");
+    pb.lastF = f; pb.lastDur = dur; void jump;
+    chapterTick(t);
     pb.fill.style.transform = `scaleX(${f})`;
     pb.handle.style.transform = `translateX(${(f * pb.w).toFixed(1)}px)`;
     let bf = 0; try { for (let i = 0; i < v.buffered.length; i++) if (v.buffered.start(i) <= t + 1 && v.buffered.end(i) > bf) bf = v.buffered.end(i); } catch {}
@@ -5077,7 +5104,14 @@
       if (pill) L.replaceChildren(prevB, playB, nextB, time, vw, qB, fsB, gridB); else { L.replaceChildren(playB, nextB, vw, time); R.replaceChildren(qB, fsB); }
     };
     pb.place();
-    box.append(line, L, R);
+    // chapters: a strip of pictures above the line, and a thin zone just over the line that brings it up
+    const strip = el("div", "chs"), zone = el("div", "chz");
+    const stay = () => clearTimeout(chs.t), leave = () => { clearTimeout(chs.t); if (!chs.sticky) chs.t = setTimeout(() => showChapters(false), 320); };
+    zone.addEventListener("mouseenter", () => { stay(); if (!chs.on) showChapters(true); }); zone.addEventListener("mouseleave", leave);
+    strip.addEventListener("mouseenter", stay); strip.addEventListener("mouseleave", leave);
+    strip.addEventListener("wheel", (e) => { e.stopPropagation(); if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); strip.scrollLeft += e.deltaY; } }, { passive: false });
+    pb.strip = strip;
+    box.append(zone, strip, line, L, R);
     Object.assign(pb, { el: box, line, fill, buf, handle, tip, tipT, tipC, im, playB, muteB, volF, timeA, timeB, qB });
     try { new ResizeObserver(() => { pbMeasure(); pbSync(true); }).observe(line); } catch {}
     return box;
@@ -5093,6 +5127,52 @@
     ui.pop.replaceChildren(el("div", "ph", "Picture quality"), ...items);
     placePop(pb.qAnchor, true); wake();
   };
+  // ---- Chapters: a row of pictures that rises above the line (hover just above the line, or C). Click one to go there.
+  const chs = { sticky: false, on: false, key: "", cur: -1, t: 0 };
+  const chapterIndex = (t) => { let k = -1; for (let i = 0; i < pb.chapters.length; i++) { if (pb.chapters[i].t <= t + 0.25) k = i; else break; } return k; };
+  const drawChapters = () => {
+    if (!pb.strip) return;
+    const v = vidEl(), dur = v && Number.isFinite(v.duration) ? v.duration : 0, key = pb.forId + "|" + pb.chapters.length + "|" + (pb.sb ? 1 : 0) + "|" + Math.round(dur);
+    if (chs.key === key) return;
+    chs.key = key; chs.cur = -1;
+    pb.strip.replaceChildren(...pb.chapters.map((c, i) => {
+      const b = el("button", "chc"); b.type = "button"; b.title = `Go to ${fmtT(c.t)} · ${c.title}`;
+      const im = el("span", "chi");
+      if (pb.sb && dur > 0) { const fr = sbFrame(pb.sb, Math.min(dur - 1, c.t + 2), dur), k = 176 / pb.sb.w; im.style.backgroundImage = `url("${fr.url}")`; im.style.backgroundSize = `${pb.sb.cols * pb.sb.w * k}px ${pb.sb.rows * pb.sb.h * k}px`; im.style.backgroundPosition = `-${fr.x * k}px -${fr.y * k}px`; }
+      im.append(el("span", "cht", fmtT(c.t)));
+      b.append(im, el("span", "chn", c.title));
+      b.addEventListener("click", (e) => { e.stopPropagation(); cmd({ cmd: "seekto", start: c.t, done: true }); cmd({ cmd: "play" }); });
+      b.dataset.i = String(i);
+      return b;
+    }));
+  };
+  const chapterTick = (t) => {
+    if (!chs.on || !pb.strip) return;
+    const k = chapterIndex(t); if (k === chs.cur) return;
+    const first = chs.cur < 0; chs.cur = k;
+    for (const n of pb.strip.children) n.classList.toggle("on", Number(n.dataset.i) === k);
+    const n = pb.strip.children[k]; if (n) pb.strip.scrollTo({ left: Math.max(0, n.offsetLeft - (pb.strip.clientWidth - n.offsetWidth) / 2), behavior: first || !motionOn() ? "auto" : "smooth" });
+  };
+  const showChapters = (on) => {
+    if (!pb.el) return;
+    on = !!on && pb.chapters.length > 0;
+    clearTimeout(chs.t);
+    if (on) { drawChapters(); chs.on = true; pb.el.classList.add("chon"); const v = vidEl(); chs.cur = -1; chapterTick(v ? v.currentTime : 0); }
+    else { chs.on = false; pb.el.classList.remove("chon"); }
+  };
+  const toggleChapters = () => {
+    if (!ui || !ownBarOn()) return;
+    if (!pb.chapters.length) return toast("This video has no chapters");
+    chs.sticky = !chs.on || !chs.sticky; showChapters(chs.sticky); wake();
+  };
+  // ---- play / pause: a small soft mark in the middle (YouTube's own is hidden)
+  const ppMark = (paused) => {
+    if (!ui || !motionOn() || ui.root.classList.contains("on-twitch")) return;
+    if (!ui.ppi) { ui.ppi = el("div", "ppi"); ui.root.append(ui.ppi); }
+    ui.ppi.replaceChildren(icon(paused ? "pause" : "play"));
+    for (const a of ui.ppi.getAnimations()) a.cancel();
+    ui.ppi.animate([{ opacity: 0, transform: "translate(-50%,-50%) scale(.82)" }, { opacity: 1, transform: "translate(-50%,-50%) scale(1)", offset: 0.28 }, { opacity: 1, transform: "translate(-50%,-50%) scale(1)", offset: 0.55 }, { opacity: 0, transform: "translate(-50%,-50%) scale(1.12)" }], { duration: 560, easing: "cubic-bezier(.2,.8,.2,1)" });
+  };
   const syncOwnBar = () => {
     const on = ownBarOn() && !!ui;
     if (on) document.documentElement.setAttribute("data-ytv-bar", "1"); else document.documentElement.removeAttribute("data-ytv-bar");
@@ -5104,6 +5184,8 @@
     if (e.type === "timeupdate" && (ui.root.classList.contains("fade") || document.hidden)) return; // nothing to draw while the bar isn't shown
     pbSync(e.type === "seeked" || e.type === "loadedmetadata" || e.type === "emptied");
     pbRun();
+    // you paused or played it (not a video starting, ending, or a jump in it): the mark in the middle
+    if ((e.type === "pause" || e.type === "play") && !e.target.seeking && !e.target.ended && e.target.currentTime > 0.6 && e.target.readyState >= 2 && Date.now() - (state.loadAt || 0) > 2500 && !document.hidden && !ui.root.classList.contains("adon")) ppMark(e.type === "pause");
   };
   // While it plays and the bar is in view, the line and its head move every frame (smooth, not in quarter-second steps).
   // Nothing runs while the bar is hidden or the video is paused.
@@ -5899,10 +5981,9 @@
         if (Math.hypot(lx - x0, ly - y0) < 9) return;
         on = dragging = true; ui.root.classList.add("dragging");
         const pic = a.querySelector(".vgp") || a, r = pic.getBoundingClientRect(), rr = ui.root.getBoundingClientRect();
-        ghost = pic.cloneNode(true); ghost.classList.add("vgghost"); // (just the picture: the title stays behind)
+        ghost = el("div", "vgghost"); { const im = pic.querySelector("img"); if (im && im.src) ghost.style.backgroundImage = `url("${im.src}")`; } // (just the picture)
         Object.assign(ghost.style, { left: (r.left - rr.left) / z + "px", top: (r.top - rr.top) / z + "px", width: r.width / z + "px", height: r.height / z + "px" });
         ui.root.append(ghost); a.classList.add("vslot");
-        const gs = ghost.querySelector(".sw"); if (gs && a._sw) gs.scrollLeft = a._sw.scrollLeft;
         dragCancel = () => { target = null; up(); };
       }
       if (!raf) raf = requestAnimationFrame(frame);
@@ -5914,7 +5995,7 @@
       dragging = false; if (ui) ui.root.classList.remove("dragging");
       const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; // the release isn't a click
       window.addEventListener("click", eat, true); setTimeout(() => window.removeEventListener("click", eat, true), 0);
-      a.classList.remove("vslot"); marks();
+      a.classList.remove("vslot"); marks(); try { a.blur(); } catch {}
       if (ghost) ghost.remove();
       if (target && target._api && target._api.drop) { try { target._api.drop(api.v.id, after); } catch (err) { logErr("griddrag", err); } if (gridShown()) drawGrid(); }
     };
@@ -6009,7 +6090,7 @@
         if (!comeIn.has(t)) continue;
         const r = t.getBoundingClientRect();
         if (r.bottom < vb.top || r.top > vb.bottom) continue;
-        t.animate([{ opacity: 0, transform: "translateY(10px) scale(.985)" }, { opacity: 1, transform: "none" }], { duration: 230, delay: Math.min(k++, 14) * 12, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
+        t.animate([{ opacity: 0, transform: "translateY(10px) scale(.985)" }, { opacity: 1, transform: "none" }], { duration: 320, delay: Math.min(k++, 14) * 22, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
       }
     }
     if (!grid.busy && grid.dryTab !== tab) setTimeout(gridFill, 120); // (plenty ready ahead, by itself)
@@ -6234,7 +6315,7 @@
     box.addEventListener("scroll", () => gridNearEnd(), { passive: true }); // (Load more: when I near the end)
     // its bar, always at the very top: the tabs (and +) in the middle, refresh and ∧ on the right
     const bar = el("div", "vgbar"), acts = el("div", "vgact");
-    const x = el("button", "vgclose"); x.type = "button"; x.title = "Close (V)"; x.setAttribute("aria-label", "Close"); x.append(icon("chevron")); // (the same pill as the ∨ on the video, pointing up)
+    const x = el("button", "vgx"); x.type = "button"; x.title = "Close (V)"; x.setAttribute("aria-label", "Close"); x.append(icon("chevron")); x.firstChild.style.transform = "rotate(180deg)";
     x.addEventListener("click", (e) => { e.stopPropagation(); closeGrid(); });
     const rf = el("button", "vgx vgref"); rf.type = "button"; rf.title = "Refresh this list"; rf.setAttribute("aria-label", "Refresh this list"); rf.append(icon("refresh"));
     rf.addEventListener("click", async (e) => {
@@ -6243,9 +6324,9 @@
       try { await refreshTab(grid.tab); } catch {} finally { busy(-1); rf.classList.remove("spin"); }
       if (ui && ui.vgrid) { ui.vgrid.scrollTop = 0; drawGrid(); }
     });
-    acts.append(rf);
+    acts.append(rf, x);
     const tabs = el("div", "vgtabs"); tabs.setAttribute("role", "tablist");
-    bar.append(x, tabs, acts);
+    bar.append(tabs, acts);
     box.append(bar, el("div", "vgl"));
     box.addEventListener("pointerdown", (e) => { if (!e.composedPath().includes(ui.chmenu)) closeChanMenu(); });
     // a right-click on a video: the same menu as on a row in the list (Shift + right-click: the browser's own)
@@ -6348,7 +6429,7 @@
   // (in full screen YouTube's own grid used to open this way: YTV's has the list you're on)
   const overVideo = (path) => {
     if (!ui || !onWatchTv() || ui.root.classList.contains("show-guide") || ui.root.classList.contains("show-start")) return false;
-    if (path && path.some((n) => n.classList && (n.classList.contains("panel") || n.classList.contains("guide") || n.classList.contains("explore") || n.classList.contains("pop") || n.classList.contains("setwrap") || n.classList.contains("twchatov") || n.classList.contains("top") || n.classList.contains("bar") || n.classList.contains("ytp-chrome-bottom") || n.classList.contains("vgrid")))) return false;
+    if (path && path.some((n) => n.classList && (n.classList.contains("panel") || n.classList.contains("chs") || n.classList.contains("guide") || n.classList.contains("explore") || n.classList.contains("pop") || n.classList.contains("setwrap") || n.classList.contains("twchatov") || n.classList.contains("top") || n.classList.contains("bar") || n.classList.contains("ytp-chrome-bottom") || n.classList.contains("vgrid")))) return false;
     return !path || path.some((n) => n.id === "movie_player" || n === ui.host);
   };
   const videoWheel = (dy, path) => {
@@ -6445,6 +6526,20 @@
       bump: (px, outMs, backMs) => { if (anims.has("mb")) return; px = Math.min(px, STRIP * 0.45); const c = () => get() && get().content(); const set = (v) => { const n = c(); if (n) n.style.transform = v > 0.3 ? `translateY(${-v}px)` : ""; }; tween("mb", 0, px, outMs, set, () => tween("mb", px, 0, backMs, set), easeOut); } });
     return eng;
   };
+  // Watched, pulled open at the top of the list
+  const wY = { y: 0 };
+  const watchedPut = (v, prog) => {
+    const g = watchedCan() || (ui && { list: ui.pbody.querySelector(":scope > .lbox > .list"), bar: ui.pbody.querySelector(":scope > .lbox > .list > .wbar") });
+    wY.y = v; if (!g || !g.list) return;
+    g.list.style.transform = v > 0.3 ? `translate3d(0,${v.toFixed(1)}px,0)` : ""; g.list.style.willChange = v > 0.3 ? "transform" : "";
+    if (g.bar) { if (prog !== undefined) g.bar.style.setProperty("--pp", String(Math.min(1, prog).toFixed(3))); if (v <= 0.3) g.bar.style.removeProperty("--pp"); }
+  };
+  const watchedEng = pullEngine({ K: () => ({ ...PULL_FEEL.list.normal }), dir: -1, size: () => (ui ? ui.pbody.clientHeight : 400),
+    ready: () => !!ui && ui.pbody.scrollTop <= 0 && !!watchedCan(), busy: () => false, scrolls: true,
+    show: (px, ready, prog) => { stopTween("w"); watchedPut(lift(px) * 1.4, prog); },
+    act: () => { stopTween("w"); const from = wY.y; flipList(() => { watchedPut(0); lsSet("ytv:wopen", true); drawWatched(); }, 360); void from; },
+    back: () => tween("w", wY.y, 0, PULL_FEEL.list.normal.spring, (v) => watchedPut(v)),
+    bump: () => {} });
   // the list panel
   const listMore = moreFor(() => {
     if (!ui) return null;
@@ -6466,7 +6561,9 @@
       can: () => comPull.can(), load: () => comPull.load(), redraw: () => {} };
   });
   const listWheel = (e) => {
-    if (!pullK("list") || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (isListTab(state.panel) && cfg && cfg.tv.watchedFold && watchedEng.wheel(wheelDy(e), performance.now())) { e.preventDefault(); e.stopImmediatePropagation(); return; } // (Watched: pulled open at the top)
+    if (!pullK("list")) return;
     if ((state.panel === "comments" ? comMore : listMore).wheel(wheelDy(e), performance.now())) { e.preventDefault(); e.stopImmediatePropagation(); }
   };
 
@@ -7105,7 +7202,7 @@
   const ACTIONS = {
     chUp: () => stepTab(+1), chDown: () => stepTab(-1), next: () => nextVideo(), prev: () => prevVideo(),
     list: () => toggleList(), info: () => togglePanel("info"), comments: () => commentsOrChat(), explore: () => exploreKey(),
-    back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(), settings: () => (ui.setFrame.hidden ? openSettings("") : closeSettings()),
+    chapters: () => toggleChapters(), back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(), settings: () => (ui.setFrame.hidden ? openSettings("") : closeSettings()),
   };
   // E: on the Twitch tab (or with a stream on and no panel open) it finds streamers; anywhere else it explores YouTube
   const exploreKey = () => {
@@ -7223,7 +7320,7 @@
     if (d.evt === "qlist") return pbQualityMenu(d);
     if (d.evt === "playing") {
       state.lastEvt = "playing";
-      if (v && d.id === v.id) { hidePoster(); pbMeta(d.id, d.desc, d.sb); pbSync(true); }
+      if (v && d.id === v.id) { hidePoster(); pbMeta(d.id, d.desc, d.sb); pbSync(true); if (!ownerNow(v.id)) setTimeout(() => { if (current() && current().id === v.id) ownerInfo(v.id).catch(() => {}); }, 1500); }
       // YouTube labels a video's category on its page: skip music there too (lists don't say).
       const col0 = currentCol();
       if (cfg.tv.skipMusic && d.category === "Music" && v && d.id === v.id && col0 && !col0.watchLater && !col0.homeFeed && !col0.watchedChip && !v.f) {
