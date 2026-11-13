@@ -799,6 +799,12 @@
     .vgbtn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
     .fade .vgbtn,.show-guide .vgbtn,.show-start .vgbtn,.vgon .vgbtn{opacity:0;pointer-events:none}
     .nogrid .vgbtn{display:none}
+    /* two fingers sideways on the video: a small pill like the ∨ comes in from that side with your swipe, and lights up when it switches */
+    .swh{position:absolute;top:50%;z-index:5;width:20px;height:40px;margin-top:-20px;border-radius:999px;display:grid;place-items:center;background:rgba(0,0,0,.45);color:#fff;opacity:0;pointer-events:none;will-change:transform,opacity}
+    .swh.r{right:10px} .swh.l{left:10px} .show-panel .swh.r{right:calc(var(--pw) + 10px)}
+    .swh svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+    .swh.back{transition:opacity .2s ease,transform .2s ease}
+    .swh.go{background:var(--acc)}
     .fade .top > *,.fade .top::before,.fade .top::after,.fade .bar,.fade .panel{opacity:0}
     .fade .top,.fade .bar,.fade .panel{pointer-events:none}
     .panel{transition:opacity .3s ease,backdrop-filter .3s ease}
@@ -6102,9 +6108,31 @@
     side.last = now;
     if (!side.fired) {
       side.acc += e.deltaX * (e.deltaMode === 1 ? 16 : 1);
-      if (Math.abs(side.acc) > 140) { side.fired = true; poke(); if (side.acc > 0) nextVideo(); else prevVideo(); }
+      const next = side.acc > 0, p = Math.min(1, Math.abs(side.acc) / SIDE_PX);
+      sideHint(next, p);
+      if (p >= 1) { side.fired = true; sideHint(next, 1, true); poke(); if (next) nextVideo(); else prevVideo(); }
+      else { clearTimeout(side.t); side.t = setTimeout(() => { if (!side.fired) sideHint(next, 0); }, 240); } // (let go before it switched: it slides back out)
     }
     return true;
+  };
+  // the pill that shows the swipe: it follows your fingers in from the side (p: how far, 0 to 1), lights up and flies off when it switches
+  const SIDE_PX = 140;
+  const sideHint = (next, p, fire = false) => {
+    if (!ui || !motionOn()) return;
+    if (!side.r) { side.r = el("div", "swh r"); side.r.append(icon("fwd")); side.l = el("div", "swh l"); side.l.append(icon("back")); ui.root.append(side.r, side.l); }
+    if (!side.r.isConnected) ui.root.append(side.r, side.l);
+    const h = next ? side.r : side.l, other = next ? side.l : side.r, dir = next ? 1 : -1;
+    other.style.opacity = "0";
+    for (const a of h.getAnimations()) a.cancel();
+    if (fire) {
+      h.classList.remove("back"); h.classList.add("go"); h.style.opacity = "0"; h.style.transform = "none"; // (the animation shows it; nothing is left behind after)
+      const an = h.animate([{ transform: "scale(1)", opacity: 1 }, { transform: "scale(1.25)", opacity: 1, offset: 0.3 }, { transform: `translateX(${-dir * 26}px) scale(1.25)`, opacity: 0 }], { duration: 380, easing: "cubic-bezier(.3,0,.2,1)" });
+      an.onfinish = an.oncancel = () => { h.classList.remove("go"); h.style.opacity = "0"; };
+      return;
+    }
+    h.classList.toggle("back", p === 0); h.classList.remove("go");
+    h.style.opacity = String(p);
+    h.style.transform = `translateX(${(dir * (1 - p) * 30).toFixed(1)}px) scale(${(0.8 + 0.2 * p).toFixed(3)})`;
   };
   window.addEventListener("wheel", (e) => {
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { if (sideSwipe(e)) { e.preventDefault(); e.stopImmediatePropagation(); } return; }
