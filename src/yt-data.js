@@ -249,7 +249,13 @@
       const html = await fetchPage(path), data = embeddedJson(html, "ytInitialData") || {};
       const md = data.metadata && data.metadata.channelMetadataRenderer;
       const token = findToken(data), ctx = (ytcfgFrom(html) || {}).INNERTUBE_CONTEXT || null;
-      return { videos: extractVideos(data), title: String((md && md.title) || "").slice(0, 100),
+      // (a channel's own page: its picture and how many subscribe, for its page in Info)
+      const thumbs = md && md.avatar && Array.isArray(md.avatar.thumbnails) ? md.avatar.thumbnails : [];
+      let avatar = thumbs.length ? String(thumbs[thumbs.length - 1].url || "") : ""; if (avatar.startsWith("//")) avatar = "https:" + avatar;
+      if (!/^https:\/\/yt3\.(ggpht|googleusercontent)\.com\//.test(avatar)) avatar = "";
+      let subs = ""; const seek = (o, d) => { if (subs || !o || typeof o !== "object" || d > 16) return; for (const [k, x] of Object.entries(o)) { if (subs) return; if (typeof x === "string" && (k === "content" || k === "simpleText") && x.length < 40 && /\d/.test(x) && /subscri|abonn|suscript|iscritt/i.test(x)) subs = x; else if (typeof x === "object") seek(x, d + 1); } };
+      seek(data.header, 0);
+      return { videos: extractVideos(data), title: String((md && md.title) || "").slice(0, 100), avatar, subs: subs.slice(0, 40),
         more: token && ctx ? { endpoint: path.startsWith("/results") ? "search" : "browse", token, ctx } : null };
     } catch { return { videos: [], title: "", more: null }; }
   };

@@ -7,7 +7,7 @@
   "use strict";
   const SW = (globalThis.SW = globalThis.SW || {});
 
-  SW.VERSION = "1.49.0";
+  SW.VERSION = "1.50.0";
   SW.ALLOWED_HOSTS = ["www.youtube.com", "m.youtube.com", "youtube.com"];
 
   SW.DEFAULT_CONFIG = Object.freeze({
@@ -182,7 +182,7 @@
       gridPullPct: 10, // how far (of the screen) a pull has to bring the ∨ grid before it snaps
       gridTopZone: tv.prefsV >= 9 ? clampInt(tv.gridTopZone, 0, 40, 4) : 4, // the ∨ grid closes when the pointer rests at the top this much of the screen (0: off)
       listPullPx: 240, // how far to pull past the end of a list for more
-      listPull: ["off", "easy", "normal", "firm"].includes(tv.listPull) ? tv.listPull : "normal", // pull past the end of a list for more videos (off: they load as you near the end) // a scroll on the video opens the ∨ grid (and at its top closes it): how deliberate it has to be
+      listPull: tv.prefsV >= 11 && ["off", "easy", "normal", "firm"].includes(tv.listPull) ? tv.listPull : "off", // (loading as you near the end is the default, once for older settings too) // pull past the end of a list for more videos (off: they load as you near the end) // a scroll on the video opens the ∨ grid (and at its top closes it): how deliberate it has to be
       fsGridCols: clampInt(tv.fsGridCols, 2, 8, 3), // YouTube's own grid of videos in full screen: per row (3 is YouTube's)
       swipeNextFirst: tv.swipeNextFirst === true, // swapped: a plain swipe (and A) plays next, with Shift it goes to your Feed
       swipeMove: true, // (a video on your Feed is in no other list, so adding always moves it there)
@@ -290,7 +290,7 @@
           tabHeight: clampInt(l.tabHeight, 12, 400, 50), tabPad: 12, tabWidth: 150, tabScale: clampInt(l.tabScale, 25, 400, 120),
         };
       })(),
-      prefsV: 10,
+      prefsV: 11,
       motion: typeof tv.motion === "boolean" ? tv.motion : true,
       motionSystem: tv.motionSystem === true, // also switch animations off when the computer asks for reduced motion
       subs: (() => { const sb = isObj(tv.subs) ? tv.subs : {}; return { enabled: typeof sb.enabled === "boolean" ? sb.enabled : true, skipSeen: sb.skipSeen === true }; })(),

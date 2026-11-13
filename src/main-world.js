@@ -118,6 +118,11 @@
     const isAd = p.classList && p.classList.contains("ad-showing");
     const err = document.querySelector(".ytp-error");
     if (err && err.offsetParent !== null && errorFor !== id) { errorFor = id; emit("error", { id }); return; }
+    // (a video YouTube won't play here at all, without its error screen showing: the same, so YTV moves on)
+    try {
+      const pr0 = typeof p.getPlayerResponse === "function" ? p.getPlayerResponse() : null, st0 = pr0 && pr0.playabilityStatus && pr0.playabilityStatus.status, id0 = (pr0 && pr0.videoDetails && pr0.videoDetails.videoId) || id;
+      if ((st0 === "ERROR" || st0 === "UNPLAYABLE") && id0 && errorFor !== id0) { errorFor = id0; emit("error", { id: id0 }); return; }
+    } catch {}
     if (s === 1 && !isAd && playingFor !== id) {
       playingFor = id;
       let desc = "", channelId = "", keywords = [], publishDate = "", category = "", sb = "";
