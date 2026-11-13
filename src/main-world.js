@@ -39,7 +39,11 @@
       if (c.cmd === "vol" && Number(c.v) >= 0 && Number(c.v) <= 100 && typeof p.setVolume === "function") { p.setVolume(Math.round(Number(c.v))); if (Number(c.v) > 0 && p.isMuted && p.isMuted()) p.unMute(); }
       if (c.cmd === "mute" && typeof p.isMuted === "function") { if (p.isMuted()) p.unMute(); else p.mute(); }
       if (c.cmd === "qlist") emit("qlist", { cur: p.getPlaybackQuality ? p.getPlaybackQuality() : "", list: (p.getAvailableQualityLevels ? p.getAvailableQualityLevels() || [] : []).filter((l) => ORDER.includes(l)) });
-      if (c.cmd === "setq" && ORDER.includes(c.q) && typeof p.setPlaybackQualityRange === "function") { p.setPlaybackQualityRange(c.q, c.q); if (typeof p.setPlaybackQuality === "function") p.setPlaybackQuality(c.q); }
+      if (c.cmd === "setq" && ORDER.includes(c.q) && typeof p.setPlaybackQualityRange === "function") {
+        const prem = c.q === "hd1080" ? premium1080(p) : null; // 1080p is always the higher-bitrate one where the video has it
+        if (prem) p.setPlaybackQualityRange("hd1080", "hd1080", prem.formatId);
+        else { p.setPlaybackQualityRange(c.q, c.q); if (typeof p.setPlaybackQuality === "function") p.setPlaybackQuality(c.q); }
+      }
       if (c.cmd === "repaint") {
         // Give the video a fresh layer so the picture comes back. (YouTube re-measures itself on the
         // resize events YTV sends; its internal size functions are never called — without exact sizes
@@ -85,6 +89,10 @@
   // playable with YouTube Premium) where the video has it, else 1080p; a video without 1080p plays in the best it has.
   const QUAL = ["premium", "hd1080", "hd720", "auto"], ORDER = ["hd2160", "hd1440", "hd1080", "hd720", "large", "medium", "small", "tiny"];
   let wantQ = "premium", qDoneFor = "";
+  const premium1080 = (p) => {
+    const data = typeof p.getAvailableQualityData === "function" ? p.getAvailableQualityData() || [] : [];
+    return data.find((q) => q && q.quality === "hd1080" && /premium/i.test(q.qualityLabel || "") && q.isPlayable !== false && !q.paygatedQualityDetails && q.formatId) || null;
+  };
   const applyQuality = (p, id) => {
     if (!id || qDoneFor === id || wantQ === "auto" || typeof p.setPlaybackQualityRange !== "function") return;
     const cap = wantQ === "hd720" ? "hd720" : "hd1080";
@@ -92,8 +100,8 @@
     const levels = (typeof p.getAvailableQualityLevels === "function" ? p.getAvailableQualityLevels() || [] : []).filter((l) => ORDER.includes(l));
     if (!levels.length) return; // not known yet: next tick
     qDoneFor = id;
-    if (wantQ === "premium") {
-      const prem = data.find((q) => q && q.quality === "hd1080" && /premium/i.test(q.qualityLabel || "") && q.isPlayable !== false && !q.paygatedQualityDetails && q.formatId);
+    if (wantQ === "premium" || wantQ === "hd1080") { // (1080p always means the higher-bitrate 1080p where it plays)
+      const prem = premium1080(p);
       if (prem) { p.setPlaybackQualityRange("hd1080", "hd1080", prem.formatId); return; }
     }
     const target = levels.find((l) => ORDER.indexOf(l) >= ORDER.indexOf(cap)) || levels[levels.length - 1];

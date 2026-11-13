@@ -612,12 +612,20 @@
     .pbg .ib.solid svg{fill:currentColor;stroke:none}
     .pbtime{padding:0 12px 0 8px;font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap} .pbtime i{font-style:normal;color:#b3b8c2}
     .pbq{height:40px;min-height:0;padding:0 12px;border:0;border-radius:10px;background:none;color:#fff;font:inherit;font-size:13px;font-weight:600;cursor:pointer} .pbq:hover{background:rgba(255,255,255,.12)} .pbq:empty{display:none}
-    .pbvol{position:relative;width:72px;height:40px;cursor:pointer;touch-action:none}
-    .pbvol::before{content:"";position:absolute;left:6px;right:10px;top:18px;height:4px;border-radius:2px;background:rgba(255,255,255,.28)}
-    .pbvol i{position:absolute;left:6px;right:10px;top:18px;height:4px;border-radius:2px;background:#fff;transform-origin:left center;transform:scaleX(1)}
+    .pbvw{position:relative;display:flex}
+    .pbvol{position:absolute;left:50%;bottom:100%;width:40px;height:124px;margin-left:-20px;padding-bottom:10px;box-sizing:border-box;cursor:pointer;touch-action:none;opacity:0;transform:translateY(8px) scale(.96);transform-origin:50% 100%;pointer-events:none;transition:opacity .16s ease,transform .2s cubic-bezier(.2,.8,.2,1)}
+    .pbvw:hover .pbvol,.pbvol.drag{opacity:1;transform:none;pointer-events:auto}
+    .pbvol b{position:absolute;inset:0 0 10px 0;border-radius:12px;background:var(--pnl);box-shadow:0 6px 24px rgba(0,0,0,.5)}
+    .pbvol::after{content:"";position:absolute;left:18px;width:4px;top:12px;bottom:22px;border-radius:2px;background:rgba(255,255,255,.28)}
+    .pbvol i{position:absolute;z-index:1;left:18px;width:4px;top:12px;bottom:22px;border-radius:2px;background:#fff;transform-origin:50% 100%;transform:scaleY(1)}
     .ownbar .vgbtn{bottom:26px!important}
     .ownbar .bar{bottom:112px}
-    .dts{padding:0;border:0;background:none;color:color-mix(in srgb,var(--acc) 60%,#fff);font:inherit;font-weight:600;cursor:pointer;min-height:0} .dts:hover{text-decoration:underline}
+    .desc .dts,.desc .dts:hover,.desc .dts:focus-visible{display:inline;min-height:0;padding:0;border:0;border-radius:0;background:none;outline:0;color:#8fbcff;font:inherit;cursor:pointer;transition:color .15s}
+    .desc .dts:hover,.desc .dts:focus-visible{color:#c4dcff}
+    .vgi{opacity:0;transition:opacity .22s ease} .vgi.in{opacity:1}
+    .cards.still .card{animation:none!important}
+    .motion .cards.still .card.fresh{animation:cnew .55s cubic-bezier(.2,.8,.2,1) both!important}
+    @keyframes cnew{0%{opacity:0;transform:scale(.86)}60%{opacity:1;transform:scale(1.03)}100%{transform:none}}
     /* a video picked in the ∨ menu: its picture grows from its tile to the whole screen */
     .grow{position:absolute;inset:0;z-index:9;background:#000 center/cover no-repeat;transform-origin:0 0;pointer-events:none;will-change:transform,opacity}
     /* someone you follow went live: a card at the top; click it to watch */
@@ -4337,9 +4345,9 @@
     return id;
   };
   let guideToken = 0;
-  const renderGuide = () => {
+  const renderGuide = (freshId = "") => {
     const my = ++guideToken;
-    const list = el("div", "cards");
+    const list = el("div", "cards" + (freshId ? " still" : ""));
     const all = chans();
     let dragId = null;
     const clearDrop = () => { for (const n of list.querySelectorAll(".drop-before,.drop-after")) n.classList.remove("drop-before", "drop-after"); };
@@ -4367,6 +4375,7 @@
       const card = el("div", "card" + (c.id === state.colId ? " on" : ""));
       card.style.animationDelay = `${Math.min(i, 16) * 22}ms`;
       card.tabIndex = 0; card.setAttribute("role", "button"); card.dataset.id = c.id;
+      if (freshId && c.id === freshId) card.classList.add("fresh");
       const head = el("div", "chd"), nm = el("span", "nm", c.name);
       head.append(el("span", "n", String(c.num)), nm, ...(c.id === state.colId ? [el("span", "live", "● On now")] : []),
         iconBtn("pencil", `Rename ${c.name}`, () => startRename(nm, card, c), "ren"),
@@ -4411,7 +4420,7 @@
           const ids = all.filter((x) => !x.feed).map((x) => x.id).filter((x) => x !== from);
           ids.splice(ids.indexOf(c.id) + (after ? 1 : 0), 0, from);
           await setOrder(ids);
-          renderGuide();
+          renderGuide(from);
         });
       }
       list.append(card);
@@ -4426,7 +4435,7 @@
       if (!nmIn.value.trim() && !what.value.trim()) { nmIn.focus(); return; }
       const id = await newChannel(nmIn.value, what.value);
       if (!id) { note.textContent = `That’s the most channels YTV can have (${SW.MAX_CHANNELS}).`; return; }
-      renderGuide();
+      renderGuide(id); // (the new one pops in; the others stay as they are)
       const card = ui.guide.querySelector(`.card[data-id="${id}"]`);
       if (card) { card.scrollIntoView({ block: "center" }); card.focus(); }
     }, "acc");
@@ -4846,7 +4855,7 @@
     if (pb.playB._p !== paused) { pb.playB._p = paused; pb.playB.replaceChildren(icon(paused ? "play" : "pause")); pb.playB.title = paused ? "Play" : "Pause"; pb.playB.setAttribute("aria-label", pb.playB.title); }
     const quiet = v.muted || v.volume === 0;
     if (pb.muteB._m !== quiet) { pb.muteB._m = quiet; pb.muteB.replaceChildren(icon(quiet ? "vol-off" : "vol")); }
-    pb.volF.style.transform = `scaleX(${quiet ? 0 : Math.min(1, v.volume)})`;
+    if (!pb.volF.parentNode.classList.contains("drag")) pb.volF.style.transform = `scaleY(${quiet ? 0 : Math.min(1, v.volume)})`;
   };
   const pbMeasure = () => { if (pb.el) { const r = pb.line.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100; pb.w = r.width / z; pb.x0 = r.left; pb.wPx = r.width; } };
   const pbHover = (e) => {
@@ -4874,8 +4883,8 @@
     const playB = iconBtn("pause", "Pause", () => { const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" }); }, "solid");
     const nextB = iconBtn("skip", "Next video", () => nextVideo(), "solid");
     const muteB = iconBtn("vol", "Mute / unmute", () => cmd({ cmd: "mute" }));
-    const vol = el("div", "pbvol"), volF = el("i"); vol.append(volF); vol.title = "Volume";
-    const setVol = (e) => { const r = vol.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100, f = Math.min(1, Math.max(0, (e.clientX - r.left - 6 * z) / Math.max(1, r.width - 16 * z))); volF.style.transform = `scaleX(${f})`; cmd({ cmd: "vol", v: Math.round(f * 100) }); };
+    const vw = el("div", "pbvw"), vol = el("div", "pbvol"), volF = el("i"); vol.append(el("b"), volF); vol.title = "Volume"; vw.append(muteB, vol);
+    const setVol = (e) => { const r = volF.getBoundingClientRect(), tr = volF.parentNode.getBoundingClientRect(), z = (cfg ? cfg.tv.uiScale : 100) / 100, top = tr.top + 12 * z, bot = tr.bottom - 22 * z, f = Math.min(1, Math.max(0, (bot - e.clientY) / Math.max(1, bot - top))); volF.style.transform = `scaleY(${f})`; cmd({ cmd: "vol", v: Math.round(f * 100) }); };
     vol.addEventListener("pointerdown", (e) => { if (e.button) return; e.preventDefault(); vol.classList.add("drag"); try { vol.setPointerCapture(e.pointerId); } catch {} setVol(e); });
     vol.addEventListener("pointermove", (e) => { if (vol.classList.contains("drag")) setVol(e); });
     const volUp = (e) => { vol.classList.remove("drag"); try { vol.releasePointerCapture(e.pointerId); } catch {} };
@@ -4883,7 +4892,7 @@
     const time = el("span", "pbtime"), timeA = el("span", null, "0:00"), timeB = el("i", null, " / 0:00"); time.append(timeA, timeB);
     const qB = btn("", "Picture quality for this video", () => { if (!ui.pop.hidden) return closePop(); pb.qAnchor = qB; cmd({ cmd: "qlist" }); }, "pbq");
     const fsB = iconBtn("fs", "Full screen", () => toggleFullscreen());
-    L.append(playB, nextB, muteB, vol, time); R.append(qB, fsB);
+    L.append(playB, nextB, vw, time); R.append(qB, fsB);
     box.append(line, L, R);
     Object.assign(pb, { el: box, line, fill, buf, handle, tip, tipT, tipC, im, playB, muteB, volF, timeA, timeB, qB });
     try { new ResizeObserver(() => { pbMeasure(); pbSync(true); }).observe(line); } catch {}
@@ -5626,8 +5635,9 @@
   const gridTile = (v, kind, c) => {
     const a = el("div", "vgt"); a.tabIndex = 0; a.dataset.id = v.id; a.setAttribute("role", "button");
     if (v.off) a.classList.add("voff"); // (a streamer who's offline: greyed out, as in the list)
-    const pic = el("div", "vgp"), sl = el("div", "vgs"), img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+    const pic = el("div", "vgp"), sl = el("div", "vgs"), img = el("img"); img.alt = ""; img.loading = grid.tiles.size < 40 ? "eager" : "lazy"; img.decoding = "async"; // (the first screens load at once, not as they scroll into view)
     img.addEventListener("error", () => { img.style.visibility = "hidden"; });
+    img.className = "vgi"; img.addEventListener("load", () => img.classList.add("in"), { once: true });
     if (v.tw) { if (/^https:\/\/static-cdn\.jtvnw\.net\//.test(v.thumb || "")) img.src = v.thumb; } else if (ID_RE.test(v.id)) img.src = `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
     sl.append(img);
     if (v.tw && !v.off && v.viewers) { // how many watch, with an eye (as in the list)
