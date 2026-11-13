@@ -529,7 +529,7 @@
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-author,html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-view-count-and-date-info{font-size:calc(14.3px * var(--ytv-fsgs,1))!important;line-height:1.3!important}
     html.ytv[data-ytv-fsg] .ytp-modern-videowall-still-info-duration{font-size:calc(13.2px * max(var(--ytv-fsgs,1),.8))!important}
     /* YTV's own play bar (Settings → Playing): YouTube's bar is there but not shown (during an ad it's back) */
-    html.ytv[data-ytv-bar] #movie_player:not(.ad-showing) .ytp-chrome-bottom, html.ytv[data-ytv-bar] #movie_player:not(.ad-showing) .ytp-gradient-bottom { opacity: 0 !important; pointer-events: none !important; }
+    html.ytv[data-ytv-bar] #movie_player:not(.ad-showing) .ytp-chrome-bottom, html.ytv[data-ytv-bar] #movie_player:not(.ad-showing) .ytp-gradient-bottom { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; }
     /* YTV has its own grid (V, or a scroll down on the video): YouTube's full-screen one and its ∨ stay out of the way */
     html.ytv .ytp-fullscreen-grid, html.ytv [class*="fullscreen-grid-expand"] { display: none !important; }
     html.ytv, html.ytv body { overflow: hidden !important; background: #000 !important; margin: 0 !important; scrollbar-width: none !important; }
@@ -565,7 +565,8 @@
     html.ytv ytd-watch-flexy #player:not(:has(#movie_player, .html5-video-player)) { display: none !important; }
   `;
   const pageStyle = () => {
-    if (document.getElementById("ytv-page")) return;
+    const old = document.getElementById("ytv-page");
+    if (old) { if (old.textContent !== PAGE_CSS) old.textContent = PAGE_CSS; return; } // (left by an earlier version of YTV on this page: brought up to date)
     const st = document.createElement("style"); st.id = "ytv-page"; st.textContent = PAGE_CSS;
     (document.head || document.documentElement).appendChild(st);
   };
@@ -1584,6 +1585,7 @@
   const wake = () => { if (ui && state.syncControls) state.syncControls(); };
   const poke = () => {
     if (!ui) return;
+    if (!extAlive()) staleCheck();
     state.wakeUntil = performance.now() + 3000;
     const mp = document.getElementById("movie_player"); // YouTube's own controls come back in step
     if (mp) { const r = mp.getBoundingClientRect(); mp.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })); }
@@ -6080,8 +6082,22 @@
     if (!cfg || !cfg.tv.gridOn || !pullK("grid") || (gOpenNow && !gOpen.active()) || grid.closing || !overVideo(path)) return false;
     return gOpen.wheel(dy, performance.now());
   };
+  // Two fingers sideways on the video: the next video (to the left) or the previous one (to the right). Once per swipe.
+  const side = { acc: 0, last: 0, fired: false };
+  const sideSwipe = (e) => {
+    if (!ui || !cfg || !cfg.tv.swipeNav || gridOpen() || !overVideo(e.composedPath())) return false;
+    if (e.composedPath().some((n) => n.classList && (n.classList.contains("pb") || n.classList.contains("top") || n.classList.contains("bar")))) return false; // (not over YTV's own controls)
+    const now = performance.now();
+    if (now - side.last > 220) { side.acc = 0; side.fired = false; } // a new swipe (the glide after one doesn't count again)
+    side.last = now;
+    if (!side.fired) {
+      side.acc += e.deltaX * (e.deltaMode === 1 ? 16 : 1);
+      if (Math.abs(side.acc) > 140) { side.fired = true; poke(); if (side.acc > 0) nextVideo(); else prevVideo(); }
+    }
+    return true;
+  };
   window.addEventListener("wheel", (e) => {
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { if (sideSwipe(e)) { e.preventDefault(); e.stopImmediatePropagation(); } return; }
     if (videoWheel(wheelDy(e), e.composedPath())) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, { capture: true, passive: false });
   state.gridWheel = (w) => { videoWheel(w.dy, null); }; // (from over a Twitch stream)
@@ -6779,6 +6795,7 @@
   const onVisible = () => {
     if (!ui) return;
     if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    staleCheck(); // (the extension was updated while this page was open: say so, instead of half working)
     repairPlayer();
     if (hiddenAt && Date.now() - hiddenAt > 30000) { state.loadAt = 0; cmd({ cmd: "announce", q: cfg ? cfg.tv.videoQuality : "premium" }); showNow(); }
     hiddenAt = 0;
