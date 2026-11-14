@@ -3607,40 +3607,6 @@
     setTimeout(() => { eatVid = 0; }, 800);
   }, true);
   for (const t of ["mousedown", "mouseup", "pointerup", "click", "dblclick"]) window.addEventListener(t, eatVidEv, true);
-  const clickVideo = (path) => !!ui && onWatchTv() && !ui.root.classList.contains("on-twitch") && !ui.root.classList.contains("show-guide") && !ui.root.classList.contains("show-start")
-    && path.some((n) => n.classList && (n.classList.contains("html5-video-container") || n.classList.contains("ytp-player-content") || n.tagName === "VIDEO"))
-    && !path.some((n) => n === ui.host || (n.classList && (n.classList.contains("ytp-chrome-bottom") || n.classList.contains("ytp-chrome-top") || n.classList.contains("ytp-ce-element") || n.classList.contains("ytp-ad-module") || n.tagName === "BUTTON" || n.tagName === "A")))
-    && !document.querySelector("#movie_player.ad-showing");
-  // a click on the video: play / pause the moment you press (as quick as Space), not when you let go
-  let vidDown = 0;
-  window.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || e.pointerType === "touch" || eatVid || !clickVideo(e.composedPath())) return;
-    e.stopImmediatePropagation(); // (YouTube's own press, which could play it again a moment later, never sees it)
-    vidDown = performance.now();
-    const v = vidEl(); if (v) { pauseHold = v.paused ? 0 : performance.now() + 12000; cmd({ cmd: v.paused ? "play" : "pause" }); }
-  }, true);
-  // (YouTube can start a video again on its own a moment after a click paused it: for a few seconds, that's undone,
-  // unless you asked for it: a key, a button, anything you click)
-  let pauseHold = 0;
-  window.addEventListener("keydown", () => { pauseHold = 0; }, true);
-  window.addEventListener("pointerdown", (e) => { if (!clickVideo(e.composedPath())) pauseHold = 0; }, true);
-  let heldN = 0;
-  const holdPaused = (e) => {
-    if (!pauseHold || performance.now() > pauseHold || !e.target || e.target.tagName !== "VIDEO" || !e.target.closest("#movie_player")) return;
-    if (document.querySelector("#movie_player.ad-showing")) return;
-    e.target.pause(); cmd({ cmd: "pause" });
-    if (++heldN <= 3) cmd({ cmd: "whyplay" }); // (what started it: kept in YTV's error log, to find the cause)
-  };
-  document.addEventListener("play", holdPaused, true);
-  document.addEventListener("playing", holdPaused, true);
-  for (const t of ["mousedown", "pointerup", "mouseup"]) window.addEventListener(t, (e) => { if (vidDown && performance.now() - vidDown < 1500 && e.button === 0 && clickVideo(e.composedPath())) e.stopImmediatePropagation(); }, true);
-  window.addEventListener("click", (e) => {
-    if (e.button !== 0 || eatVid || !clickVideo(e.composedPath())) return;
-    e.stopImmediatePropagation(); e.preventDefault();
-    if (performance.now() - vidDown < 1500) { vidDown = 0; return; } // (done when you pressed)
-    const v = vidEl(); if (v) cmd({ cmd: v.paused ? "play" : "pause" });
-  }, true);
-  window.addEventListener("dblclick", (e) => { if (!clickVideo(e.composedPath())) return; e.stopImmediatePropagation(); e.preventDefault(); toggleFullscreen(); }, true);
   // right-click on the video that's playing: the same menu as in the list (Shift + right-click: YouTube's own menu).
   // Not on Twitch (its player is Twitch's own page, and has no such menu here).
   window.addEventListener("contextmenu", (e) => {
@@ -5244,7 +5210,12 @@
       pbRaf = 0;
       const v = vidEl();
       if (!ui || !pb.el || !ownBarOn() || !v || v.paused || document.hidden || ui.root.classList.contains("fade") || ui.root.classList.contains("on-twitch")) return;
-      pbSync(); pbRaf = requestAnimationFrame(tick);
+      // (only when there's something new to draw: the head moved half a pixel, or the clock a second. A long video
+      // moves the line a pixel every few seconds: nothing is recalculated in the frames between)
+      const dur = Number.isFinite(v.duration) ? v.duration : 0, t = v.currentTime || 0;
+      const key = (dur > 0 ? Math.round((t / dur) * (pb.w || 0) * 2) : 0) + ":" + Math.floor(t) + ":" + dur;
+      if (pb.drag || key !== pb.drawn) { pb.drawn = key; pbSync(); }
+      pbRaf = requestAnimationFrame(tick);
     };
     pbRaf = requestAnimationFrame(tick);
   };
@@ -7394,7 +7365,6 @@
       return;
     }
     if (d.evt === "qlist") return pbQualityMenu(d);
-    if (d.evt === "whyplay") { logErr("unpaused", d.by || "(not by a play() call)"); console.warn("[YTV] a paused video was started again by:\n" + (d.by || "(not by a play() call)")); return; }
     if (d.evt === "playing") {
       state.lastEvt = "playing";
       if (v && d.id === v.id) { hidePoster(); pbMeta(d.id, d.desc, d.sb); pbSync(true); if (!ownerNow(v.id)) setTimeout(() => { if (current() && current().id === v.id) ownerInfo(v.id).catch(() => {}); }, 1500); }
