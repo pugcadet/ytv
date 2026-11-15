@@ -52,6 +52,7 @@
         if (v) { v.style.transform = "translateZ(0)"; requestAnimationFrame(() => requestAnimationFrame(() => { v.style.transform = ""; })); }
       }
       if (c.cmd === "play" && typeof p.playVideo === "function") p.playVideo();
+      if (c.cmd === "cc") { const b = p.querySelector(".ytp-subtitles-button"); if (b && b.getAttribute("aria-disabled") !== "true") b.click(); else if (typeof p.toggleSubtitles === "function") p.toggleSubtitles(); } // captions on / off: YouTube's own button
       if (c.cmd === "pause" && typeof p.pauseVideo === "function") p.pauseVideo();
     } catch {}
   });

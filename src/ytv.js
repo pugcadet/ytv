@@ -5147,7 +5147,7 @@
     ui.pop.replaceChildren(el("div", "ph", "Picture quality"), ...items);
     placePop(pb.qAnchor, true); wake();
   };
-  // ---- Chapters: a row of pictures that rises above the line (hover just above the line, or C). Click one to go there.
+  // ---- Chapters: a row of pictures that rises above the line (hover just above the line). Click one to go there.
   const chapterIndex = (t) => { let k = -1; for (let i = 0; i < pb.chapters.length; i++) { if (pb.chapters[i].t <= t + 0.25) k = i; else break; } return k; };
   const drawChapters = () => {
     if (!pb.strip) return;
@@ -5944,6 +5944,7 @@
     if (tab.startsWith("x:")) { const x = xtabOf(tab); return x ? x.query : "Topic"; }
     const c = chanById(tab.slice(4)); return c ? c.name : "Up next";
   };
+  const tileLook = (v) => [v.id, v.title || "", v.tw ? (v.off ? "off" : v.viewers ? "eye" : "live") : v.len || "", v.tw ? [v.thumb, v.channel, v.game].join("|") : [whoOf(v), v.age].join("|"), v.tw ? 0 : Math.round(progressOf(v))].join("\u0001");
   const gridTile = (v, kind, c) => {
     const a = el("div", "vgt"); a.tabIndex = 0; a.dataset.id = v.id; a.setAttribute("role", "button");
     if (v.off) a.classList.add("voff"); // (a streamer who's offline: greyed out, as in the list)
@@ -5973,6 +5974,16 @@
     a.addEventListener("click", go);
     a.addEventListener("pointerdown", (e) => gridDrag(a, e));
     a.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); go(); } });
+    // (the same video again as a new object, e.g. after its list refreshed, looking the same: this tile simply carries on
+    // with it. Nothing is rebuilt, so nothing flickers or jumps under the mouse; only a stream's viewer count is updated)
+    a._look = tileLook(v);
+    a._re = (v2) => {
+      const api2 = { v: v2, kind, c, wrap, row: sl, tile: a, ...actionsFor(kind, v2, c) };
+      if (v2.tw) api2.canAdd = () => false;
+      rowApi.set(wrap, api2); a._api = api2;
+      const eye = sl.querySelector(".vgeye");
+      if (eye && v2.viewers) { eye.title = `${v2.viewers.toLocaleString()} watching`; if (eye.lastChild && eye.lastChild.nodeType === 3) eye.lastChild.nodeValue = Intl.NumberFormat(undefined, { notation: "compact" }).format(v2.viewers); }
+    };
     return a;
   };
   const shakeTile = (a) => { if (a._api) rowMark(a._api, "no"); };
@@ -6052,8 +6063,9 @@
     const want = [], comeIn = new Set();
     for (const v of items) {
       let t = grid.tiles.get(v.id);
+      if (t && t._v !== v && !t._sw.classList.contains("gone") && !t._leaving && t._kind === L.kind && t._look === tileLook(v)) { t._re(v); t._v = v; }
       const made = !t || t._v !== v || t._sw.classList.contains("gone");
-      if (made) { t = gridTile(v, L.kind, L.c); t._v = v; grid.tiles.set(v.id, t); }
+      if (made) { t = gridTile(v, L.kind, L.c); t._v = v; t._kind = L.kind; grid.tiles.set(v.id, t); }
       if ((made || all) && motionOn() && !state.quiet && !t._leaving) comeIn.add(t); // (comes in: see below, once everything is in place)
       const i = qi && qi.has(v.id) ? qi.get(v.id) : -1, now = !!(cur && cur.id === v.id && (L.kind === "live" || L.kind === "hist"));
       t.classList.toggle("vnow", now);
@@ -7175,7 +7187,7 @@
       if (play) playFirstInGrid(id);
       return;
     }
-    if (!state.panel || !isListTab(state.panel)) { showPanel(playingTab()); if (!play) return; }
+    if (!state.panel || !isListTab(state.panel)) { showPanel(playingTab()); } // (closed: it opens, and goes to the next tab as well)
     const tabsNow = [...ui.ptabs.querySelectorAll(".tab:not(.add)")];
     if (tabsNow.length < 2) return;
     let i = tabsNow.findIndex((b) => b.getAttribute("aria-selected") === "true");
@@ -7254,7 +7266,7 @@
   const ACTIONS = {
     chUp: () => stepTab(+1), chDown: () => stepTab(-1), next: () => nextVideo(), prev: () => prevVideo(),
     list: () => toggleList(), info: () => togglePanel("info"), comments: () => commentsOrChat(), explore: () => exploreKey(),
-    chapters: () => toggleChapters(), back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(), settings: () => (ui.setFrame.hidden ? openSettings("") : closeSettings()),
+    captions: () => { const v = current(); if (v && !v.tw) cmd({ cmd: "cc" }); }, back: () => backToMix(), toggle: () => closeTv(), autohide: () => cycleHide(), history: () => togglePanel("history"), grid: () => toggleGrid(), sorting: () => toggleSorting(), overview: () => showGuide(!ui.root.classList.contains("show-guide")), fullscreen: () => toggleFullscreen(), settings: () => (ui.setFrame.hidden ? openSettings("") : closeSettings()),
   };
   // E: on the Twitch tab (or with a stream on and no panel open) it finds streamers; anywhere else it explores YouTube
   const exploreKey = () => {
