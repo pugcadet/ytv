@@ -699,7 +699,7 @@
     .livec .lx:hover{background:rgba(255,255,255,.12);color:#fff}
     @keyframes livein{from{opacity:0;transform:translateY(-14px)}}
     /* between two videos: the next one's picture, soft, until it plays (no black screen) */
-    .poster{position:absolute;inset:-4%;z-index:1;background:#000 center/cover no-repeat;filter:blur(14px) brightness(.72);opacity:0;transition:opacity .3s ease;pointer-events:none}
+    .poster{position:absolute;inset:0;z-index:1;background:#000 center/cover no-repeat;opacity:0;transition:opacity .35s ease;pointer-events:none}
     .poster.on{opacity:1;transition-duration:.18s}
     .noise{position:absolute;inset:-9px 0 0 0;opacity:.16;background:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);animation:roll .35s steps(6) infinite}
     @keyframes roll{to{transform:translateY(9px)}}
@@ -2259,9 +2259,12 @@
   };
   // The playing video swiped to add: it goes back in line, after everything you've lined up (or right after the next one),
   // where you left it, and the next video plays.
+  let requeuedAt = -1e9;
   const requeueCurrent = () => {
     const pos = state.pos, it = state.queue[pos];
     if (!it || it.tw || !state.queue[pos + 1]) return false;
+    if (performance.now() - requeuedAt < 1500) return true; // (the tail of the same swipe: once is enough, the next one isn't passed over)
+    requeuedAt = performance.now();
     if (state.t > 0 && state.lastEvt) saveResume(it.id, state.t, state.dur || 0);
     const hist = idsOfHistory();
     state.queue.splice(pos, 1);
@@ -4952,6 +4955,8 @@
       if (i < 0 && state.queue.length) { // no longer in the list (watched ones leave it): it comes back right after what's playing
         const hist = idsOfHistory(); state.queue.splice(state.pos + 1, 0, { ...e.v, nx: 1 }); fixHistory(hist); i = state.pos + 1;
       }
+      // (further down the list: it comes up to right after what's playing, so what you lined up in between stays lined up)
+      if (i > state.pos + 1 && !sortOff() && !(currentCol() && currentCol().twitch)) { moveItem(i, state.pos + 1); i = state.pos + 1; }
       if (i >= 0) { played.delete(e.v.id); ghist.pos = to; saveGhist(); return goTo(i); }
     }
     const at = ci >= 0 ? ci : cols.findIndex((c) => e.v.tw ? c.twitch : !c.feed && !c.twitch); // its channel is gone: play it on another one
@@ -5271,7 +5276,7 @@
   const showPoster = (v) => {
     if (!ui || !v || v.tw || !ID_RE.test(v.id) || !motionOn()) return hidePoster();
     if (!ui.poster) { ui.poster = el("div", "poster"); ui.curtain.after(ui.poster); }
-    ui.poster.style.backgroundImage = `url(https://i.ytimg.com/vi/${v.id}/hqdefault.jpg)`;
+    ui.poster.style.backgroundImage = `url(https://i.ytimg.com/vi/${v.id}/maxresdefault.jpg),url(https://i.ytimg.com/vi/${v.id}/hqdefault.jpg)`; // (sharp, as it is; the small one shows until the big one is in)
     ui.poster.dataset.id = v.id;
     clearTimeout(state.posterT); clearTimeout(state.posterIn);
     state.posterIn = setTimeout(() => { if (ui && ui.poster && ui.poster.dataset.id === v.id) ui.poster.classList.add("on"); }, 200); // (ready at once: no picture at all)
@@ -5281,7 +5286,7 @@
     const nv = state.queue[nextIndex()];
     if (!nv || nv.tw || !ID_RE.test(nv.id) || state.warmed === nv.id) return;
     state.warmed = nv.id;
-    try { const i = new Image(); i.decoding = "async"; i.src = `https://i.ytimg.com/vi/${nv.id}/hqdefault.jpg`; state.warmImg = i; } catch {}
+    try { const i = new Image(); i.decoding = "async"; i.src = `https://i.ytimg.com/vi/${nv.id}/hqdefault.jpg`; const j = new Image(); j.decoding = "async"; j.src = `https://i.ytimg.com/vi/${nv.id}/maxresdefault.jpg`; state.warmImg = [i, j]; } catch {}
   };
   const hidePoster = () => { clearTimeout(state.posterT); clearTimeout(state.posterIn); if (ui && ui.poster) ui.poster.classList.remove("on"); dropGrow(); };
   // A video picked in the ∨ menu: its picture grows from its tile to the whole screen, and stays until the video plays.
