@@ -5270,7 +5270,7 @@
     c.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); go(); } });
     c.append(av, tx, el("span", "lw", "Watch"), x);
     ui.lives.append(c);
-    setTimeout(() => { if (c.isConnected && !c.matches(":hover")) gone(); else if (c.isConnected) setTimeout(gone, 6000); }, 15000);
+    setTimeout(() => { if (c.isConnected && !c.matches(":hover")) gone(); else if (c.isConnected) setTimeout(gone, 3000); }, 7500); // (half as long as before: 7.5 s, 3 s more while hovered)
   };
   // Between two videos the next one's picture fades in, and fades out into the video when it plays.
   const showPoster = (v) => {
