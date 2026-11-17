@@ -3035,7 +3035,7 @@
     else got = await buildLineup(col, () => {}, () => {}, true);
     const cur = current();
     // the ones you put up next yourself (Shift-swipe, Play next, dragged there) stay exactly where they are
-    const mine = state.queue.map((x, k) => [k - state.pos - 1, x]).filter(([d, x]) => d >= 0 && x && x.nx);
+    const mine = state.queue.map((x, k) => [k - state.pos - 1, x]).filter(([d, x]) => d >= 0 && mineOf(x));
     let fresh = []; const ids = new Set([cur && cur.id, ...mine.map(([, x]) => x.id)]);
     for (const x of got) if (x && !ids.has(x.id) && !played.has(x.id) && usable(col, x)) { ids.add(x.id); fresh.push(x); }
     if (!fresh.length) return 0;
@@ -4755,8 +4755,11 @@
       if (ui) { if (state.panel === tab) ui.pbody.scrollTop = 0; if (ui.vgrid && !ui.vgrid.hidden && grid.tab === tab) { ui.vgrid.scrollTop = 0; drawGrid(); } }
     } catch {} finally { autoBusy = false; }
   };
-  const snapshot = () => ({ queue: state.queue.slice(Math.max(0, state.pos - 10), state.pos + 50), pos: Math.min(state.pos, 10),
-    history: [], stay: state.stay, base: state.base ? state.base.slice(0, 60) : null, from: state.from, t: state.t, at: Date.now() });
+  // what you lined up yourself: put up next, on your Feed, or moved back. A list rebuilt (refresh, or coming back
+  // after a while) keeps these, wherever they are in it.
+  const mineOf = (v) => !!v && !!(v.nx || v.f || v.bk);
+  const snapshot = () => { const off = Math.max(0, state.pos - 10), q = state.queue.slice(off, state.pos + 50), far = state.queue.slice(state.pos + 50).filter(mineOf);
+    return { queue: q.concat(far), pos: state.pos - off, history: state.history.map((i) => i - off).filter((i) => i >= 0 && i < q.length), stay: state.stay, base: state.base ? state.base.slice(0, 60) : null, from: state.from, t: state.t, at: Date.now() }; };
 
   // "Start watching" only appears if the video really isn't playing (a replay, a seek or a resume never trips it).
   const armStart = (ms) => {
@@ -4932,13 +4935,14 @@
   window.addEventListener("pagehide", () => { if (ghistT) lsSet(GHIST_KEY, ghist); });
   const slimV = (v) => { const o = {}; for (const k of ["id", "title", "channel", "creator", "len", "age", "tw", "login", "vod", "off", "thumb"]) if (v[k] !== undefined) o[k] = v[k]; return o; };
   // Whatever plays is where you are in it: the same one as here (you stepped to it) or the next one changes nothing
-  // but your place; anything else starts a new branch from here, like a browser's back and forward.
+  // but your place; anything else is added at the end. (Nothing is ever cut off: after stepping back with Shift+[,
+  // playing something else used to drop everything newer, like a browser's back and forward. That emptied History)
   const noteWatched = (v) => {
     if (!v) return;
     const here = ghist.list[ghist.pos], next = ghist.list[ghist.pos + 1];
     if (here && here.v.id === v.id) return;
     if (next && next.v.id === v.id) { ghist.pos++; saveGhist(); return; }
-    ghist.list = ghist.list.slice(0, ghist.pos + 1); ghist.list.push({ colId: state.colId, v: slimV(v), at: Date.now() });
+    ghist.list.push({ colId: state.colId, v: slimV(v), at: Date.now() });
     const max = cfg ? cfg.tv.histMax : 200; // (Settings → List → History)
     while (ghist.list.length > max) { ghist.list.shift(); ghist.pos--; }
     ghist.pos = ghist.list.length - 1;
@@ -7088,7 +7092,7 @@
     }
     const m = state.mem[col.id];
     if (m && !(Date.now() - m.at < MEM_MS) && !col.twitch) { // left too long ago: a fresh list, but what you lined up there stays
-      const mine = m.queue.filter((x, k) => k > m.pos && x && x.nx), ids = new Set((carry || []).map((x) => x.id));
+      const mine = m.queue.filter((x, k) => k > m.pos && mineOf(x)), ids = new Set((carry || []).map((x) => x.id));
       if (mine.length) carry = [...(carry || []), ...mine.filter((x) => !ids.has(x.id))];
       delete state.mem[col.id];
     }
