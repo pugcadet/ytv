@@ -4405,6 +4405,7 @@
     ui.root.classList.toggle("panchat", which === "comments" && ui.root.classList.contains("on-twitch")); // the chat in the panel: the panel itself see-through
     if (ui.root.classList.contains("on-twitch")) setTimeout(() => { if (!ui) return; if (which !== "comments" && !cfg.tv.twitch.chat.show) stopChat(); chatBox(); }, 0); // one chat at a time; none showing: no chat connection at all
     if (which === "explore" && !state.stay) which = playingTab();
+    if (which && !state.panel && isListTab(which)) setTimeout(autoRefresh, 0); // (opening a list: anything 2 hours old loads fresh)
     if (which.startsWith("src:") && !chanById(which.slice(4))) which = playingTab();
     if (cfg && !cfg.tv.listOn && isListTab(which) && which !== HIST_TAB) { if (gridShown()) selectGridTab(which); which = ""; }
     if (which && gridShown()) closeGrid(); // (one at a time: a panel on the right closes the ∨ menu) // (the list menu is off in settings: its tabs live in the ∨ menu)
@@ -4740,6 +4741,9 @@
       }
     }, 4000);
   };
+  // (also checked every few minutes while YTV stays on screen, and whenever the list or the ∨ menu opens: before,
+  // only coming back to the page did it, so Home stayed hours old on a page that was never left)
+  setInterval(() => { if (ui && !document.hidden && !state.panel && !gridOpen()) autoRefresh(); }, 5 * 60000);
   const autoRefresh = async () => {
     if (!ui || autoBusy || !cfg) return;
     const now = Date.now(); let dropped = false;
@@ -6443,6 +6447,7 @@
   };
   const snapMs = () => (cfg ? cfg.tv.gridSnapMs : 240);
   const openGrid = () => {
+    setTimeout(autoRefresh, 0);
     if (chs.on) { chs.sticky = false; showChapters(false); }
     if (!ui || !cfg || !cfg.tv.gridOn || gridOpen()) return;
     const box = showGridBox(); box.classList.remove("peek"); grid.dryTab = ""; grid.fills = 0;
