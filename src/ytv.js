@@ -313,8 +313,13 @@
     const take = (list) => { for (const v of list) if (!seen.has(v.id) && !have.has(v.id) && usable(col, v) && !played.has(v.id)) { seen.add(v.id); out.push(v); } };
     if (col.twitch) return twitchLive(); // live streams: just look again
     take((p.held || []).splice(0)); // (kept back last time: one creator had too many at once)
+    let again = false;
     for (let round = 0; round < (want > 20 ? 7 : 4) && out.length < want; round++) { // (a pull for more asks for a good batch: more pages)
       const live = p.srcs.filter((s) => !s.started || s.more);
+      // Home ran out of pages (YouTube stops after a while, or one answer came back empty): it was then "at its end" for
+      // 2 hours and only a reload helped. YouTube's Home always has more when asked again from the top: start it over
+      // (what's already in the list or watched is left out as always)
+      if (!live.length && col.homeFeed && !again) { again = true; for (const s of p.srcs) { s.started = false; s.more = null; } continue; }
       if (!live.length) break;
       const pages = await Promise.all(live.map(async (s) => {
         const pg = s.started ? await SW.yt.moreVideos(s.more) : s.src.chip ? await SW.yt.homeChip(s.src.chip) : await SW.yt.videosPage(s.src.path);
@@ -845,6 +850,8 @@
     .vgt img{width:100%;height:100%;object-fit:cover;display:block}
     .vgt:hover .vgp,.vgt:focus-visible .vgp{transform:scale(1.03);box-shadow:0 0 0 3px #fff,0 14px 34px rgba(0,0,0,.6)}
     .dragging .vgt .vgp{transform:none!important;box-shadow:none!important}
+    .vgrid.vscroll .vgt:hover .vgp{transform:none;box-shadow:none} /* scrolling: tiles passing under the pointer don't light up one by one */
+    .vgrid.vscroll .vgt.vnow:hover .vgp{box-shadow:0 0 0 3px var(--acc)}
     .vgt{outline:none}
     .vgt.vnow .vgp{box-shadow:0 0 0 3px var(--acc)}
     .vgt .vgd{position:absolute;right:8px;bottom:8px;padding:1px 6px;border-radius:5px;background:rgba(0,0,0,.82);color:#fff;font-size:12px;font-weight:700}
@@ -5939,7 +5946,7 @@
   const selectGridTab = (id) => {
     if (!ui || !ui.vgrid || id === grid.tab) return;
     grid.mems.set(grid.tab, ui.vgrid.scrollTop);
-    grid.tab = id; grid.fills = 0;
+    grid.tab = id; grid.fills = 0; grid.capTab = "";
     lastListTab = id; // (the list panel opens on it next time)
     grid.animAll = true; drawGrid(); syncGridTabs();
     ui.vgrid.scrollTop = grid.mems.get(id) || 0;
@@ -6137,7 +6144,7 @@
         t.animate([{ opacity: 0, transform: "translateY(10px) scale(.985)" }, { opacity: 1, transform: "none" }], { duration: 320, delay: Math.min(k++, 14) * 22, easing: "cubic-bezier(.2,.8,.2,1)", fill: "backwards" });
       }
     }
-    if (!grid.busy && grid.dryTab !== tab) setTimeout(gridFill, 120); // (plenty ready ahead, by itself)
+    if (!grid.busy && !gridDry(tab) && grid.capTab !== tab) setTimeout(gridFill, 120); // (plenty ready ahead, by itself)
   };
   // a tile swiped away (or A / D): it fades where it is, then the others glide into its place
   const leaveTile = (w) => {
@@ -6151,15 +6158,19 @@
   // few rows, so it keeps loading (in the background, a few pages at most per go) until there are plenty to scroll.
   // "Load more: when I near the end" (no pull): as you scroll the grid within about two screens of its end, the next
   // videos load (a few rows' worth at a time), as in the list
+  // ("no more" from YouTube is believed for 15 s: scrolling at the end after that asks again. The background filling has
+  // its own limit per opening, which never stops this.)
+  const gridDry = (tab) => grid.dryTab === tab && performance.now() - (grid.dryAt || 0) < 15000;
+  const markDry = (tab) => { grid.dryTab = tab; grid.dryAt = performance.now(); };
   const gridNearEnd = () => {
     if (!ui || !ui.vgrid || grid.busy || pullK("list") || !gridShown()) return;
     const b = ui.vgrid; if (b.scrollHeight - b.scrollTop - b.clientHeight > b.clientHeight * 2.5) return;
-    const tab = grid.tab; if (!canPull(tabKind(tab)) || grid.dryTab === tab) return;
+    const tab = grid.tab; if (!canPull(tabKind(tab)) || gridDry(tab)) return;
     grid.busy = true; gridLoading(true);
     (async () => {
       try {
         let n = 0; const want = (cfg.tv.fsGridCols || 3) * 4;
-        for (let k = 0; k < 3 && n < want; k++) { const m = await loadMoreTab(tab).catch(() => 0); if (!m) { grid.dryTab = tab; break; } n += m; }
+        for (let k = 0; k < 3 && n < want; k++) { const m = await loadMoreTab(tab).catch(() => 0); if (!m) { markDry(tab); break; } n += m; }
         drawGrid();
       } finally { grid.busy = false; gridLoading(false); }
     })();
@@ -6168,15 +6179,15 @@
   let gFillGo = 0;
   const gridFill = async () => {
     if (grid.busy || !gridShown()) return;
-    const tab = grid.tab, kind = tabKind(tab); if (!canPull(kind) || grid.dryTab === tab) return;
+    const tab = grid.tab, kind = tabKind(tab); if (!canPull(kind) || gridDry(tab) || grid.capTab === tab) return;
     const want = (cfg.tv.fsGridCols || 3) * 8, go = ++gFillGo;
     grid.busy = true; gridLoading(true);
     try {
       for (let k = 0; k < 4 && gFillGo === go && gridShown() && grid.tab === tab; k++) {
         if (ui.vgrid.querySelectorAll(".vgl > .vgt:not(.vdone)").length >= want) break;
-        if ((grid.fills = (grid.fills || 0) + 1) > 10) { grid.dryTab = tab; break; } // (at most 10 pages by itself per opening: then a pull at the end)
+        if ((grid.fills = (grid.fills || 0) + 1) > 10) { grid.capTab = tab; break; } // (at most 10 pages by itself per opening: after that, as you scroll near the end)
         const n = await loadMoreTab(tab).catch(() => 0);
-        if (!n) { grid.dryTab = tab; break; } // (YouTube has no more right now: no asking again until it's opened again)
+        if (!n) { markDry(tab); break; } // (YouTube has no more right now)
         drawGrid(); gridLoading(true);
       }
     } finally { grid.busy = false; gridLoading(false); }
@@ -6356,7 +6367,8 @@
   const gridBox = () => {
     if (ui.vgrid) return ui.vgrid;
     const box = el("div", "vgrid"); box.hidden = true; box.setAttribute("role", "dialog"); box.setAttribute("aria-label", "Videos");
-    box.addEventListener("scroll", () => gridNearEnd(), { passive: true }); // (Load more: when I near the end)
+    let vsT = 0;
+    box.addEventListener("scroll", () => { gridNearEnd(); box.classList.add("vscroll"); clearTimeout(vsT); vsT = setTimeout(() => box.classList.remove("vscroll"), 160); }, { passive: true }); // (Load more: when I near the end)
     // its bar, always at the very top: the tabs (and +) in the middle, refresh and ∧ on the right
     const bar = el("div", "vgbar"), acts = el("div", "vgact");
     const x = el("button", "vgx"); x.type = "button"; x.title = "Close (V)"; x.setAttribute("aria-label", "Close"); x.append(icon("chevron")); x.firstChild.style.transform = "rotate(180deg)";
@@ -6443,14 +6455,14 @@
     const box = ui && ui.vgrid; if (!box) return;
     box.classList.remove("peek"); grid.closing = false; gOpenNow = true; gput(0); wake();
     const now = box.querySelector(".vgt.vnow"); if (now && box.scrollTop === 0 && !grid.restored) { const r = now.getBoundingClientRect(); if (r.bottom > box.clientHeight) box.scrollTop += r.top - box.clientHeight / 2 + r.height / 2; }
-    if (box.scrollHeight <= box.clientHeight + 40) setTimeout(gridMore, 300); // (too few to scroll: fill it up)
+    if (box.scrollHeight <= box.clientHeight + 40) setTimeout(gridFill, 300); // (too few to scroll: fill it up)
   };
   const snapMs = () => (cfg ? cfg.tv.gridSnapMs : 240);
   const openGrid = () => {
     setTimeout(autoRefresh, 0);
     if (chs.on) { chs.sticky = false; showChapters(false); }
     if (!ui || !cfg || !cfg.tv.gridOn || gridOpen()) return;
-    const box = showGridBox(); box.classList.remove("peek"); grid.dryTab = ""; grid.fills = 0;
+    const box = showGridBox(); box.classList.remove("peek"); grid.dryTab = ""; grid.capTab = ""; grid.fills = 0;
     gput(gH()); gTween(0, snapMs(), settleOpen);
   };
   const hideGridBox = () => { if (!ui || !ui.vgrid) return; gStop(); gHc = 0; zoneOff(); if (gOpenNow) grid.mems.set(grid.tab, ui.vgrid.scrollTop); ui.vgrid.hidden = true; if (ui.vgbg) ui.vgbg.hidden = true; if (ui.vgup) ui.vgup.classList.remove("on"); ui.vgrid.classList.remove("peek"); gput(0); ui.root.classList.remove("vgon"); grid.closing = false; gOpenNow = false; gClose.reset(); gMore.reset(); wake(); };
