@@ -108,10 +108,12 @@
   window.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopImmediatePropagation(); say({ dbl: true }); }, true);
   // a scroll down over the stream opens YTV's grid of videos (as over a YouTube video)
   // (every step of it: YTV pulls the grid up with resistance, and a fast flick bounces back)
+  // sideways (two fingers): YTV's swipe to the next / previous video. Kept from Twitch and from the browser's own
+  // back gesture, as over a YouTube video
   window.addEventListener("wheel", (e) => {
-    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) { e.preventDefault(); say({ swipe: Math.max(-400, Math.min(400, Math.round(e.deltaX * (e.deltaMode === 1 ? 16 : 1)))) }); return; }
     say({ wheel: Math.max(-400, Math.min(400, Math.round(e.deltaY * (e.deltaMode === 1 ? 16 : 1)))) });
-  }, { capture: true, passive: true });
+  }, { capture: true, passive: false });
   // Twitch's own mute button (and its volume): yours, YTV never turns the sound back on after it
   window.addEventListener("click", (e) => { if (e.target && e.target.closest && e.target.closest('[data-a-target="player-mute-unmute-button"], [data-a-target="player-volume-slider"], .volume-slider__slider-container')) unmuted = true; }, true);
   window.addEventListener("pointerdown", (e) => { if (e.target && e.target.closest && e.target.closest('[data-a-target="player-mute-unmute-button"], [data-a-target="player-volume-slider"], .volume-slider__slider-container')) unmuted = true; }, true);

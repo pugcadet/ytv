@@ -4823,6 +4823,7 @@
     if (mine.move) { state.twIdleAt = Date.now(); if (state.overVideo) state.overVideo(); if (state.syncControls) state.syncControls(); return; } // the mouse over the stream wakes YTV's UI
     if (mine.dbl) { toggleFullscreen(); return; }
     if (mine.click) { if (state.panel && !state.edgeOpened && ui.root.classList.contains("show-panel")) showPanel(""); return; } // a click on the stream: the list closes (opened with its key, as on YouTube)
+    if (typeof mine.swipe === "number") { sideSwipe({ deltaX: mine.swipe, deltaMode: 0 }, true); return; } // sideways over the stream: next / back
     if (typeof mine.wheel === "number") { if (state.gridWheel) state.gridWheel({ dy: mine.wheel, notch: !!mine.notch }); return; }
     if (typeof mine.muted === "boolean" && !mine.playing) { tw.muted = mine.muted; toast(mine.muted ? "Muted" : "Sound on"); return; }
     if (typeof mine.paused === "boolean") { tw.paused = mine.paused; if (mine.said) toast(mine.paused ? "Paused" : "Playing"); return; }
@@ -6505,9 +6506,9 @@
     const out = []; while (n) { out.push(n); n = n.parentNode instanceof ShadowRoot ? n.parentNode.host : n.parentElement; }
     out.push(document, window); return out;
   };
-  const sideSwipe = (e) => {
+  const sideSwipe = (e, fromTw = false) => {
     if (!ui || !cfg || !cfg.tv.swipeNav || gridOpen()) return false;
-    const path = pathAt(e);
+    const path = fromTw ? [ui.host] : pathAt(e); // (over a Twitch stream: its frame passes the swipe on)
     if (!overVideo(path)) return false;
     if (path.some((n) => n.classList && (n.classList.contains("ypb") || n.classList.contains("top") || n.classList.contains("bar")))) return false; // (not over YTV's own controls)
     const now = performance.now(), dx = e.deltaX * (e.deltaMode === 1 ? 16 : 1), ax = Math.abs(dx);
@@ -6533,13 +6534,15 @@
       side.acc += dx;
       const next = side.acc > 0, p = Math.min(1, Math.abs(side.acc) / SIDE_PX);
       sideHint(next, p);
-      if (p >= 1) { side.fired = true; side.firedAt = now; side.fireDir = Math.sign(side.acc); side.low = 0; side.grow = 0; side.prevAx = ax; sideHint(next, 1, true); poke(); if (next) nextVideo(); else prevVideo(); }
+      if (p >= 1) { side.fired = true; side.firedAt = now; side.fireDir = Math.sign(side.acc); side.low = 0; side.grow = 0; side.prevAx = ax; sideHint(next, 1, true); poke(); if (next) nextVideo(); else swipeBack(); }
       else { clearTimeout(side.t); side.t = setTimeout(() => { if (!side.fired) sideHint(next, 0); }, 240); } // (let go before it switched: it slides back out)
     }
     return true;
   };
   // the pill that shows the swipe: it follows your fingers in from the side (p: how far, 0 to 1), lights up and flies off when it switches
   const SIDE_PX = 140;
+  // back: the video you watched before (as Shift+[), on any channel, YouTube or Twitch; forward: next in the list (as ])
+  const swipeBack = () => { if (ghist.pos > 0) historyStep(-1); else prevVideo(); };
   const sideHint = (next, p, fire = false) => {
     if (!ui || !motionOn()) return;
     if (!side.r) { side.r = el("div", "swh r"); side.r.append(icon("fwd")); side.l = el("div", "swh l"); side.l.append(icon("back")); ui.root.append(side.r, side.l); }
